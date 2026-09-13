@@ -28,6 +28,7 @@ internal class IosRecorder(
     private var currentPath: String? = null
     private var state = RecorderSessionState()
     private var systemInterruptionActive = false
+    private var waitingForExternalInput = false
     private val waveform = mutableListOf<Float>()
 
     init {
@@ -95,6 +96,7 @@ internal class IosRecorder(
         recorder = created
         currentPath = path
         systemInterruptionActive = false
+        waitingForExternalInput = false
         waveform.clear()
         state = RecorderSessionState(RecorderPhase.RECORDING, sessionId)
     }
@@ -125,6 +127,7 @@ internal class IosRecorder(
             )
             error("audioFailed")
         }
+        waitingForExternalInput = false
         state = RecorderSessionState(RecorderPhase.RECORDING, sessionId)
     }
 
@@ -139,6 +142,7 @@ internal class IosRecorder(
         recorder = null
         currentPath = null
         systemInterruptionActive = false
+        waitingForExternalInput = false
 
         return try {
             val finalPath = IosPaths.child(IosPaths.audio, source.substringAfterLast('/'))
@@ -167,6 +171,7 @@ internal class IosRecorder(
         recorder = null
         currentPath = null
         systemInterruptionActive = false
+        waitingForExternalInput = false
         waveform.clear()
         IosPaths.remove(source)
         if (IosPaths.exists(source)) {
@@ -239,13 +244,18 @@ internal class IosRecorder(
             )
             return
         }
-        if (
-            state.issue?.kind == RecorderIssueKind.INPUT_UNAVAILABLE &&
-            event.inputAvailable
-        ) {
-            state = state.copy(
-                issue = RecorderIssue(RecorderIssueKind.INPUT_UNAVAILABLE, recoverable = true),
-            )
+        if (state.issue?.kind == RecorderIssueKind.INPUT_UNAVAILABLE) {
+            val routeRecovered = if (waitingForExternalInput) {
+                event.currentHasExternalInput
+            } else {
+                event.inputAvailable
+            }
+            if (routeRecovered) {
+                waitingForExternalInput = false
+                state = state.copy(
+                    issue = RecorderIssue(RecorderIssueKind.INPUT_UNAVAILABLE, recoverable = true),
+                )
+            }
         }
     }
 
@@ -262,9 +272,10 @@ internal class IosRecorder(
 
         if (externalInputLost || noInput) {
             if (activePhase) recorder?.pause()
+            waitingForExternalInput = externalInputLost
             val issue = RecorderIssue(
                 RecorderIssueKind.INPUT_UNAVAILABLE,
-                recoverable = event.inputAvailable,
+                recoverable = false,
             )
             state = if (activePhase) {
                 RecorderSessionState(
@@ -278,16 +289,18 @@ internal class IosRecorder(
             return
         }
 
-        if (
-            event.reason == "newDeviceAvailable" &&
-            state.issue?.kind == RecorderIssueKind.INPUT_UNAVAILABLE
-        ) {
-            state = state.copy(
-                issue = RecorderIssue(
-                    RecorderIssueKind.INPUT_UNAVAILABLE,
-                    recoverable = event.inputAvailable,
-                ),
-            )
+        if (state.issue?.kind == RecorderIssueKind.INPUT_UNAVAILABLE) {
+            val routeRecovered = if (waitingForExternalInput) {
+                event.currentHasExternalInput
+            } else {
+                event.inputAvailable
+            }
+            if (routeRecovered) {
+                waitingForExternalInput = false
+                state = state.copy(
+                    issue = RecorderIssue(RecorderIssueKind.INPUT_UNAVAILABLE, recoverable = true),
+                )
+            }
         }
     }
 
