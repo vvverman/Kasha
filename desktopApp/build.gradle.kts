@@ -18,9 +18,9 @@ compose.desktop {
         mainClass = "brain.desktop.MainKt"
         jvmArgs += listOf("-Xmx768m", "-Dfile.encoding=UTF-8", "-Dapple.awt.application.name=Kasha")
         nativeDistributions {
-            targetFormats(TargetFormat.Dmg)
+            targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Exe, TargetFormat.Deb, TargetFormat.Rpm)
             packageName = if(demoBuild) "Kasha Test" else "Kasha"
-            packageVersion = "1.1.4"
+            packageVersion = "1.2.0"
             vendor = "Vyacheslav Verman"
             description = if(demoBuild) "Тест интерфейса, ИИ имитируется" else "Локальные голосовые заметки"
             includeAllModules = true
@@ -39,6 +39,15 @@ compose.desktop {
                         <key>CFBundleLocalizations</key><array><string>ru</string><string>en</string><string>es</string><string>fr</string><string>de</string><string>uk</string><string>be</string><string>kk</string></array>
                     """.trimIndent()
                 }
+            }
+            windows {
+                menuGroup = "Kasha"
+                dirChooser = true
+                perUserInstall = true
+            }
+            linux {
+                menuGroup = "Utility"
+                appCategory = "Utility"
             }
         }
     }
