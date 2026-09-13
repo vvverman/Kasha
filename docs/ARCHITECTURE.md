@@ -1,67 +1,139 @@
 # Kasha — архитектура
 
-Каноническая физическая схема проекта:
+Главный принцип: **одно бизнес-ядро, один общий UI, общие AI-слои и шесть максимально тонких delivery shells**.
 
 ```text
-                           kashaCore
-          models · domain · rules · contracts · AI ports
-                               │
-                           aiCatalog
-             concrete model/provider descriptors
-                               │
-                        shared Kasha UI
-                               │
-       ┌──────────┬──────────┬─┴────────┬────────┬────────┬────────┐
+                         modules/core
+             models · domain · rules · ports
+                                │
+              ┌─────────────────┼──────────────────┐
+              │                 │                  │
+      modules/ai/catalog  modules/ai/connectors  modules/ui
+        AI metadata        provider protocols     Kasha UI
+              │                 │                  │
+              └─────────────────┼──────────────────┘
+                                │
+                  reusable infrastructure
+                                │
+                         platforms/*
+                                │
+       ┌──────────┬──────────┬──┴───────┬────────┬────────┬───────┐
      macOS      Windows    Linux      Android    iOS      Web
-       │            │        │           │        │        │
-     thin         thin     thin        thin     thin     thin
-     shell        shell    shell       shell    shell    shell
 ```
+
+Подробная физическая карта: [`REPOSITORY_STRUCTURE.md`](REPOSITORY_STRUCTURE.md).
 
 ## Неподвижные правила
 
-1. В продукте ровно **одно бизнес-ядро — `kashaCore`**.
-2. `kashaCore` не зависит от Compose UI, платформенных API, конкретных AI-моделей, AI-провайдеров, URL API, Keychain/Keystore/DPAPI/Secret Service.
-3. Конкретные AI-модели и провайдеры находятся вне Core. AI подключается через три независимых контракта: `SPEECH_TO_TEXT`, `TEXT`, `ROUTING`.
-4. Продуктовый интерфейс реализуется один раз в `composeApp`/Kasha UI.
-5. Поддерживаются шесть оболочек: **macOS, Windows, Linux, Android, iOS, Web**.
-6. Если код одинаков минимум на двух платформах, он не должен дублироваться в shell. Его место — Core, shared UI или общий infrastructure-модуль вне Core.
-7. Shell содержит только то, что действительно платформенное: lifecycle, permissions, filesystem/DB binding, microphone, playback, notifications, secure storage, native AI runtime binding и packaging.
-8. Основной режим local-first. Внешний AI опционален, требует явного consent, а API-key хранится только в защищённом хранилище конкретной платформы.
+1. В продукте ровно **одно бизнес-ядро**: `modules/core` (Gradle ID `:kashaCore`).
+2. Core не зависит от UI, ОС, конкретных AI-моделей/providers, сетевых endpoint, secure storage или packaging.
+3. AI имеет три независимые роли: `SPEECH_TO_TEXT`, `TEXT`, `ROUTING`. Это контракты одного Core, а не отдельные ядра.
+4. Конкретные модели/providers описывает `modules/ai/catalog`; provider-specific HTTP protocol находится в `modules/ai/connectors`.
+5. Продуктовый интерфейс реализуется один раз в `modules/ui`. В нём физически нет platform source sets.
+6. Поддерживаются ровно шесть delivery targets: **macOS, Windows, Linux, Android, iOS, Web**.
+7. Если код одинаков хотя бы на двух платформах, он поднимается в `modules/`, а не копируется по shells.
+8. Platform shell содержит только lifecycle, permissions, platform storage, microphone/playback, notifications, secure secrets, native bindings и packaging.
+9. Local-first — базовый режим. Внешний AI включается только явно после consent; API-key не сохраняется в Core/UI Preferences.
 
-## Физические оболочки
+## Слои
 
-| Платформа | Оболочка | Что остаётся платформенным |
+### `modules/core`
+
+Единственный источник бизнес-правил:
+
+- Project / Note / Task / Capture models;
+- сортировки и persistent manual order;
+- append/distribution rules;
+- task lifecycle/reminder scheduling rules;
+- AI role contracts и privacy invariants;
+- platform-neutral state/contracts.
+
+### `modules/ai/catalog`
+
+Только каталог возможностей:
+
+- concrete local engine metadata;
+- supported roles/languages/sizes;
+- external provider descriptors;
+- validation выбранного engine ID.
+
+Он не выполняет HTTP-запросы и не хранит секреты.
+
+### `modules/ai/connectors`
+
+Единственное место provider-specific протоколов:
+
+- OpenAI;
+- Anthropic;
+- Gemini;
+- OpenRouter;
+- OpenAI-compatible/custom endpoints;
+- request/response schemas;
+- multipart external STT;
+- обязательная consent validation.
+
+Модуль не знает Keychain/Keystore/DPAPI и получает API-key только как transient parameter.
+
+### `modules/ui`
+
+Единый Compose Multiplatform продуктовый UI:
+
+- Kasha UI components;
+- Kasha Icons;
+- экраны;
+- `StudioState`;
+- общая UX-логика представления.
+
+Запрещены `iosMain`, `androidMain`, `jvmMain`, `wasmJsMain`: platform-specific UI wiring находится только в shells.
+
+### `modules/infrastructure/jvm`
+
+Переиспользуемая JVM-инфраструктура:
+
+- disk persistence;
+- local process execution;
+- local AI runtime;
+- Java HTTP transport для `aiConnectors`;
+- localhost runtime для Web.
+
+Она не содержит продуктовых экранов и provider protocol constants.
+
+## Шесть оболочек
+
+| Delivery | Physical location | Platform-specific responsibility |
 | --- | --- | --- |
-| macOS | `desktopApp` / macOS resources | app paths, Keychain, notifications, native executables, DMG |
-| Windows | `desktopApp` / Windows resources | app paths, DPAPI, notifications, `.exe` native engines, MSI/EXE |
-| Linux | `desktopApp` / Linux resources | XDG paths, Secret Service, notifications, ELF native engines, DEB/RPM |
-| Android | `androidApp` | Activity/lifecycle, permissions, files, microphone, playback, notifications, Android native/on-device AI bindings, APK |
-| iOS | `iosApp` + `composeApp/iosMain` | lifecycle, permissions, files, AVAudio, notifications, Apple/native AI bindings, IPA |
-| Web | `composeApp/wasmJsMain` | browser media/storage/runtime bridge and web packaging |
+| macOS | `platforms/desktop` | paths, Keychain, notification adapter, Mach-O engines, DMG |
+| Windows | `platforms/desktop` | paths, DPAPI, notifications, `.exe` engines, MSI/EXE |
+| Linux | `platforms/desktop` | XDG paths, Secret Service, notifications, ELF engines, DEB/RPM |
+| Android | `platforms/android` | Activity/lifecycle, permissions, AudioRecord/AudioTrack, notifications, Android storage, APK |
+| iOS | `platforms/ios/shared` + `platforms/ios/app` | AVAudio, Apple Speech, notifications, files, Kotlin framework + minimal Xcode wrapper, IPA |
+| Web | `platforms/web` | browser entry point, browser media/runtime adapters, production Wasm |
 
-Desktop использует один JVM implementation там, где API действительно переносим (например Java Sound и общая repository/runtime логика), а различия ОС изолируются в малых platform adapters и OS-specific resources. Это всё равно три оболочки поставки: macOS, Windows и Linux.
+macOS/Windows/Linux намеренно используют один общий desktop implementation. Три копии одинакового desktop-кода были бы нарушением цели максимального reuse. Отличия изолируются внутри малых OS adapters и `packaging/`.
 
-## Зависимости
-
-Разрешённое направление:
+## Направление зависимостей
 
 ```text
-platform shell ──► shared Kasha UI ──► kashaCore
-       │                  │
-       ├────────► aiCatalog ─────────► kashaCore
-       └────────► infrastructure/runtime ─► kashaCore + aiCatalog
+platforms/*
+    │
+    ├────► modules/ui ───────────────► modules/core
+    │          │
+    │          └────► modules/ai/catalog ──► modules/core
+    │
+    ├────► modules/ai/connectors ────► modules/core
+    │
+    └────► modules/infrastructure/* ─► modules/ai/* + modules/core
 ```
 
-Обратные зависимости запрещены.
+Обратная зависимость запрещена. `modules/core` никогда не импортирует внешний слой.
 
-## Definition of Done для архитектурного этапа
+## Definition of Done
 
-- Core и общий UI собираются независимо от конкретной оболочки.
-- Все шесть оболочек физически присутствуют и имеют CI build target.
-- macOS, Windows, Linux имеют самостоятельные установочные артефакты.
-- Android имеет installable APK.
-- iOS имеет installable IPA/SideStore artifact.
-- Web имеет production Wasm bundle.
-- сторонний AI подключается через общие AI-контракты без добавления provider-specific логики в Core.
-- CI запускает `scripts/check-platform-shells.py` и AI/UI boundary guards.
+- Core собирается независимо.
+- UI физически platform-neutral.
+- AI catalog и provider protocol вынесены из Core.
+- Все шесть shells присутствуют физически под `platforms/`.
+- macOS → DMG, Windows → MSI/EXE, Linux → DEB/RPM, Android → APK, iOS → IPA, Web → production Wasm.
+- API keys используют системное secure storage там, где подключается внешний AI.
+- CI проверяет архитектуру через `check-platform-shells.py`, `check-ai-boundary.py`, `check-local-only.py`, `check-ui-boundary.py`.
+- старые неоднозначные top-level modules (`kashaCore`, `composeApp`, `runtime`, `desktopApp`, `androidApp`, `iosApp`, `aiCatalog`) не возвращаются.
