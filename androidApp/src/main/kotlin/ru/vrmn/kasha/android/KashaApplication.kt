@@ -29,6 +29,7 @@ internal class AndroidPlatformRuntime(application: Application) {
         systemLanguage = systemLanguage,
     )
     val recorder = AndroidRecorder(application, repository, scope)
+    val permissions = AndroidDevicePermissionGateway(application)
     val audio = AndroidUnavailableAudio
     val state = StudioState(
         repository = repository,

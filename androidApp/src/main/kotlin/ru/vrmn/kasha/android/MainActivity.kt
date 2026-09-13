@@ -8,10 +8,18 @@ import brain.studio.StudioApp
 
 /** Тонкая Android entry point: весь продуктовый state/UI берётся из shared Kasha UI. */
 class MainActivity : ComponentActivity() {
+    private lateinit var platform: AndroidPlatformRuntime
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        platform = (application as KashaApplication).platform
+        platform.permissions.bind(this)
         enableEdgeToEdge()
-        val state = (application as KashaApplication).platform.state
-        setContent { StudioApp(state) }
+        setContent { StudioApp(platform.state) }
+    }
+
+    override fun onDestroy() {
+        if (::platform.isInitialized) platform.permissions.unbind(this)
+        super.onDestroy()
     }
 }
