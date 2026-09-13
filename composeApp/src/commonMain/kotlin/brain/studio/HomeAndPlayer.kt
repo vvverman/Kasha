@@ -184,26 +184,28 @@ private fun ResultActions(s: StudioState) {
                 )
             }
         } else {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconAction(s.tr("cancelNote"), Glyph.DELETE, { s.confirmDelete = true })
-                Spacer(Modifier.width(10.dp))
+            Column(Modifier.fillMaxWidth()) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconAction(s.tr("cancelNote"), Glyph.DELETE, { s.confirmDelete = true })
+                    Spacer(Modifier.width(10.dp))
+                    Action(
+                        KashaCopy.text(s.language, "sendToNotes") ?: s.tr("send"),
+                        { scope.launch { s.sendToNotes() } },
+                        primary = true,
+                        glyph = Glyph.SEND,
+                        modifier = Modifier.weight(1f),
+                        enabled = canSave,
+                    )
+                }
+                Spacer(Modifier.height(10.dp))
                 Action(
-                    KashaCopy.text(s.language, "sendToNotes") ?: s.tr("send"),
-                    { scope.launch { s.sendToNotes() } },
-                    primary = true,
-                    glyph = Glyph.SEND,
-                    modifier = Modifier.weight(1f),
+                    KashaCopy.text(s.language, "sendToTasks") ?: "В задачи",
+                    { scope.launch { s.sendToTasks() } },
+                    glyph = Glyph.TASKS,
                     enabled = canSave,
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
-            Spacer(Modifier.height(10.dp))
-            Action(
-                KashaCopy.text(s.language, "sendToTasks") ?: "В задачи",
-                { scope.launch { s.sendToTasks() } },
-                glyph = Glyph.TASKS,
-                enabled = canSave,
-                modifier = Modifier.fillMaxWidth(),
-            )
         }
     }
 }
