@@ -48,7 +48,12 @@ internal class IosRecorder(
         check(requestMicrophonePermission()) { "microphonePermissionDenied" }
 
         val session = AVAudioSession.sharedInstance()
-        session.setCategory(AVAudioSessionCategoryPlayAndRecord, error = null)
+        check(session.setCategory(
+            AVAudioSessionCategoryPlayAndRecord,
+            withOptions = AVAudioSessionCategoryOptionAllowBluetooth,
+            error = null,
+        )) { "audioSessionUnavailable" }
+        check(session.setActive(true, error = null)) { "audioSessionUnavailable" }
 
         val path = IosPaths.child(IosPaths.pending, "${NSUUID().UUIDString.lowercase()}.m4a")
         val settings = mapOf<Any?, Any>(
@@ -58,8 +63,12 @@ internal class IosRecorder(
         )
         val created = AVAudioRecorder(NSURL.fileURLWithPath(path), settings, null)
         created.meteringEnabled = true
-        check(created.prepareToRecord()) { "audioFailed" }
-        check(created.record()) { "audioFailed" }
+        if (!created.prepareToRecord() || !created.record()) {
+            created.stop()
+            session.setActive(false, error = null)
+            IosPaths.remove(path)
+            error("audioFailed")
+        }
 
         recorder = created
         currentPath = path
@@ -84,6 +93,7 @@ internal class IosRecorder(
         val source = currentPath ?: error("recordingNotStarted")
         val duration = active.currentTime
         active.stop()
+        AVAudioSession.sharedInstance().setActive(false, error = null)
         recorder = null
         currentPath = null
         currentPhase = "idle"
