@@ -13,7 +13,7 @@ import javax.swing.JOptionPane
 import kotlin.system.exitProcess
 
 fun main(args:Array<String>){
-    val resources=Path.of(System.getProperty("compose.application.resources.dir")?:System.getenv("KASHA_BUNDLE_RESOURCES")?:"desktopApp/bundle-test/common").toAbsolutePath()
+    val resources=Path.of(System.getProperty("compose.application.resources.dir")?:System.getenv("KASHA_BUNDLE_RESOURCES")?:"platforms/desktop/bundle-test/common").toAbsolutePath()
     val demo=Files.exists(resources.resolve("demo-mode.txt"))
     val name=if(demo)"Kasha Test" else "Kasha"
     System.setProperty("apple.awt.application.name",name)
