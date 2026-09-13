@@ -20,6 +20,16 @@ class InferenceRunnerTest {
         DesktopInferenceRunner(true, capture(output)).run(command, 2)
         assertEquals(command + listOf("--n-gpu-layers", "0", "--device", "none"), output)
     }
+    @Test fun cpuWindowsWhisperExeGetsNoGpu() = runBlocking {
+        val output = mutableListOf<String>(); val command = listOf("/bundle/bin/whisper-cli.exe", "-m", "/bundle/models/original.bin")
+        DesktopInferenceRunner(true, capture(output)).run(command, 2)
+        assertEquals(command + "--no-gpu", output)
+    }
+    @Test fun cpuWindowsLlamaExeGetsCpuFlags() = runBlocking {
+        val output = mutableListOf<String>(); val command = listOf("/bundle/bin/llama-completion.exe", "-m", "/bundle/models/original.gguf")
+        DesktopInferenceRunner(true, capture(output)).run(command, 2)
+        assertEquals(command + listOf("--n-gpu-layers", "0", "--device", "none"), output)
+    }
     @Test fun audioConversionIsUnchanged() = runBlocking {
         val output = mutableListOf<String>(); val command = listOf("/bundle/bin/ffmpeg", "-version")
         DesktopInferenceRunner(true, capture(output)).run(command, 2); assertEquals(command, output)
