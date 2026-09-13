@@ -5,6 +5,7 @@ import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.*
@@ -29,9 +30,10 @@ fun <T> KashaReorderableList(
     contentPadding: PaddingValues = PaddingValues(bottom = 20.dp),
     moveUpLabel: String? = null,
     moveDownLabel: String? = null,
+    listState: LazyListState? = null,
     itemContent: @Composable (T, Boolean) -> Unit,
 ) {
-    val state = rememberLazyListState()
+    val state = listState ?: rememberLazyListState()
     val scope = rememberCoroutineScope()
     val local = remember { mutableStateListOf<T>() }
     var draggingKey by remember { mutableStateOf<String?>(null) }
