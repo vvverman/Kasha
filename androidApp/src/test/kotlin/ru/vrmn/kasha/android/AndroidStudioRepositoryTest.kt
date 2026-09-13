@@ -32,11 +32,13 @@ class AndroidStudioRepositoryTest {
 
             val pendingNote = first.newPendingFile().apply { writeBytes(byteArrayOf(1, 2, 3, 4)) }
             val noteCapture = first.acceptPending(pendingNote, 1.25, listOf(0.1f, 0.8f))
+            first.reprocess(noteCapture.id)
             first.updateCaptureDraft(noteCapture.id, CaptureDraftUpdate(text = "Первая строка\nТекст"))
             val note = first.distribute(noteCapture.id, DistributionRequest(project.id))
 
             val pendingTask = first.newPendingFile().apply { writeBytes(byteArrayOf(5, 6, 7, 8)) }
             val taskCapture = first.acceptPending(pendingTask, 2.0, listOf(0.2f))
+            first.reprocess(taskCapture.id)
             first.updateCaptureDraft(taskCapture.id, CaptureDraftUpdate(text = "Сделать задачу"))
             val task = first.distributeTask(
                 taskCapture.id,
