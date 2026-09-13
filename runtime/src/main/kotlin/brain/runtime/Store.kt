@@ -2,6 +2,7 @@ package brain.runtime
 
 import brain.domain.BrainData
 import brain.domain.migrated
+import brain.domain.orderNotePins
 import brain.model.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
