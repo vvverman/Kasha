@@ -45,8 +45,6 @@ with sync_playwright() as p:
     page.on('pageerror', lambda error: errors.append(str(error)))
 
     def wait_until(check, description, timeout=30):
-        # evaluate дожидается Promise. В закреплённой версии wait_for_function
-        # принимает сам Promise за truthy, даже если тот разрешается в false.
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             value = check()
@@ -56,8 +54,6 @@ with sync_playwright() as p:
         raise AssertionError('Не дождались: ' + description)
 
     def click_button(name):
-        # Узел семантики находится под canvas. Щёлкаем мышью по его координатам,
-        # не вызываем обработчики приложения напрямую и не отключаем проверки.
         button = page.get_by_role('button', name=name, exact=True)
         button.wait_for(state='visible', timeout=30000)
         box = button.bounding_box()
@@ -73,8 +69,8 @@ with sync_playwright() as p:
         page.locator('canvas').first.wait_for(state='visible', timeout=30000)
         click_button('Пока без записи')
         page.get_by_role('button', name='Пока без записи', exact=True).wait_for(state='hidden')
-        assert page.locator('#webApp').bounding_box()['width'] == 430
-        page.screenshot(path=str(OUT / 'desktop-mobile-layout.png'))
+        assert page.locator('#webApp').bounding_box()['width'] == 1440
+        page.screenshot(path=str(OUT / 'desktop-shell-layout.png'))
 
         click_button('Записать')
         page.wait_for_function('kashaPlatform.phase() === "recording"')
@@ -95,7 +91,6 @@ with sync_playwright() as p:
         assert page.evaluate('kashaPlatform.phase()') == 'idle'
         assert page.evaluate('kashaPlatform.pending()') is True
 
-        # Контрольная сумма сохранённых фрагментов до повторной отправки.
         pending_source = page.evaluate('''async () => {
             const db = await new Promise((resolve, reject) => {
                 const r = indexedDB.open('kasha-audio-v1', 1);
@@ -143,7 +138,7 @@ with sync_playwright() as p:
         assert page.locator('#webApp').bounding_box()['width'] == 390
         page.screenshot(path=str(OUT / 'mobile-layout.png'))
         assert not errors, errors
-        checks = ['render-430-and-390', 'record-pause-resume', 'failed-upload-keeps-audio',
+        checks = ['render-1440-and-390', 'record-pause-resume', 'failed-upload-keeps-audio',
                   'reload-and-recover', 'saved-audio-sha256-matches', 'missing-model-honesty',
                   'project-and-idempotent-distribution']
         (OUT / 'browser-result.json').write_text(json.dumps({
@@ -152,7 +147,6 @@ with sync_playwright() as p:
         }, ensure_ascii=False, indent=2), encoding='utf-8')
         print('BROWSER SMOKE PASSED: 7 проверок, без настоящих весов моделей')
     finally:
-        # Диагностика не должна скрывать исходную ошибку теста при закрытии страницы.
         with suppress(Exception):
             (OUT / 'browser.html').write_text(page.content(), encoding='utf-8')
         with suppress(Exception):
