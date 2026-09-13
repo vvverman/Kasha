@@ -7,6 +7,8 @@ import io.ktor.server.testing.testApplication
 import kotlinx.coroutines.*
 import java.nio.file.*
 import java.util.UUID
+import kotlin.math.PI
+import kotlin.math.sin
 import kotlin.test.*
 
 class RuntimeTest {
@@ -69,12 +71,43 @@ class RuntimeTest {
         val root = Files.createTempDirectory("brain-pcm")
         try {
             val original = root.resolve("original.wav")
-            val runner = JvmCommandRunner()
-            runner.run(listOf("ffmpeg", "-v", "error", "-f", "lavfi", "-i", "aevalsrc=if(lt(t\\,0.6)+gt(t\\,3.4)\\,0.3*sin(2*PI*440*t)\\,0):s=16000:d=4", "-ac", "1", "-c:a", "pcm_s16le", original.toString()), 20)
+            writePcmFixture(original)
             val before = Files.readAllBytes(original)
             val (meta, spans) = PcmAudio.compact(original, root.resolve("compact.wav"))
             assertEquals(4.0, meta.duration, .01); assertTrue(spans.sumOf { it.duration } < 3)
             assertContentEquals(before, Files.readAllBytes(original)); assertTrue(PcmAudio.info(root.resolve("compact.wav")).duration < 3)
         } finally { root.toFile().deleteRecursively() }
+    }
+
+    private fun writePcmFixture(path: Path) {
+        val rate = 16000
+        val seconds = 4
+        val samples = rate * seconds
+        val pcm = ByteArray(samples * 2)
+        for (index in 0 until samples) {
+            val t = index.toDouble() / rate
+            val amplitude = if (t < 0.6 || t > 3.4) 0.3 * sin(2 * PI * 440 * t) else 0.0
+            val sample = (amplitude * Short.MAX_VALUE).toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt())
+            pcm[index * 2] = (sample and 0xff).toByte()
+            pcm[index * 2 + 1] = ((sample ushr 8) and 0xff).toByte()
+        }
+        val size = pcm.size
+        val header = ByteArray(44)
+        fun ascii(offset: Int, value: String) = value.encodeToByteArray().copyInto(header, offset)
+        fun u16(offset: Int, value: Int) {
+            header[offset] = (value and 0xff).toByte()
+            header[offset + 1] = ((value ushr 8) and 0xff).toByte()
+        }
+        fun u32(offset: Int, value: Int) {
+            header[offset] = (value and 0xff).toByte()
+            header[offset + 1] = ((value ushr 8) and 0xff).toByte()
+            header[offset + 2] = ((value ushr 16) and 0xff).toByte()
+            header[offset + 3] = ((value ushr 24) and 0xff).toByte()
+        }
+        ascii(0, "RIFF"); u32(4, 36 + size); ascii(8, "WAVE")
+        ascii(12, "fmt "); u32(16, 16); u16(20, 1); u16(22, 1)
+        u32(24, rate); u32(28, rate * 2); u16(32, 2); u16(34, 16)
+        ascii(36, "data"); u32(40, size)
+        Files.write(path, header + pcm)
     }
 }
