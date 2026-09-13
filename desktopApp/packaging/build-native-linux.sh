@@ -21,7 +21,10 @@ LLAMA=5266f24da75dc449bd56cbed7addb9c8e4a6a73e
 FFMPEG=894da5ca7d742e4429ffb2af534fcda0103ef593
 
 build_engine() {
-  local repo="$1" rev="$2" target="$3" dir="$ROOT/$repo"
+  local repo="$1"
+  local rev="$2"
+  local target="$3"
+  local dir="$ROOT/$repo"
   checkout "ggml-org/$repo" "$rev" "$dir"
   cmake -S "$dir" -B "$dir/build" -DCMAKE_BUILD_TYPE=Release \
     -DBUILD_SHARED_LIBS=OFF -DGGML_NATIVE=OFF -DGGML_OPENMP=OFF -DGGML_CUDA=OFF -DGGML_BLAS=OFF \
