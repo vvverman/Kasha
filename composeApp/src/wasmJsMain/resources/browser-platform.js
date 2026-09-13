@@ -25,11 +25,21 @@
     const chunks=(await all('chunks')).filter(x=>x.id===id);
     await new Promise((resolve,reject)=>{const tx=database.transaction(['sessions','chunks'],'readwrite');tx.objectStore('sessions').delete(id);chunks.forEach(x=>tx.objectStore('chunks').delete([x.id,x.index]));tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error||Error('Audio cleanup failed'));});
   };
+  const pendingSession=async()=>{
+    if(recorder&&recorder.state!=='inactive')return null;
+    const sessions=(await all('sessions')).sort((a,b)=>a.created-b.created);
+    const chunks=await all('chunks');
+    for(const saved of sessions){
+      if(chunks.some(x=>x.id===saved.id&&x.blob?.size>0))return saved;
+      await removeSession(saved.id).catch(()=>{});
+    }
+    return null;
+  };
   const upload=async base=>{
     await writes;
-    const saved=(await all('sessions')).sort((a,b)=>a.created-b.created)[0];
+    const saved=await pendingSession();
     if(!saved)throw Error('No pending recording');
-    const chunks=(await all('chunks')).filter(x=>x.id===saved.id).sort((a,b)=>a.index-b.index);
+    const chunks=(await all('chunks')).filter(x=>x.id===saved.id&&x.blob?.size>0).sort((a,b)=>a.index-b.index);
     if(!chunks.length){await removeSession(saved.id);throw Error('No audio samples');}
     const blob=new Blob(chunks.map(x=>x.blob),{type:saved.mime});
     const form=new FormData();const ext=saved.mime.includes('mp4')?'m4a':saved.mime.includes('ogg')?'ogg':'webm';
@@ -44,16 +54,7 @@
   globalThis.kashaPlatform={
     baseUrl:()=>location.port==='8080'?'http://127.0.0.1:8787':location.origin,
     consent:()=>{try{return localStorage.getItem('kasha.mic-consent')==='yes';}catch{return false;}},
-    pending:async()=>{
-      if(recorder&&recorder.state!=='inactive')return false;
-      const sessions=(await all('sessions')).sort((a,b)=>a.created-b.created);
-      for(const saved of sessions){
-        const chunks=(await all('chunks')).filter(x=>x.id===saved.id);
-        if(chunks.some(x=>x.blob?.size>0))return true;
-        await removeSession(saved.id).catch(()=>{});
-      }
-      return false;
-    },
+    pending:async()=>Boolean(await pendingSession()),
     phase:()=>recorder?.state==='recording'?'recording':recorder?.state==='paused'?'paused':'idle',
     level:()=>{
       if(!analyser||recorder?.state!=='recording')return 0;
@@ -65,7 +66,7 @@
       let sessionId=null;
       try{
         if(recorder&&recorder.state!=='inactive')return 'ok';
-        if(await globalThis.kashaPlatform.pending())throw Error('Recover pending audio first');
+        if(await pendingSession())throw Error('Recover pending audio first');
         if(player&&!player.paused&&!player.ended)throw Error('Stop playback first');
         if(!navigator.mediaDevices?.getUserMedia||!globalThis.MediaRecorder)throw Error('Microphone unavailable');
         stream=await navigator.mediaDevices.getUserMedia({audio:true});
@@ -84,7 +85,12 @@
         };
         stopped=new Promise((resolve,reject)=>{
           own.onstop=async()=>{release();await writes;persistError?reject(persistError):resolve();};
-          own.onerror=()=>{if(own.state!=='inactive')own.stop();else release();};
+          own.onerror=event=>{
+            persistError=event?.error||Error('Recording failed');
+            if(own.state!=='inactive'){
+              try{own.stop();}catch{release();reject(persistError);}
+            }else{release();reject(persistError);}
+          };
         });stopped.catch(()=>{});own.start(500);
         try{localStorage.setItem('kasha.mic-consent','yes');}catch{}
         return 'ok';
@@ -92,7 +98,18 @@
     },
     pause:()=>{try{if(recorder?.state!=='recording')throw Error('Not recording');recorder.pause();return 'ok';}catch(e){return failure(e);}},
     resume:()=>{try{if(recorder?.state!=='paused')throw Error('Not paused');recorder.resume();return 'ok';}catch(e){return failure(e);}},
-    stop:async base=>{try{if(recorder?.state!=='inactive')recorder?.stop();await stopped;recorder=null;return await upload(base);}catch(e){return failure(e);}},
+    stop:async base=>{
+      try{
+        if(recorder?.state!=='inactive')recorder?.stop();
+        await stopped;
+        recorder=null;stopped=null;
+        return await upload(base);
+      }catch(e){
+        if(recorder?.state==='inactive')recorder=null;
+        stopped=null;
+        return failure(e);
+      }
+    },
     recover:async base=>{try{return await upload(base);}catch(e){return failure(e);}},
     play:async(url,from,rate)=>{
       try{
