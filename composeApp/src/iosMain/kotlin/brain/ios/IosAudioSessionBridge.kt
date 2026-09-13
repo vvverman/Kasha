@@ -35,24 +35,36 @@ internal object IosAudioSessionBridge {
     private const val ROUTE_CHANGED = "KashaAudioRouteChanged"
     private const val APP_DID_BECOME_ACTIVE = "KashaApplicationDidBecomeActive"
 
+    private var systemEventHandler: ((IosAudioSystemEvent) -> Unit)? = null
+    private var observersInstalled = false
+
     fun activateRecording() = post(ACTIVATE_RECORDING)
     fun activatePlayback() = post(ACTIVATE_PLAYBACK)
     fun deactivate() = post(DEACTIVATE)
 
     /**
-     * Observer живёт столько же, сколько process-level iOS composition root.
+     * Foundation observers устанавливаются ровно один раз на процесс. При пересоздании
+     * Compose host заменяется только текущий handler, поэтому системное событие не дублируется.
      * Swift гарантирует доставку bridge events на main thread.
      */
     fun observeSystemEvents(handler: (IosAudioSystemEvent) -> Unit) {
+        systemEventHandler = handler
+        if (observersInstalled) return
+        observersInstalled = true
+
         val center = NSNotificationCenter.defaultCenter
         center.addObserverForName(INTERRUPTION_BEGAN, null, null) { notification ->
-            handler(IosAudioSystemEvent.InterruptionBegan(notification.bool("wasSuspended")))
+            systemEventHandler?.invoke(
+                IosAudioSystemEvent.InterruptionBegan(notification.bool("wasSuspended"))
+            )
         }
         center.addObserverForName(INTERRUPTION_ENDED, null, null) { notification ->
-            handler(IosAudioSystemEvent.InterruptionEnded(notification.bool("canResume")))
+            systemEventHandler?.invoke(
+                IosAudioSystemEvent.InterruptionEnded(notification.bool("canResume"))
+            )
         }
         center.addObserverForName(ROUTE_CHANGED, null, null) { notification ->
-            handler(
+            systemEventHandler?.invoke(
                 IosAudioSystemEvent.RouteChanged(
                     reason = notification.string("reason"),
                     inputAvailable = notification.bool("inputAvailable"),
@@ -62,7 +74,7 @@ internal object IosAudioSessionBridge {
             )
         }
         center.addObserverForName(APP_DID_BECOME_ACTIVE, null, null) { notification ->
-            handler(
+            systemEventHandler?.invoke(
                 IosAudioSystemEvent.ApplicationDidBecomeActive(
                     inputAvailable = notification.bool("inputAvailable"),
                     currentHasExternalInput = notification.bool("currentHasExternalInput"),
