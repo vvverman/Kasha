@@ -37,7 +37,7 @@ class DesktopServices(val root: Path, val resources: Path, cpuOnly: Boolean = fa
                 AiCatalog.DEFAULT_TEXT to Path.of(env.getValue("KASHA_LLAMA_MODEL")),
             )
             val packages = JvmAiPackageGateway(root, bundledModels)
-            val cloud = JvmCloudAiGateway(root)
+            val cloud = JvmCloudAiGateway(root, desktopSecretStore())
             val intelligence: Intelligence = if(simulated) DemoIntelligence() else RoutedStudioIntelligence(prefs,env,root,packages,cloud,runner)
             studioProcessor = StudioProcessor(store,prefs,intelligence,env.getValue("KASHA_FFMPEG"),runner)
             val baseRepository = StudioDiskRepository(store,studioProcessor,prefs,scope)
