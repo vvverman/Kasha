@@ -193,6 +193,20 @@ private fun ModalHost(state: StudioState, scope: CoroutineScope) {
             Spacer(Modifier.height(24.dp))
             Action(state.tr("ok"), { state.error = null }, primary = true, modifier = Modifier.fillMaxWidth())
         }
+        state.confirmDelete && state.selectedTaskId != null -> {
+            val taskId = state.selectedTaskId!!
+            KashaModal(onDismiss = { state.confirmDelete = false }) {
+                Text(KashaCopy.text(state.language, "deleteTask") ?: state.tr("delete"), style = MaterialTheme.typography.headlineMedium)
+                Spacer(Modifier.height(28.dp))
+                Action(
+                    state.tr("delete"),
+                    { scope.launch { if (state.deleteTask(taskId)) state.confirmDelete = false } },
+                    primary = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                QuietAction(state.tr("cancel"), { state.confirmDelete = false }, Modifier.align(Alignment.CenterHorizontally))
+            }
+        }
         state.confirmDelete -> KashaModal(onDismiss = { state.confirmDelete = false }) {
             ConfirmationContent(
                 state.tr("deleteTitle"), state.tr("deleteBody"), state.tr("delete"), state.tr("cancel"),
