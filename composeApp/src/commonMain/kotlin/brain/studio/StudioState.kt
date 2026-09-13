@@ -165,8 +165,10 @@ class StudioState(
             if (recording && phase == "idle") { recordPhase = phase; mark = null; pending = recorder.hasPending() }
             if (recording) {
                 elapsed = (recordedMillis + (mark?.elapsedNow()?.inWholeMilliseconds ?: 0L)) / 1000
-                val level = if (recordPhase == "recording") recorder.level().coerceIn(0f, 1f) else 0f
-                liveWave = liveWave.drop(1) + level
+                if (recordPhase == "recording") {
+                    val level = recorder.level().coerceIn(0f, 1f)
+                    liveWave = liveWave.drop(1) + level
+                }
             }
             playback = audio.telemetry()
             if (++tick % 12 == 0 && working) {
