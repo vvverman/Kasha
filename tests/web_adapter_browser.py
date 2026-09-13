@@ -56,6 +56,25 @@ with sync_playwright() as pw:
     page.on('pageerror', lambda error: errors.append(str(error)))
     page.on('dialog', lambda dialog: (dialogs.append(dialog.type), dialog.accept()))
 
+    def stored_chunk_count():
+        return page.evaluate('''async () => {
+            const db = await new Promise((resolve, reject) => {
+                const r = indexedDB.open('kasha-audio-v1', 1);
+                r.onsuccess = () => resolve(r.result);
+                r.onerror = () => reject(r.error);
+            });
+            try {
+                const chunks = await new Promise((resolve, reject) => {
+                    const r = db.transaction('chunks').objectStore('chunks').getAll();
+                    r.onsuccess = () => resolve(r.result);
+                    r.onerror = () => reject(r.error);
+                });
+                return chunks.filter(x => x.blob?.size > 0).length;
+            } finally {
+                db.close();
+            }
+        }''')
+
     try:
         page.goto(BASE, wait_until='networkidle', timeout=60000)
         page.locator('canvas').first.wait_for(state='visible', timeout=30000)
@@ -104,9 +123,12 @@ with sync_playwright() as pw:
         assert denied['pending'] is False, denied
         assert denied['phase'] == 'idle', denied
 
-        # Reload во время активной записи: уже записанные chunks остаются восстановимыми.
+        # Reload во время активной записи: уже подтверждённо записанный browser journal восстанавливается.
         assert page.evaluate('kashaPlatform.start()') == 'ok'
-        page.wait_for_timeout(1300)
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline and stored_chunk_count() == 0:
+            page.wait_for_timeout(100)
+        assert stored_chunk_count() > 0, 'MediaRecorder не записал ни одного persisted chunk'
         assert page.evaluate('kashaPlatform.phase()') == 'recording'
         assert page.evaluate('kashaPlatform.consent()') is True
         page.reload(wait_until='networkidle')
