@@ -37,30 +37,48 @@
 - unit tests покрывают restart persistence и crash-recovery;
 - branch-head CI: `:androidApp:testDebugUnitTest` и `:androidApp:assembleDebug` проходят.
 
-### 4. Microphone/recording — Android-часть завершена, общий пункт заблокирован
+### 4. Microphone/recording — Android adapter готов, общий пункт ещё не закрыт
 
-Готово в Android shell:
+Интеграционная ветка: `platform/android-recorder-contract`, draft PR #41 поверх Core PR #37.
 
-- реальный `MediaRecorder`, AAC/M4A, mono 44.1 kHz, bitrate из общей `Preferences.quality`;
-- `RECORD_AUDIO` проверяется платформой, но system permission не запрашивается скрытно внутри recorder;
-- start/pause/resume/finalize и app-private pending;
-- duration исключает паузы;
-- реальные амплитуды собираются самим recorder независимо от UI lifecycle;
-- финальная waveform представляет всю временную шкалу и сводится максимум к 512 точкам;
-- process-scoped runtime не создаёт второй recorder при пересоздании Activity;
-- background capture защищён foreground service типа `microphone`; сервис запускается только вместе с уже инициированной записью и не рестартует её после process death;
-- foreground notification открывает текущую Kasha Activity через immutable `PendingIntent`;
-- recovery измеряет фактическую duration M4A и не выдумывает успешное восстановление нечитаемого файла;
-- до подключения реального Android AI capture остаётся сохранённым с честным `NEEDS_MODEL`, без demo/fake STT;
-- branch-head Android CI после recorder/FGS изменений: `:androidApp:testDebugUnitTest` + `:androidApp:assembleDebug` — success.
+Готово и зелёное в Android shell:
 
-Общие межплатформенные зависимости, из-за которых пункт 4 целиком пока не закрывается:
+- `AndroidRecorder` реализует общий `RecorderSessionGateway`, не собственную Android state-machine;
+- typed `RecorderPermission`, `RecorderPhase`, `RecorderIssue`, stable `activeSessionId`;
+- real `MediaRecorder`: AAC/M4A, mono 44.1 kHz, bitrate из общей `Preferences`;
+- start/pause/resume/finalize, duration без пауз, app-private active pending;
+- safe `cancelActive(sessionId)`: только точный active source, без Capture/STT/AI/`reprocess`;
+- exact `recoverPending(pendingId)` и `discardPending(pendingId)`;
+- реальные уровни и full-timeline waveform, сведение максимум до 512 точек;
+- recovery duration читается из фактического M4A;
+- recovery waveform локально декодируется через `MediaExtractor + MediaCodec`; при неподдержанном OEM PCM waveform остаётся неизвестной, синтетические данные не подставляются;
+- process-scoped runtime не создаёт второй recorder при Activity recreation;
+- foreground service типа `microphone`, `START_NOT_STICKY`, без скрытого restart capture после process death;
+- foreground notification использует официальный Kasha asset и immutable `PendingIntent` обратно в приложение;
+- `MediaRecorder.OnErrorListener` → typed `INTERRUPTED(IO_FAILURE)`;
+- `AudioRouting.OnRoutingChangedListener` → typed `INTERRUPTED(INPUT_UNAVAILABLE)`;
+- API 29+ `AudioRecordingCallback.isClientSilenced` → typed `INTERRUPTED(INTERRUPTION)`;
+- route/system interruption замораживают recording state, не делают hidden resume;
+- route monitoring регистрируется только после успешного `MediaRecorder.start()`, recording callback — до старта capture;
+- recorder использует только public Android SDK, hidden permission flags удалены;
+- branch-head `:androidApp:testDebugUnitTest :androidApp:assembleDebug` — success;
+- unit tests покрывают waveform reduction и PCM recovery buckets.
 
-- #14 / #25 — shared `RecorderStatus`, permission intent, безопасный `cancelActive`, типизированные interruption/route/hardware причины, pending identity и background reconciliation;
-- #28 — общий контракт полного waveform/duration при recovery из готового файла.
+Permission boundary:
 
-Android follow-up #35 уже фиксирует точное подключение `AudioRecordingCallback`, `AudioDeviceCallback`, `MediaRecorder.OnErrorListener`, route-loss/silenced semantics и запрет скрытого resume после появления общего Core API.
+- recorder достоверно определяет `GRANTED` и `UNAVAILABLE`, а до фактического system prompt возвращает `NOT_DETERMINED`;
+- `DENIED/RESTRICTED` должен фиксировать Android Activity permission-host после реального `ActivityResultContracts.RequestPermission`, потому что обычному приложению недоступны внутренние permission flags;
+- system dialog нельзя запускать внутри recorder: сначала shared Kasha-explanation из #25.
 
-Android-specific обход этих разрывов запрещён. Пункт 5 не начинать до закрытия общего пункта 4.
+Оставшиеся условия полного закрытия пункта 4:
 
-Текущий этап: **4. Microphone/recording — BLOCKED BY Core/UI #14/#25/#28**.
+- Core PR #37 (`RecorderSessionGateway`) должен попасть в `main`;
+- #14: shared `StudioState`/presentation должны reconciles фактический `sessionState()` для external `PAUSED/INTERRUPTED`, замораживать timer/waveform, использовать exact ids и запрещать auto-resume;
+- Android permission-host подключается к shared permission intent из #25;
+- после shared reconciliation — physical-device acceptance: звонок/конкурирующий capture, Bluetooth/headset route loss/return, background/foreground, Settings return, kill/recovery.
+
+#28 со стороны Android больше не требует синтетической waveform: фактическое декодирование реализовано; общий issue остаётся межплатформенным.
+
+Android-specific обход shared gaps запрещён. Пункт 5 не начинать до закрытия общего пункта 4.
+
+Текущий этап: **4. Microphone/recording — Android adapter GREEN, BLOCKED BY shared Core/UI #37/#14/#25**.
