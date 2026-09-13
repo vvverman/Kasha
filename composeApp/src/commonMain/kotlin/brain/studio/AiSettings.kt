@@ -50,10 +50,7 @@ internal fun AiSettingsSection(s: StudioState) {
             AiLocality.CLOUD -> {
                 val providerId = AiCatalog.cloudProviderId(engineId) ?: return false
                 connections.any {
-                    it.providerId == providerId &&
-                        it.enabled &&
-                        it.privacyConsentVersion >= AiPrivacy.CONSENT_VERSION &&
-                        it.modelFor(role) != null
+                    it.providerId == providerId && it.enabled && AiPrivacy.hasCurrentConsent(it) && it.modelFor(role) != null
                 }
             }
             AiLocality.NATIVE -> false
@@ -152,7 +149,7 @@ internal fun AiSettingsSection(s: StudioState) {
                     }
                 }
 
-                val cloudChoices = AiCatalog.connectedCloudChoices(role, connections)
+                val cloudChoices = AiCatalog.connectedCloudChoices(role, connections.filter(AiPrivacy::hasCurrentConsent))
                 if (cloudChoices.isNotEmpty()) {
                     Spacer(Modifier.height(10.dp))
                     Text(t("aiCloudProviders"), style = MaterialTheme.typography.labelLarge)
@@ -184,7 +181,7 @@ internal fun AiSettingsSection(s: StudioState) {
 
     AiCatalog.cloudProviders.forEach { provider ->
         val connected = connections.firstOrNull {
-            it.providerId == provider.id && it.enabled && it.privacyConsentVersion >= AiPrivacy.CONSENT_VERSION
+            it.providerId == provider.id && it.enabled && AiPrivacy.hasCurrentConsent(it)
         }
         KashaListCard(
             onClick = {
@@ -193,7 +190,7 @@ internal fun AiSettingsSection(s: StudioState) {
                 modelIds = existing?.modelIds.orEmpty()
                 endpoint = existing?.endpoint.orEmpty()
                 apiKey = ""
-                consent = existing?.privacyConsentVersion?.let { it >= AiPrivacy.CONSENT_VERSION } == true
+                consent = existing?.let(AiPrivacy::hasCurrentConsent) == true
                 connectionResult = null
                 actionError = null
             },
@@ -215,6 +212,16 @@ internal fun AiSettingsSection(s: StudioState) {
     if (provider != null) {
         val configuredModels = modelIds.filter { (role, model) -> role in provider.roles && model.isNotBlank() }
         val configuredRoles = configuredModels.keys
+        fun configuredConnection(consentGranted: Boolean): CloudAiConnection {
+            val base = CloudAiConnection(
+                providerId = provider.id,
+                modelIds = configuredModels.mapValues { it.value.trim() },
+                endpoint = endpoint.trim().ifBlank { null },
+                enabled = true,
+                privacyConsentVersion = if (consentGranted) AiPrivacy.CONSENT_VERSION else 0,
+            )
+            return if (consentGranted) base.copy(consentSnapshot = AiPrivacy.snapshot(base)) else base
+        }
         Spacer(Modifier.height(8.dp))
         KashaPanel(Modifier.fillMaxWidth(), padding = 16.dp) {
             Text(provider.name, style = MaterialTheme.typography.titleMedium)
@@ -223,14 +230,14 @@ internal fun AiSettingsSection(s: StudioState) {
                 if (index > 0) Spacer(Modifier.height(10.dp))
                 KashaField(
                     modelIds[role].orEmpty(),
-                    { value -> modelIds = modelIds + (role to value) },
+                    { value -> modelIds = modelIds + (role to value); consent = false },
                     "${roleLabel(role)} · ${t("aiModelId")}",
                     Modifier.fillMaxWidth(),
                 )
             }
             if (provider.endpointRequired) {
                 Spacer(Modifier.height(12.dp))
-                KashaField(endpoint, { endpoint = it }, t("aiEndpoint"), Modifier.fillMaxWidth())
+                KashaField(endpoint, { endpoint = it; consent = false }, t("aiEndpoint"), Modifier.fillMaxWidth())
             }
             Spacer(Modifier.height(12.dp))
             KashaField(apiKey, { apiKey = it }, t("aiApiKey"), Modifier.fillMaxWidth())
@@ -262,13 +269,7 @@ internal fun AiSettingsSection(s: StudioState) {
             val testConnection: () -> Unit = {
                 scope.launch {
                     actionError = null
-                    val connection = CloudAiConnection(
-                        providerId = provider.id,
-                        modelIds = configuredModels.mapValues { it.value.trim() },
-                        endpoint = endpoint.trim().ifBlank { null },
-                        enabled = true,
-                        privacyConsentVersion = if (consent) AiPrivacy.CONSENT_VERSION else 0,
-                    )
+                    val connection = configuredConnection(consent)
                     connectionResult = runCatching { cloud.test(connection, apiKey.ifBlank { null }) }
                         .onFailure { actionError = it.message }
                         .getOrDefault(false)
@@ -277,13 +278,7 @@ internal fun AiSettingsSection(s: StudioState) {
             val saveConnection: () -> Unit = {
                 scope.launch {
                     actionError = null
-                    val connection = CloudAiConnection(
-                        providerId = provider.id,
-                        modelIds = configuredModels.mapValues { it.value.trim() },
-                        endpoint = endpoint.trim().ifBlank { null },
-                        enabled = true,
-                        privacyConsentVersion = AiPrivacy.CONSENT_VERSION,
-                    )
+                    val connection = configuredConnection(true)
                     runCatching { cloud.save(connection, apiKey.ifBlank { null }) }
                         .onSuccess { connections = cloud.connections(); providerEditor = null }
                         .onFailure { actionError = it.message }
@@ -308,7 +303,8 @@ internal fun AiSettingsSection(s: StudioState) {
                 Spacer(Modifier.height(8.dp))
                 KashaQuietButton(t("aiDisconnect"), {
                     scope.launch {
-                        cloud.remove(provider.id)
+                        val result = cloud.disconnect(provider.id)
+                        if (result.secretDeletion == SecureSecretDeletion.FAILED) actionError = t("aiConnectionFailed")
                         connections = cloud.connections()
                         providerEditor = null
                         var next = s.preferences.ai
