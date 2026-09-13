@@ -5,6 +5,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.*
 import androidx.compose.ui.window.Dialog
 import kotlinx.coroutines.*
@@ -104,8 +105,15 @@ private fun DesktopShell(state: StudioState, wide: Boolean) {
 
 @Composable
 private fun MobileShell(state: StudioState, width: Dp) {
-    val fontScale = LocalDensity.current.fontScale
-    val gridNav = fontScale > 1.3f || width < 360.dp
+    val density = LocalDensity.current
+    val textMeasurer = rememberTextMeasurer()
+    val labels = remember(state.language) { navEntries.map { navLabel(state, it.key) } }
+    val navWidth = minOf(width, 560.dp)
+    val itemLabelWidthPx = with(density) { ((navWidth - 28.dp) / 4 - 12.dp).coerceAtLeast(1.dp).toPx() }
+    val labelOverflow = labels.any { label ->
+        textMeasurer.measure(label, style = MaterialTheme.typography.labelSmall, maxLines = 1).size.width > itemLabelWidthPx
+    }
+    val gridNav = density.fontScale > 1.3f || labelOverflow
     val contentMax = when {
         width >= 600.dp -> 720.dp
         width >= 431.dp -> 480.dp
