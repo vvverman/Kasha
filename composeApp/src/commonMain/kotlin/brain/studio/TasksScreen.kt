@@ -142,8 +142,8 @@ private fun TaskDetailScreen(s: StudioState, task: Task) {
                 taskText(s, "completeTask"),
                 {
                     scope.launch {
-                        if (changed && text.isNotBlank()) s.saveTask(task.id, text)
-                        s.completeTask(task.id)
+                        val saved = !changed || (text.isNotBlank() && s.saveTask(task.id, text))
+                        if (saved) s.completeTask(task.id)
                     }
                 },
                 primary = true,
