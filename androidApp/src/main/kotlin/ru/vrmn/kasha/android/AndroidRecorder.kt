@@ -171,6 +171,18 @@ internal class AndroidRecorder(
             val sessionId = activeSessionId ?: error("recordingSessionMissing")
             try {
                 active.resume()
+                if (isRecorderSilenced(active)) {
+                    runCatching { active.pause() }
+                    latestLevel = 0f
+                    mark = null
+                    session = RecorderSessionState(
+                        phase = RecorderPhase.INTERRUPTED,
+                        activeSessionId = sessionId,
+                        issue = RecorderIssue(RecorderIssueKind.INTERRUPTION, recoverable = false),
+                    )
+                    runCatching { RecordingForegroundService.paused(appContext) }
+                    return@withContext
+                }
                 val newDeviceId = active.routedDevice?.id
                 val previousDeviceId = routedDeviceId
                 if (previousDeviceId != null && newDeviceId != previousDeviceId) {
@@ -356,19 +368,33 @@ internal class AndroidRecorder(
     }
 
     private fun handleRecordingConfiguration(source: MediaRecorder, config: AudioRecordingConfiguration?) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
-        val deviceId = config?.audioDevice?.id
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q || config == null) return
+        val deviceId = config.audioDevice?.id
         if (deviceId != null) handleRouteChanged(source, deviceId)
-        if (config?.isClientSilenced != true) return
+        val silenced = config.isClientSilenced
 
         scope.launch {
             control.withLock {
-                if (recorder !== source || session.phase != RecorderPhase.RECORDING) return@withLock
-                interruptActive(
-                    source = source,
-                    kind = RecorderIssueKind.INTERRUPTION,
-                    recoverable = true,
-                )
+                if (recorder !== source || session.phase == RecorderPhase.IDLE) return@withLock
+                if (silenced) {
+                    if (session.phase == RecorderPhase.RECORDING || session.phase == RecorderPhase.PAUSED) {
+                        interruptActive(
+                            source = source,
+                            kind = RecorderIssueKind.INTERRUPTION,
+                            recoverable = false,
+                        )
+                    }
+                } else if (
+                    session.phase == RecorderPhase.INTERRUPTED &&
+                    session.issue?.kind == RecorderIssueKind.INTERRUPTION
+                ) {
+                    val sessionId = activeSessionId ?: return@withLock
+                    session = RecorderSessionState(
+                        phase = RecorderPhase.INTERRUPTED,
+                        activeSessionId = sessionId,
+                        issue = RecorderIssue(RecorderIssueKind.INTERRUPTION, recoverable = true),
+                    )
+                }
             }
         }
     }
@@ -421,6 +447,11 @@ internal class AndroidRecorder(
             RecorderPhase.IDLE,
             RecorderPhase.FINALIZING -> Unit
         }
+    }
+
+    private fun isRecorderSilenced(active: MediaRecorder): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return false
+        return runCatching { active.activeRecordingConfiguration?.isClientSilenced == true }.getOrDefault(false)
     }
 
     private fun startSampler(active: MediaRecorder) {
