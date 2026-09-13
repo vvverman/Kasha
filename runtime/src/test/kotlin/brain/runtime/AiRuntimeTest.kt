@@ -35,14 +35,15 @@ class AiRuntimeTest {
     fun cloudMetadataNeverStoresApiKey() = runBlocking {
         val root = Files.createTempDirectory("kasha-ai-cloud-")
         val secrets = MemorySecrets()
+        val gateway = JvmCloudAiGateway(root, secrets)
         try {
-            val gateway = JvmCloudAiGateway(root, secrets)
-            val connection = CloudAiConnection(
+            val draft = CloudAiConnection(
                 providerId = "openai",
                 modelIds = mapOf(AiRole.TEXT to "test-model"),
                 enabled = true,
                 privacyConsentVersion = AiPrivacy.CONSENT_VERSION,
             )
+            val connection = draft.copy(consentSnapshot = AiPrivacy.snapshot(draft))
             gateway.save(connection, "SUPER-SECRET")
             assertEquals("SUPER-SECRET", secrets.get("openai"))
             val metadata = Files.readString(root.resolve("ai/connections.json"))
