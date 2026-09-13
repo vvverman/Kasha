@@ -56,6 +56,7 @@ internal fun AiSettingsSection(s: StudioState) {
                         it.modelFor(role) != null
                 }
             }
+            AiLocality.NATIVE -> false
         }
     }
     fun refreshPlatformState() {
