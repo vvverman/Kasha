@@ -2,6 +2,7 @@ package brain.ios
 
 import brain.domain.BrainData
 import brain.domain.NoteText
+import brain.domain.orderNotePins
 import brain.model.*
 import brain.studio.*
 import kotlinx.serialization.decodeFromString
