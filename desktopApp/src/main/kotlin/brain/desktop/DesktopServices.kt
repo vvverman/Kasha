@@ -53,8 +53,16 @@ class DesktopServices(val root: Path, val resources: Path, cpuOnly: Boolean = fa
         lock.release();lockChannel.close()
     }
 }
-private fun bundledExecutable(resources:Path,name:String):String = resources.resolve("bin/$name").toAbsolutePath().toString().also{
-    require(Files.isRegularFile(Path.of(it))&&Files.isExecutable(Path.of(it))){"В пакете отсутствует $name. Переустановите приложение целиком."}
+private fun bundledExecutable(resources:Path,name:String):String {
+    val file = DesktopPlatform.executableCandidates(name)
+        .asSequence()
+        .map { resources.resolve("bin").resolve(it).toAbsolutePath() }
+        .firstOrNull(Files::isRegularFile)
+        ?: error("В пакете отсутствует $name. Переустановите приложение целиком.")
+    if (DesktopPlatform.os != DesktopOs.WINDOWS) {
+        require(Files.isExecutable(file)) { "Файл $name не имеет права запуска. Переустановите приложение целиком." }
+    }
+    return file.toString()
 }
 fun bundledEnvironment(resources:Path):Map<String,String> {
     fun model(name:String)=resources.resolve("models/$name").toAbsolutePath().toString().also{require(Files.isRegularFile(Path.of(it))&&Files.size(Path.of(it))>1_000_000){"В пакете отсутствует модель $name"}}
