@@ -213,8 +213,10 @@ with sync_playwright() as pw:
         click_card('Позвонить в сервис повторно')
         assert page.get_by_role('button', name='Выполнить', exact=True).count() == 0
         button('Удалить')
+        visible_item(page.get_by_role('button', name='Удалить', exact=True), 'подтверждение удаления задачи')
+        button('Удалить')
         wait(lambda: not api('snapshot')['tasks'], 'удаление задачи из архива')
-        checks.append('выполнение, архив и удаление задачи')
+        checks.append('выполнение, архив и подтверждённое удаление задачи')
 
         assert not errors, errors
         (OUT / 'result.json').write_text(json.dumps({
