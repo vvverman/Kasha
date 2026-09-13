@@ -36,8 +36,27 @@ class JvmCloudAiGateway(
     }
 
     override suspend fun remove(providerId: String) {
-        mutex.withLock { writeUnsafe(readUnsafe().filterNot { it.providerId == providerId }) }
-        secrets.remove(providerId)
+        disconnect(providerId)
+    }
+
+    override suspend fun disconnect(providerId: String): CloudAiDisconnectResult {
+        val metadataRemoved = mutex.withLock {
+            val before = readUnsafe()
+            val next = before.filterNot { it.providerId == providerId }
+            if (next != before) writeUnsafe(next)
+            next != before
+        }
+        val deletion = if (!secrets.available) {
+            SecureSecretDeletion.UNAVAILABLE
+        } else {
+            val existed = runCatching { !secrets.get(providerId).isNullOrBlank() }.getOrDefault(false)
+            runCatching { secrets.remove(providerId) }
+                .fold(
+                    onSuccess = { if (existed) SecureSecretDeletion.DELETED else SecureSecretDeletion.NOT_FOUND },
+                    onFailure = { SecureSecretDeletion.FAILED },
+                )
+        }
+        return CloudAiDisconnectResult(metadataRemoved = metadataRemoved, secretDeletion = deletion)
     }
 
     override suspend fun test(connection: CloudAiConnection, apiKey: String?): Boolean {
@@ -48,8 +67,8 @@ class JvmCloudAiGateway(
     }
 
     suspend fun connection(providerId: String): CloudAiConnection = connections()
-        .firstOrNull { it.providerId == providerId && it.enabled && it.privacyConsentVersion >= AiPrivacy.CONSENT_VERSION }
-        ?: error("Внешний AI $providerId не подключён")
+        .firstOrNull { it.providerId == providerId && it.enabled && AiPrivacy.hasCurrentConsent(it) }
+        ?: error("Внешний AI $providerId не подключён или требует нового согласия")
 
     suspend fun key(providerId: String): String = secrets.get(providerId)?.takeIf(String::isNotBlank)
         ?: error("API-ключ $providerId отсутствует в защищённом хранилище")
@@ -62,13 +81,14 @@ class JvmCloudAiGateway(
 
     suspend fun transcribe(providerId: String, file: Path, language: String): String {
         val connection = connection(providerId)
+        require(connection.modelFor(AiRole.SPEECH_TO_TEXT) != null) { "Для SPEECH_TO_TEXT не выбрана модель" }
         return external.transcribe(connection, key(providerId), file, language)
     }
 
     private fun validate(connection: CloudAiConnection) {
         val provider = AiCatalog.provider(connection.providerId) ?: error("Неизвестный AI provider")
         require(connection.enabled)
-        require(connection.privacyConsentVersion >= AiPrivacy.CONSENT_VERSION) { "Нужно подтвердить передачу данных" }
+        require(AiPrivacy.hasCurrentConsent(connection)) { "Нужно подтвердить передачу данных для текущей конфигурации" }
         require(connection.roles.isNotEmpty()) { "Выберите хотя бы одну модель" }
         require(connection.roles.all { it in provider.roles }) { "Provider не поддерживает выбранную роль" }
         if (provider.endpointRequired) {
