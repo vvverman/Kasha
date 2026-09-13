@@ -13,6 +13,13 @@ BASE = 'http://127.0.0.1:8787'
 OUT = pathlib.Path('test-output/sorting')
 OUT.mkdir(parents=True, exist_ok=True)
 
+SORT_LABELS = {
+    'ALPHABETICAL': 'А-Я',
+    'CREATED': 'Создано',
+    'UPDATED': 'Изменено',
+    'MANUAL': 'Вручную',
+}
+
 
 def api(path, data=None, method=None):
     headers = {'X-Kasha-Client': 'web'}
@@ -88,12 +95,16 @@ with sync_playwright() as pw:
         page.mouse.click(box['x'] + box['width'] / 2, box['y'] + box['height'] / 2)
         page.wait_for_timeout(220)
 
-    def button(name): click('button', name)
+    def button(name):
+        click('button', name)
 
-    def text_click(name):
-        _, box = visible_item(page.get_by_text(name, exact=True), name)
-        page.mouse.click(box['x'] + box['width'] / 2, box['y'] + box['height'] / 2)
-        page.wait_for_timeout(220)
+    def select_sort(pref_key, target):
+        current = api('preferences')[pref_key]
+        if current == target:
+            return
+        button(SORT_LABELS[current])
+        button(SORT_LABELS[target])
+        wait(lambda: api('preferences')[pref_key] == target, f'{pref_key}={target}')
 
     def field(label, value):
         _, box = visible_item(page.get_by_role('textbox', name=label, exact=True), label)
@@ -159,11 +170,11 @@ with sync_playwright() as pw:
         for title in ['Твой первый проект', 'Бета сортировка', 'Альфа сортировка']:
             card(title)
 
-        text_click('А-Я')
+        select_sort('projectSort', 'ALPHABETICAL')
         wait(lambda: y('Альфа сортировка') < y('Бета сортировка') < y('Твой первый проект'), 'алфавит проектов')
-        text_click('Создано')
+        select_sort('projectSort', 'CREATED')
         wait(lambda: y('Альфа сортировка') < y('Бета сортировка') < y('Твой первый проект'), 'дата создания проектов')
-        text_click('Вручную')
+        select_sort('projectSort', 'MANUAL')
         drag('Альфа сортировка', 'Твой первый проект')
         wait(lambda: y('Альфа сортировка') < y('Твой первый проект'), 'manual проектов')
         project_manual = [p['title'] for p in sorted(api('snapshot')['projects'], key=lambda p: p['manualOrder'])]
@@ -174,9 +185,11 @@ with sync_playwright() as pw:
         make_note('Альфа заметка\nПервый текст', 'Альфа сортировка')
         button('Проекты'); click('button', re.compile(r'^Альфа сортировка'))
         card('Бета заметка'); card('Альфа заметка')
-        text_click('А-Я'); wait(lambda: y('Альфа заметка') < y('Бета заметка'), 'алфавит заметок')
-        text_click('Создано'); wait(lambda: y('Альфа заметка') < y('Бета заметка'), 'создание заметок')
-        text_click('Вручную')
+        select_sort('noteSort', 'ALPHABETICAL')
+        wait(lambda: y('Альфа заметка') < y('Бета заметка'), 'алфавит заметок')
+        select_sort('noteSort', 'CREATED')
+        wait(lambda: y('Альфа заметка') < y('Бета заметка'), 'создание заметок')
+        select_sort('noteSort', 'MANUAL')
         drag('Альфа заметка', 'Бета заметка')
         wait(lambda: y('Альфа заметка') < y('Бета заметка'), 'manual заметок')
 
@@ -185,20 +198,18 @@ with sync_playwright() as pw:
         make_task('Альфа задача\nТело альфа')
         button('Задачи')
         card('Бета задача'); card('Альфа задача')
-        text_click('А-Я'); wait(lambda: y('Альфа задача') < y('Бета задача'), 'алфавит задач')
-        text_click('Создано'); wait(lambda: y('Альфа задача') < y('Бета задача'), 'создание задач')
-        text_click('Вручную')
+        select_sort('taskSort', 'ALPHABETICAL')
+        wait(lambda: y('Альфа задача') < y('Бета задача'), 'алфавит задач')
+        select_sort('taskSort', 'CREATED')
+        wait(lambda: y('Альфа задача') < y('Бета задача'), 'создание задач')
+        select_sort('taskSort', 'MANUAL')
         drag('Альфа задача', 'Бета задача')
         wait(lambda: task_manual_order() == ['Альфа задача', 'Бета задача'], 'manual задач в Core')
         saved_manual = task_manual_order()
 
-        # После переключения сортировки проверяем именно сохранённую preference и manualOrder.
-        # Compose Web может кратко держать старые accessibility-координаты после recomposition.
-        text_click('А-Я')
-        wait(lambda: api('preferences')['taskSort'] == 'ALPHABETICAL', 'режим А-Я для задач')
+        select_sort('taskSort', 'ALPHABETICAL')
         assert task_manual_order() == saved_manual
-        text_click('Вручную')
-        wait(lambda: api('preferences')['taskSort'] == 'MANUAL', 'возврат в manual задач')
+        select_sort('taskSort', 'MANUAL')
         assert task_manual_order() == saved_manual
 
         page.reload(wait_until='networkidle')
