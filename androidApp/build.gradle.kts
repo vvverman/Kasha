@@ -1,5 +1,5 @@
 plugins {
-    alias(libs.plugins.androidApplication)
+    id("com.android.application")
     alias(libs.plugins.kotlinSerialization)
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
