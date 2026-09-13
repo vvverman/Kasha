@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Based on the OpenJDK 21 jpackage Windows main.wxs. Kasha overrides only
-     the media layout: the bundled local models make one embedded CAB exceed
-     the practical WiX/MSI size limit, so files are split across external CABs. -->
+<!-- OpenJDK 21 jpackage main.wxs with one Kasha-specific change: external,
+     automatically split CABs instead of one embedded Data.cab. -->
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
      xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
 
@@ -44,8 +43,6 @@
       InstallScope="$(var.JpInstallScope)" Platform="x64"
     />
 
-    <!-- Qwen3-4B Q4_K_M itself is >2 GiB. WiX must be allowed to split a
-         single large file and must not embed the cabinets back into the MSI. -->
     <MediaTemplate
       EmbedCab="no"
       CabinetTemplate="kash{0}.cab"
@@ -79,6 +76,7 @@
 
     <CustomAction Id="JpFindRelatedProducts" BinaryKey="JpCaDll" DllEntry="FindRelatedProductsEx" />
 
+    <!-- Standard required root -->
     <Directory Id="TARGETDIR" Name="SourceDir"/>
 
     <Feature Id="DefaultFeature" Title="!(loc.MainFeatureTitle)" Level="1">
@@ -137,7 +135,7 @@
     </InstallExecuteSequence>
 
     <InstallUISequence>
-      <Custom Action="JpFindRelatedProducts" After="FindRelatedProducts">1</Custom>
+      <Custom Action="JpFindRelatedProducts" After="FindRelatedProducts"/>
     </InstallUISequence>
 
   </Product>
