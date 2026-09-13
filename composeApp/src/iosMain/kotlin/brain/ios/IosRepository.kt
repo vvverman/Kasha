@@ -120,6 +120,11 @@ internal class IosRepository(
         return data.notes.first { it.id == id }
     }
 
+    override suspend fun orderNotePins(projectId: String, ids: List<String>) {
+        data = data.orderNotePins(projectId, ids)
+        persistData()
+    }
+
     override suspend fun orderNotes(projectId: String, ids: List<String>) {
         data = data.orderNotes(projectId, ids)
         persistData()
