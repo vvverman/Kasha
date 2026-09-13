@@ -1,6 +1,7 @@
 package brain.studio
 
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -10,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 
 /** Long-press + drag используется только для режима MANUAL. */
 @Composable
@@ -24,6 +26,7 @@ fun <T> KashaReorderableList(
     itemContent: @Composable (T, Boolean) -> Unit,
 ) {
     val state = rememberLazyListState()
+    val scope = rememberCoroutineScope()
     val local = remember { mutableStateListOf<T>() }
     var draggingKey by remember { mutableStateOf<String?>(null) }
     var draggedCenter by remember { mutableStateOf(0f) }
@@ -47,6 +50,8 @@ fun <T> KashaReorderableList(
     }
 
     val dragModifier = if (!manual) Modifier else Modifier.pointerInput(local.size) {
+        val edge = 56.dp.toPx()
+        val scrollStep = 28.dp.toPx()
         detectDragGesturesAfterLongPress(
             onDragStart = { offset ->
                 val hit = state.layoutInfo.visibleItemsInfo.firstOrNull { offset.y.toInt() in it.offset..(it.offset + it.size) }
@@ -59,8 +64,17 @@ fun <T> KashaReorderableList(
                 val active = draggingKey ?: return@detectDragGesturesAfterLongPress
                 change.consume()
                 draggedCenter += dragAmount.y
+
+                val info = state.layoutInfo
+                val start = info.viewportStartOffset.toFloat()
+                val end = info.viewportEndOffset.toFloat()
+                when {
+                    draggedCenter < start + edge -> scope.launch { state.scrollBy(-scrollStep) }
+                    draggedCenter > end - edge -> scope.launch { state.scrollBy(scrollStep) }
+                }
+
                 val from = local.indexOfFirst { key(it) == active }
-                val to = state.layoutInfo.visibleItemsInfo.firstOrNull {
+                val to = info.visibleItemsInfo.firstOrNull {
                     draggedCenter.toInt() in it.offset..(it.offset + it.size)
                 }?.index
                 if (from >= 0 && to != null && to in local.indices && to != from) move(from, to)
