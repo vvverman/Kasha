@@ -268,9 +268,10 @@ internal class AndroidRecorder(
             check(session.phase == RecorderPhase.IDLE) { "recordingActive" }
             val source = repository.pendingFiles().singleOrNull { it.nameWithoutExtension == pendingId }
                 ?: error("Pending recording not found")
-            val duration = mediaDurationSeconds(source)
+            val analysis = AndroidPendingAudioAnalyzer.analyze(source)
+            val duration = analysis?.durationSeconds?.takeIf { it > 0.0 } ?: mediaDurationSeconds(source)
             check(duration > 0.0) { "pendingAudioUnreadable" }
-            val capture = repository.acceptPending(source, duration, emptyList())
+            val capture = repository.acceptPending(source, duration, analysis?.waveform.orEmpty())
             scope.launch { repository.reprocess(capture.id) }
             capture
         }
