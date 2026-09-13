@@ -57,13 +57,14 @@ class AiRuntimeTest {
         val root = Files.createTempDirectory("kasha-ai-consent-")
         try {
             val gateway = JvmCloudAiGateway(root, MemorySecrets())
-            val bad = CloudAiConnection(
+            val legacy = CloudAiConnection(
                 providerId = "openai",
-                modelIds = mapOf(AiRole.TEXT to "test-model"),
+                modelIds = mapOf(AiRole.ROUTING to "test-model"),
                 enabled = true,
-                privacyConsentVersion = 0,
+                privacyConsentVersion = 1,
             )
-            assertFailsWith<IllegalArgumentException> { gateway.save(bad, "secret") }
+            assertEquals(2, AiPrivacy.CONSENT_VERSION)
+            assertFailsWith<IllegalArgumentException> { gateway.save(legacy, "secret") }
         } finally { root.toFile().deleteRecursively() }
     }
 
