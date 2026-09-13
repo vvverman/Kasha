@@ -66,7 +66,9 @@ internal class AndroidStorage(root: File) {
     fun pendingId(file: File): String {
         require(file.parentFile?.canonicalFile == pendingDir.canonicalFile)
         require(file.extension.equals("m4a", ignoreCase = true))
-        return file.nameWithoutExtension.also(UUID::fromString)
+        val id = file.nameWithoutExtension
+        UUID.fromString(id)
+        return id
     }
 
     /**
