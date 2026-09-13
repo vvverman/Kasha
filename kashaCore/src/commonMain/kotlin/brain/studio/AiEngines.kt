@@ -87,6 +87,21 @@ data class CloudProviderDescriptor(
     val description: String = "",
 )
 
+/**
+ * Точный снимок согласия пользователя. API key здесь намеренно отсутствует.
+ * Любое изменение provider/endpoint/roles/modelIds требует нового consent snapshot.
+ */
+@Serializable
+data class CloudAiConsentSnapshot(
+    val disclosureVersion: Int,
+    val providerId: String,
+    val normalizedEndpoint: String? = null,
+    val endpointHost: String? = null,
+    val roles: Set<AiRole> = emptySet(),
+    val modelIds: Map<AiRole, String> = emptyMap(),
+    val dataKinds: Set<AiDataKind> = emptySet(),
+)
+
 /** API key здесь намеренно отсутствует. */
 @Serializable
 data class CloudAiConnection(
@@ -95,10 +110,20 @@ data class CloudAiConnection(
     val endpoint: String? = null,
     val enabled: Boolean = false,
     val privacyConsentVersion: Int = 0,
+    val consentSnapshot: CloudAiConsentSnapshot? = null,
 ) {
     fun modelFor(role: AiRole): String? = modelIds[role]?.trim()?.takeIf { it.isNotEmpty() }
     val roles: Set<AiRole> get() = modelIds.filterValues { it.isNotBlank() }.keys
 }
+
+@Serializable
+enum class SecureSecretDeletion { DELETED, NOT_FOUND, FAILED, UNAVAILABLE }
+
+@Serializable
+data class CloudAiDisconnectResult(
+    val metadataRemoved: Boolean,
+    val secretDeletion: SecureSecretDeletion,
+)
 
 @Serializable
 data class AiPackageState(
@@ -132,6 +157,10 @@ interface CloudAiGateway {
     suspend fun connections(): List<CloudAiConnection>
     suspend fun save(connection: CloudAiConnection, apiKey: String?)
     suspend fun remove(providerId: String)
+    suspend fun disconnect(providerId: String): CloudAiDisconnectResult {
+        remove(providerId)
+        return CloudAiDisconnectResult(metadataRemoved = true, secretDeletion = SecureSecretDeletion.UNAVAILABLE)
+    }
     suspend fun test(connection: CloudAiConnection, apiKey: String?): Boolean
 }
 
@@ -140,6 +169,7 @@ object NoopCloudAiGateway : CloudAiGateway {
     override suspend fun connections(): List<CloudAiConnection> = emptyList()
     override suspend fun save(connection: CloudAiConnection, apiKey: String?) = error("Cloud AI is unavailable on this platform")
     override suspend fun remove(providerId: String) = Unit
+    override suspend fun disconnect(providerId: String) = CloudAiDisconnectResult(false, SecureSecretDeletion.UNAVAILABLE)
     override suspend fun test(connection: CloudAiConnection, apiKey: String?): Boolean = false
 }
 
@@ -191,4 +221,29 @@ object AiPrivacy {
     }
 
     fun dataFor(roles: Set<AiRole>): Set<AiDataKind> = roles.flatMap(::dataFor).toSet()
+
+    fun snapshot(connection: CloudAiConnection): CloudAiConsentSnapshot {
+        val models = connection.modelIds
+            .mapValues { it.value.trim() }
+            .filterValues { it.isNotEmpty() }
+        val roles = models.keys
+        val endpoint = normalizeEndpoint(connection.endpoint)
+        return CloudAiConsentSnapshot(
+            disclosureVersion = CONSENT_VERSION,
+            providerId = connection.providerId.trim(),
+            normalizedEndpoint = endpoint,
+            endpointHost = endpoint?.substringAfter("://", endpoint)?.substringBefore('/')?.lowercase(),
+            roles = roles,
+            modelIds = models,
+            dataKinds = dataFor(roles),
+        )
+    }
+
+    fun hasCurrentConsent(connection: CloudAiConnection): Boolean =
+        connection.privacyConsentVersion >= CONSENT_VERSION && connection.consentSnapshot == snapshot(connection)
+
+    private fun normalizeEndpoint(value: String?): String? = value
+        ?.trim()
+        ?.trimEnd('/')
+        ?.takeIf { it.isNotEmpty() }
 }
