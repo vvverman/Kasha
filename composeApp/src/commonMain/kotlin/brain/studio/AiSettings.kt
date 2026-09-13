@@ -37,7 +37,9 @@ internal fun AiSettingsSection(s: StudioState) {
     fun dataLabel(kind: AiDataKind): String = when (kind) {
         AiDataKind.AUDIO -> t("aiDataAudio")
         AiDataKind.NOTE_TEXT -> t("aiDataNote")
+        AiDataKind.PROJECT_IDS -> t("aiDataProjectIds")
         AiDataKind.PROJECT_TITLES -> t("aiDataProjectTitles")
+        AiDataKind.PROJECT_DESCRIPTIONS -> t("aiDataProjectDescriptions")
         AiDataKind.PROJECT_INSTRUCTIONS -> t("aiDataProjectInstructions")
     }
     fun stateFor(id: String): AiPackageState? = packageStates.firstOrNull { it.engineId == id }
@@ -153,7 +155,9 @@ internal fun AiSettingsSection(s: StudioState) {
     Spacer(Modifier.height(8.dp))
 
     AiCatalog.cloudProviders.forEach { provider ->
-        val connected = connections.firstOrNull { it.providerId == provider.id && it.enabled }
+        val connected = connections.firstOrNull {
+            it.providerId == provider.id && it.enabled && it.privacyConsentVersion >= AiPrivacy.CONSENT_VERSION
+        }
         KashaListCard(
             onClick = {
                 providerEditor = provider
