@@ -9,7 +9,6 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import platform.Foundation.NSLocale
 import platform.Foundation.NSURL
 import platform.Speech.SFSpeechRecognizer
-import platform.Speech.SFSpeechRecognizerAuthorizationStatus
 import platform.Speech.SFSpeechURLRecognitionRequest
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -49,10 +48,6 @@ internal class IosOnDeviceIntelligence : Intelligence {
 
     override suspend fun title(text: String, language: String): String = NoteText.title(text)
 
-    /**
-     * Пока отдельная локальная LLM для iOS не установлена, используем строго локальный
-     * детерминированный fallback: он ничего не придумывает и не отправляет наружу.
-     */
     override suspend fun tidy(text: String, language: String): String {
         var result = text.trim()
             .replace(Regex("[ \\t]{2,}"), " ")
@@ -103,12 +98,16 @@ internal class IosOnDeviceIntelligence : Intelligence {
     }
 
     private suspend fun checkSpeechPermission() {
-        if (SFSpeechRecognizer.authorizationStatus() == SFSpeechRecognizerAuthorizationStatus.Authorized) return
+        if (SFSpeechRecognizer.authorizationStatus().value == SPEECH_AUTHORIZED) return
         val granted = suspendCancellableCoroutine { continuation ->
             SFSpeechRecognizer.requestAuthorization { status ->
-                if (continuation.isActive) continuation.resume(status == SFSpeechRecognizerAuthorizationStatus.Authorized)
+                if (continuation.isActive) continuation.resume(status.value == SPEECH_AUTHORIZED)
             }
         }
         check(granted) { "speechPermissionDenied" }
+    }
+
+    private companion object {
+        const val SPEECH_AUTHORIZED = 3L
     }
 }
