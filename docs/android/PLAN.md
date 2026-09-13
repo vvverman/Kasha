@@ -37,7 +37,7 @@
 - unit tests покрывают restart persistence и crash-recovery;
 - branch-head CI: `:androidApp:testDebugUnitTest` и `:androidApp:assembleDebug` проходят.
 
-### 4. Microphone/recording — в работе, Android-часть реализована
+### 4. Microphone/recording — Android-часть завершена, общий пункт заблокирован
 
 Готово в Android shell:
 
@@ -49,16 +49,18 @@
 - финальная waveform представляет всю временную шкалу и сводится максимум к 512 точкам;
 - process-scoped runtime не создаёт второй recorder при пересоздании Activity;
 - background capture защищён foreground service типа `microphone`; сервис запускается только вместе с уже инициированной записью и не рестартует её после process death;
+- foreground notification открывает текущую Kasha Activity через immutable `PendingIntent`;
 - recovery измеряет фактическую duration M4A и не выдумывает успешное восстановление нечитаемого файла;
-- до подключения реального Android AI capture остаётся сохранённым с честным `NEEDS_MODEL`, без demo/fake STT.
+- до подключения реального Android AI capture остаётся сохранённым с честным `NEEDS_MODEL`, без demo/fake STT;
+- branch-head Android CI после recorder/FGS изменений: `:androidApp:testDebugUnitTest` + `:androidApp:assembleDebug` — success.
 
-Пункт пока **не закрывается** из-за общих межплатформенных контрактов:
+Общие межплатформенные зависимости, из-за которых пункт 4 целиком пока не закрывается:
 
-- #25 — shared Core/UI permission intent, безопасный cancel active recording, типизированные interruption/route/hardware причины и background capability;
+- #14 / #25 — shared `RecorderStatus`, permission intent, безопасный `cancelActive`, типизированные interruption/route/hardware причины, pending identity и background reconciliation;
 - #28 — общий контракт полного waveform/duration при recovery из готового файла.
 
-Android-specific обход этих разрывов запрещён. После появления общих контрактов Android должен только реализовать соответствующие системные операции и пройти device acceptance.
+Android follow-up #35 уже фиксирует точное подключение `AudioRecordingCallback`, `AudioDeviceCallback`, `MediaRecorder.OnErrorListener`, route-loss/silenced semantics и запрет скрытого resume после появления общего Core API.
 
-Интеграционный PR-check отдельно может отражать свежие изменения shared Kasha UI в `main`; такие ошибки не обходятся Android-specific кодом.
+Android-specific обход этих разрывов запрещён. Пункт 5 не начинать до закрытия общего пункта 4.
 
-Текущий этап: **4. Microphone/recording**. Пункт 5 не начинать до закрытия пункта 4.
+Текущий этап: **4. Microphone/recording — BLOCKED BY Core/UI #14/#25/#28**.
