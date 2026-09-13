@@ -37,12 +37,13 @@ class AiRuntimeTest {
         val secrets = MemorySecrets()
         try {
             val gateway = JvmCloudAiGateway(root, secrets)
-            val connection = CloudAiConnection(
+            val configured = CloudAiConnection(
                 providerId = "openai",
                 modelIds = mapOf(AiRole.TEXT to "test-model"),
                 enabled = true,
                 privacyConsentVersion = AiPrivacy.CONSENT_VERSION,
             )
+            val connection = configured.copy(consentSnapshot = AiPrivacy.snapshot(configured))
             gateway.save(connection, "SUPER-SECRET")
             assertEquals("SUPER-SECRET", secrets.get("openai"))
             val metadata = Files.readString(root.resolve("ai/connections.json"))
