@@ -6,6 +6,7 @@ private enum KashaAudioBridgeEvent {
     static let activateRecording = Notification.Name("KashaAudioSessionActivateRecording")
     static let activatePlayback = Notification.Name("KashaAudioSessionActivatePlayback")
     static let deactivate = Notification.Name("KashaAudioSessionDeactivate")
+    static let openSystemSettings = Notification.Name("KashaOpenSystemSettings")
 
     static let interruptionBegan = Notification.Name("KashaAudioSessionInterruptionBegan")
     static let interruptionEnded = Notification.Name("KashaAudioSessionInterruptionEnded")
@@ -13,7 +14,7 @@ private enum KashaAudioBridgeEvent {
     static let applicationDidBecomeActive = Notification.Name("KashaApplicationDidBecomeActive")
 }
 
-/// Тонкий нативный владелец AVAudioSession.
+/// Тонкий нативный владелец AVAudioSession и системных переходов iOS.
 /// Recorder/player и продуктовый state остаются в общем Kotlin-слое.
 final class KashaAudioSessionCoordinator {
     static let shared = KashaAudioSessionCoordinator()
@@ -45,6 +46,13 @@ final class KashaAudioSessionCoordinator {
                 self?.deactivate()
             },
             center.addObserver(
+                forName: KashaAudioBridgeEvent.openSystemSettings,
+                object: nil,
+                queue: .main
+            ) { _ in
+                Self.openSystemSettings()
+            },
+            center.addObserver(
                 forName: AVAudioSession.interruptionNotification,
                 object: nil,
                 queue: nil
@@ -72,6 +80,12 @@ final class KashaAudioSessionCoordinator {
         observers.forEach { observer in
             NotificationCenter.default.removeObserver(observer)
         }
+    }
+
+    private static func openSystemSettings() {
+        let url = URL(string: UIApplication.openSettingsURLString)!
+        guard UIApplication.shared.canOpenURL(url) else { return }
+        UIApplication.shared.open(url, options: [:])
     }
 
     private func activateRecording() {
