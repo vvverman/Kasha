@@ -10,6 +10,10 @@ import brain.domain.RecorderGateway
 import brain.model.Capture
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -36,6 +40,8 @@ internal class AndroidRecorder(
 
     @Volatile private var currentPhase = PHASE_IDLE
     @Volatile private var recorder: MediaRecorder? = null
+    @Volatile private var latestLevel = 0f
+    private var sampler: Job? = null
     private var pendingFile: File? = null
     private var recordedMillis = 0L
     private var mark: TimeMark? = null
@@ -48,17 +54,7 @@ internal class AndroidRecorder(
         currentPhase == PHASE_IDLE && repository.pendingFiles().isNotEmpty()
 
     override fun phase(): String = currentPhase
-
-    override fun level(): Float {
-        if (currentPhase != PHASE_RECORDING) return 0f
-        val amplitude = runCatching { recorder?.maxAmplitude ?: 0 }.getOrDefault(0)
-        val normalized = sqrt((amplitude.coerceIn(0, MAX_AMPLITUDE) / MAX_AMPLITUDE.toFloat())).coerceIn(0f, 1f)
-        synchronized(waveform) {
-            waveform += normalized
-            if (waveform.size > MAX_LIVE_SAMPLES) waveform.removeAt(0)
-        }
-        return normalized
-    }
+    override fun level(): Float = if (currentPhase == PHASE_RECORDING) latestLevel else 0f
 
     override suspend fun start() = control.withLock {
         withContext(Dispatchers.IO) {
@@ -86,10 +82,14 @@ internal class AndroidRecorder(
                 pendingFile = file
                 recordedMillis = 0L
                 mark = TimeSource.Monotonic.markNow()
+                latestLevel = 0f
                 synchronized(waveform) { waveform.clear() }
                 currentPhase = PHASE_RECORDING
+                startSampler(created)
             } catch (error: Throwable) {
                 runCatching { RecordingForegroundService.stop(appContext) }
+                sampler?.cancel()
+                sampler = null
                 runCatching { created.reset() }
                 created.release()
                 file.delete()
@@ -106,6 +106,7 @@ internal class AndroidRecorder(
                 active.pause()
                 recordedMillis += mark?.elapsedNow()?.inWholeMilliseconds ?: 0L
                 mark = null
+                latestLevel = 0f
                 currentPhase = PHASE_PAUSED
                 runCatching { RecordingForegroundService.paused(appContext) }
             } catch (error: Throwable) {
@@ -139,7 +140,9 @@ internal class AndroidRecorder(
                 recordedMillis += mark?.elapsedNow()?.inWholeMilliseconds ?: 0L
             }
             mark = null
+            latestLevel = 0f
             currentPhase = PHASE_FINALIZING
+            stopSampler()
 
             try {
                 active.stop()
@@ -153,7 +156,7 @@ internal class AndroidRecorder(
             releaseHardware()
 
             val duration = (recordedMillis / 1_000.0).coerceAtLeast(0.0)
-            val levels = synchronized(waveform) { waveform.toList() }
+            val levels = synchronized(waveform) { reduceWaveform(waveform.toList(), MAX_STORED_SAMPLES) }
             val capture = repository.acceptPending(source, duration, levels)
             recordedMillis = 0L
             synchronized(waveform) { waveform.clear() }
@@ -176,6 +179,8 @@ internal class AndroidRecorder(
     }
 
     override fun close() {
+        sampler?.cancel()
+        sampler = null
         runCatching {
             recorder?.let { active ->
                 if (currentPhase == PHASE_RECORDING || currentPhase == PHASE_PAUSED) active.stop()
@@ -185,12 +190,36 @@ internal class AndroidRecorder(
         releaseHardware()
     }
 
+    private fun startSampler(active: MediaRecorder) {
+        sampler?.cancel()
+        sampler = scope.launch(Dispatchers.Default) {
+            while (isActive) {
+                delay(SAMPLE_INTERVAL_MS)
+                if (currentPhase != PHASE_RECORDING || recorder !== active) {
+                    latestLevel = 0f
+                    continue
+                }
+                val amplitude = runCatching { active.maxAmplitude }.getOrDefault(0)
+                val level = sqrt((amplitude.coerceIn(0, MAX_AMPLITUDE) / MAX_AMPLITUDE.toFloat())).coerceIn(0f, 1f)
+                latestLevel = level
+                synchronized(waveform) { waveform += level }
+            }
+        }
+    }
+
+    private suspend fun stopSampler() {
+        val active = sampler ?: return
+        sampler = null
+        active.cancelAndJoin()
+    }
+
     private fun releaseHardware() {
         runCatching { recorder?.reset() }
         recorder?.release()
         recorder = null
         pendingFile = null
         mark = null
+        latestLevel = 0f
         currentPhase = PHASE_IDLE
     }
 
@@ -216,10 +245,22 @@ internal class AndroidRecorder(
     private companion object {
         const val SAMPLE_RATE = 44_100
         const val MAX_AMPLITUDE = 32_767
-        const val MAX_LIVE_SAMPLES = 512
+        const val SAMPLE_INTERVAL_MS = 65L
+        const val MAX_STORED_SAMPLES = 512
         const val PHASE_IDLE = "idle"
         const val PHASE_RECORDING = "recording"
         const val PHASE_PAUSED = "paused"
         const val PHASE_FINALIZING = "finalizing"
+    }
+}
+
+/** Сохраняет пики по всей временной шкале, а не последние N samples. */
+internal fun reduceWaveform(samples: List<Float>, limit: Int): List<Float> {
+    require(limit > 0)
+    if (samples.size <= limit) return samples.map { it.coerceIn(0f, 1f) }
+    return List(limit) { index ->
+        val start = index * samples.size / limit
+        val end = ((index + 1) * samples.size / limit).coerceAtMost(samples.size)
+        samples.subList(start, end).maxOrNull()?.coerceIn(0f, 1f) ?: 0f
     }
 }
