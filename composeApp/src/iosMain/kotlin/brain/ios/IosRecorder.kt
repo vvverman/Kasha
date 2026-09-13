@@ -53,7 +53,7 @@ internal class IosRecorder(
             withOptions = AVAudioSessionCategoryOptionAllowBluetooth,
             error = null,
         )) { "audioSessionUnavailable" }
-        check(session.setActive(true, error = null)) { "audioSessionUnavailable" }
+        check(session.setActive(true, withOptions = 0uL, error = null)) { "audioSessionUnavailable" }
 
         val path = IosPaths.child(IosPaths.pending, "${NSUUID().UUIDString.lowercase()}.m4a")
         val settings = mapOf<Any?, Any>(
@@ -65,7 +65,11 @@ internal class IosRecorder(
         created.meteringEnabled = true
         if (!created.prepareToRecord() || !created.record()) {
             created.stop()
-            session.setActive(false, error = null)
+            session.setActive(
+                false,
+                withOptions = AVAudioSessionSetActiveOptionNotifyOthersOnDeactivation,
+                error = null,
+            )
             IosPaths.remove(path)
             error("audioFailed")
         }
@@ -93,7 +97,11 @@ internal class IosRecorder(
         val source = currentPath ?: error("recordingNotStarted")
         val duration = active.currentTime
         active.stop()
-        AVAudioSession.sharedInstance().setActive(false, error = null)
+        AVAudioSession.sharedInstance().setActive(
+            false,
+            withOptions = AVAudioSessionSetActiveOptionNotifyOthersOnDeactivation,
+            error = null,
+        )
         recorder = null
         currentPath = null
         currentPhase = "idle"
