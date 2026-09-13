@@ -259,48 +259,49 @@ internal fun AiSettingsSection(s: StudioState) {
             }
 
             val canSave = cloud.available && consent && configuredModels.isNotEmpty() && (!provider.endpointRequired || endpoint.isNotBlank())
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                KashaButton(
-                    t("aiTestConnection"),
-                    onClick = {
-                        scope.launch {
-                            actionError = null
-                            val connection = CloudAiConnection(
-                                providerId = provider.id,
-                                modelIds = configuredModels.mapValues { it.value.trim() },
-                                endpoint = endpoint.trim().ifBlank { null },
-                                enabled = true,
-                                privacyConsentVersion = if (consent) AiPrivacy.CONSENT_VERSION else 0,
-                            )
-                            connectionResult = runCatching { cloud.test(connection, apiKey.ifBlank { null }) }
-                                .onFailure { actionError = it.message }
-                                .getOrDefault(false)
-                        }
-                    },
-                    modifier = Modifier.weight(1f),
-                    enabled = canSave,
-                )
-                KashaButton(
-                    t("aiSaveConnection"),
-                    onClick = {
-                        scope.launch {
-                            actionError = null
-                            val connection = CloudAiConnection(
-                                providerId = provider.id,
-                                modelIds = configuredModels.mapValues { it.value.trim() },
-                                endpoint = endpoint.trim().ifBlank { null },
-                                enabled = true,
-                                privacyConsentVersion = AiPrivacy.CONSENT_VERSION,
-                            )
-                            runCatching { cloud.save(connection, apiKey.ifBlank { null }) }
-                                .onSuccess { connections = cloud.connections(); providerEditor = null }
-                                .onFailure { actionError = it.message }
-                        }
-                    },
-                    modifier = Modifier.weight(1f),
-                    primary = true,
-                    enabled = canSave,
-                )
+            val testConnection = {
+                scope.launch {
+                    actionError = null
+                    val connection = CloudAiConnection(
+                        providerId = provider.id,
+                        modelIds = configuredModels.mapValues { it.value.trim() },
+                        endpoint = endpoint.trim().ifBlank { null },
+                        enabled = true,
+                        privacyConsentVersion = if (consent) AiPrivacy.CONSENT_VERSION else 0,
+                    )
+                    connectionResult = runCatching { cloud.test(connection, apiKey.ifBlank { null }) }
+                        .onFailure { actionError = it.message }
+                        .getOrDefault(false)
+                }
+            }
+            val saveConnection = {
+                scope.launch {
+                    actionError = null
+                    val connection = CloudAiConnection(
+                        providerId = provider.id,
+                        modelIds = configuredModels.mapValues { it.value.trim() },
+                        endpoint = endpoint.trim().ifBlank { null },
+                        enabled = true,
+                        privacyConsentVersion = AiPrivacy.CONSENT_VERSION,
+                    )
+                    runCatching { cloud.save(connection, apiKey.ifBlank { null }) }
+                        .onSuccess { connections = cloud.connections(); providerEditor = null }
+                        .onFailure { actionError = it.message }
+                }
+            }
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                val stacked = maxWidth < 520.dp
+                if (stacked) {
+                    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        KashaButton(t("aiTestConnection"), testConnection, Modifier.fillMaxWidth(), enabled = canSave)
+                        KashaButton(t("aiSaveConnection"), saveConnection, Modifier.fillMaxWidth(), primary = true, enabled = canSave)
+                    }
+                } else {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        KashaButton(t("aiTestConnection"), testConnection, Modifier.weight(1f), enabled = canSave)
+                        KashaButton(t("aiSaveConnection"), saveConnection, Modifier.weight(1f), primary = true, enabled = canSave)
+                    }
+                }
             }
             val existing = connections.firstOrNull { it.providerId == provider.id }
             if (existing != null) {
