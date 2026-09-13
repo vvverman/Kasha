@@ -53,13 +53,14 @@ jobs:
         run: bash platforms/desktop/packaging/build-native-linux.sh
       - name: Tests and Linux packages
         run: |
+          set -euo pipefail
           export PATH="$PWD/platforms/desktop/bundle/linux/bin:$PATH"
           command -v ffmpeg
           ffmpeg -version | head -n 1
           python3 -m pip install fonttools==4.59.2
           python3 scripts/prepare-fonts.py
-          gradle :kashaCore:jvmTest :aiCatalog:jvmTest :aiConnectors:jvmTest :composeApp:jvmTest :runtime:test :desktopApp:test
-          gradle :desktopApp:packageDistributionForCurrentOS
+          gradle :kashaCore:jvmTest :aiCatalog:jvmTest :aiConnectors:jvmTest :composeApp:jvmTest :runtime:test :desktopApp:test 2>&1 | tee linux-tests.log
+          gradle :desktopApp:packageDistributionForCurrentOS 2>&1 | tee linux-package.log
       - name: Verify packaged native resources
         run: |
           test -x platforms/desktop/bundle/linux/bin/whisper-cli
@@ -69,6 +70,20 @@ jobs:
           test -s platforms/desktop/bundle/common/models/Qwen3-4B-Q4_K_M.gguf
           find platforms/desktop/build/compose/binaries/main -type f \( -name '*.deb' -o -name '*.rpm' \) -print | tee linux-packages.txt
           test "$(wc -l < linux-packages.txt)" -ge 2
+      - name: Upload Linux diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kasha-linux-diagnostics-${{ github.sha }}
+          retention-days: 7
+          if-no-files-found: ignore
+          path: |
+            linux-tests.log
+            linux-package.log
+            linux-packages.txt
+            platforms/desktop/build/compose/logs/**
+            platforms/desktop/build/test-results/**
+            modules/infrastructure/jvm/build/test-results/**
       - uses: actions/upload-artifact@v4
         with:
           name: Kasha-Linux-x64
@@ -126,13 +141,19 @@ jobs:
       - name: Tests and Windows packages
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
           $env:Path = "$pwd\platforms\desktop\bundle\windows\bin;$env:Path"
           Get-Command ffmpeg.exe
           ffmpeg.exe -version | Select-Object -First 1
+          if ($LASTEXITCODE -ne 0) { throw "Bundled ffmpeg failed with exit code $LASTEXITCODE" }
           python -m pip install fonttools==4.59.2
+          if ($LASTEXITCODE -ne 0) { throw "pip failed with exit code $LASTEXITCODE" }
           python scripts/prepare-fonts.py
-          gradle :kashaCore:jvmTest :aiCatalog:jvmTest :aiConnectors:jvmTest :composeApp:jvmTest :runtime:test :desktopApp:test
-          gradle :desktopApp:packageDistributionForCurrentOS
+          if ($LASTEXITCODE -ne 0) { throw "font preparation failed with exit code $LASTEXITCODE" }
+          gradle :kashaCore:jvmTest :aiCatalog:jvmTest :aiConnectors:jvmTest :composeApp:jvmTest :runtime:test :desktopApp:test 2>&1 | Tee-Object -FilePath windows-tests.log
+          if ($LASTEXITCODE -ne 0) { throw "desktop tests failed with exit code $LASTEXITCODE" }
+          gradle :desktopApp:packageDistributionForCurrentOS 2>&1 | Tee-Object -FilePath windows-package.log
+          if ($LASTEXITCODE -ne 0) { throw "Windows packaging failed with exit code $LASTEXITCODE" }
       - name: Verify packaged native resources
         shell: pwsh
         run: |
@@ -142,6 +163,20 @@ jobs:
           $files = Get-ChildItem platforms/desktop/build/compose/binaries/main -Recurse -File | Where-Object { $_.Extension -in '.msi','.exe' }
           $files | ForEach-Object { $_.FullName } | Set-Content windows-packages.txt
           if ($files.Count -lt 2) { throw 'Windows MSI/EXE packages missing' }
+      - name: Upload Windows diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kasha-windows-diagnostics-${{ github.sha }}
+          retention-days: 7
+          if-no-files-found: ignore
+          path: |
+            windows-tests.log
+            windows-package.log
+            windows-packages.txt
+            platforms/desktop/build/compose/logs/**
+            platforms/desktop/build/test-results/**
+            modules/infrastructure/jvm/build/test-results/**
       - uses: actions/upload-artifact@v4
         with:
           name: Kasha-Windows-x64
