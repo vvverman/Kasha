@@ -12,20 +12,27 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
-import kotlin.math.PI
-import kotlin.math.cos
-import kotlin.math.sin
+import androidx.compose.ui.graphics.vector.PathParser
 
-/** Небольшой собственный набор Kasha. Никаких внешних icon packs в runtime. */
-enum class Glyph {
-    RECORD, PLAY, PAUSE, STOP, SEND, HOME, FOLDER, TASKS, SETTINGS,
-    BACK, NEXT, PLUS, DELETE, MAGIC, MORE, PIN, EDIT, UP, DOWN, CHECK,
-    ARCHIVE, CLOCK,
+/**
+ * Единственный runtime-реестр Kasha Icons.
+ * Канонические id совпадают с docs/design/icons/registry.json; legacy значения оставлены как aliases.
+ */
+enum class Glyph(val id: String) {
+    HOME("home"), PROJECTS("projects"), TASKS("tasks"), SETTINGS("settings"),
+    RECORD("record"), MIC("mic"), PLAY("play"), PAUSE("pause"), STOP("stop"), SEND("send"),
+    BACK("back"), NEXT("next"), ADD("add"), DELETE("delete"), TEXT_PROCESSING("text-processing"), MORE("more"),
+    PIN("pin"), UNPIN("unpin"), EDIT("edit"), UP("up"), DOWN("down"), CHECK("check"), ARCHIVE("archive"), CLOCK("clock"),
+    NOTE("note"), CLOSE("close"), SORT("sort"), DRAG("drag"), SEARCH("search"),
+    CALENDAR("calendar"), REMINDER("reminder"), REPEAT("repeat"), COMPLETE("complete"),
+    LANGUAGE("language"), THEME("theme"), LOCAL("local"), EXTERNAL("external"), PRIVACY("privacy"),
+    SPEECH("speech"), ROUTING("routing"), VISIBILITY("visibility"), VISIBILITY_OFF("visibility-off"),
+
+    // Совместимость со старым shared UI. Новые вызовы используют semantic names выше.
+    FOLDER("projects"), PLUS("add"), MAGIC("text-processing"),
 }
 
 private data class Motion(
@@ -35,30 +42,30 @@ private data class Motion(
     val scale: Float = 1f,
 )
 
-/** Короткие функциональные движения на hover/press/focus. */
-private fun motion(glyph: Glyph): Motion = when (glyph) {
-    Glyph.RECORD -> Motion(scale = 1.10f)
-    Glyph.PLAY -> Motion(x = 1.8f, scale = 1.06f)
-    Glyph.PAUSE -> Motion(scale = .92f)
-    Glyph.STOP -> Motion(rotation = 8f, scale = .94f)
-    Glyph.SEND -> Motion(rotation = -7f, x = 2.2f, y = -1.6f, scale = 1.04f)
-    Glyph.HOME -> Motion(y = -1.6f, scale = 1.04f)
-    Glyph.FOLDER -> Motion(rotation = -4f, y = -1f)
-    Glyph.TASKS -> Motion(y = -1.5f, scale = 1.04f)
-    Glyph.SETTINGS -> Motion(rotation = 42f)
-    Glyph.BACK -> Motion(x = -2.5f)
-    Glyph.NEXT -> Motion(x = 2.5f)
-    Glyph.PLUS -> Motion(rotation = 90f, scale = 1.08f)
-    Glyph.DELETE -> Motion(rotation = -6f, y = 1f)
-    Glyph.MAGIC -> Motion(rotation = 9f, y = -1.5f, scale = 1.05f)
-    Glyph.MORE -> Motion(scale = 1.14f)
-    Glyph.PIN -> Motion(y = -2f, scale = 1.05f)
-    Glyph.EDIT -> Motion(rotation = -5f, x = 1.2f, y = -1.2f)
-    Glyph.UP -> Motion(y = -2.5f)
-    Glyph.DOWN -> Motion(y = 2.5f)
-    Glyph.CHECK -> Motion(scale = 1.12f)
-    Glyph.ARCHIVE -> Motion(y = 1.8f, scale = .96f)
-    Glyph.CLOCK -> Motion(rotation = 18f)
+/** Небольшая одноразовая реакция; геометрия смысла не меняется. */
+private fun motion(glyph: Glyph): Motion = when (glyph.id) {
+    "record" -> Motion(scale = 1.035f)
+    "play" -> Motion(x = .7f, scale = 1.025f)
+    "pause", "stop" -> Motion(scale = .98f)
+    "send" -> Motion(x = .8f, y = -.5f, scale = 1.02f)
+    "home", "projects", "tasks" -> Motion(y = -.5f, scale = 1.02f)
+    "settings" -> Motion(rotation = 8f)
+    "back" -> Motion(x = -.8f)
+    "next" -> Motion(x = .8f)
+    "add" -> Motion(scale = 1.04f)
+    "delete" -> Motion(rotation = -3f, y = .4f)
+    "text-processing" -> Motion(y = -.45f, scale = 1.02f)
+    "more" -> Motion(scale = 1.035f)
+    "pin", "unpin" -> Motion(y = -.6f, scale = 1.02f)
+    "edit" -> Motion(rotation = -3f, x = .45f, y = -.35f)
+    "up" -> Motion(y = -.8f)
+    "down" -> Motion(y = .8f)
+    "check", "complete" -> Motion(scale = 1.035f)
+    "archive" -> Motion(y = .6f, scale = .985f)
+    "clock" -> Motion(rotation = 6f)
+    "search" -> Motion(scale = 1.025f)
+    "visibility", "visibility-off" -> Motion(scale = .98f)
+    else -> Motion(scale = 1.015f)
 }
 
 @Composable
@@ -67,13 +74,16 @@ fun KashaIcon(
     modifier: Modifier = Modifier,
     color: Color = MaterialTheme.colorScheme.onSurface,
     animated: Boolean = false,
+    variant: String? = null,
 ) {
+    val reducedMotion = KashaMotion.reduced
     val spec = motion(glyph)
     val phase by animateFloatAsState(
-        targetValue = if (animated) 1f else 0f,
-        animationSpec = tween(220, easing = FastOutSlowInEasing),
-        label = "kasha-${glyph.name.lowercase()}",
+        targetValue = if (animated && !reducedMotion) 1f else 0f,
+        animationSpec = tween(if (reducedMotion) 120 else 240, easing = FastOutSlowInEasing),
+        label = "kasha-${glyph.id}",
     )
+    val definition = generatedKashaIcons[glyph.id]
     Canvas(
         modifier.graphicsLayer {
             rotationZ = spec.rotation * phase
@@ -84,105 +94,40 @@ fun KashaIcon(
             scaleY = s
         },
     ) {
+        if (definition == null) return@Canvas
+        val geometry = variant?.let { definition.variants[it] } ?: definition.geometry
         val u = size.minDimension / 24f
         val dx = (size.width - 24f * u) / 2f
         val dy = (size.height - 24f * u) / 2f
+        val stroke = Stroke(GENERATED_KASHA_ICON_STROKE * u)
         fun p(x: Float, y: Float) = Offset(dx + x * u, dy + y * u)
-        val strokeWidth = 1.9f * u
-        val stroke = Stroke(strokeWidth, cap = StrokeCap.Round, join = StrokeJoin.Round)
-        fun line(x1: Float, y1: Float, x2: Float, y2: Float) = drawLine(color, p(x1, y1), p(x2, y2), strokeWidth, StrokeCap.Round)
-        fun circle(x: Float, y: Float, r: Float, fill: Boolean = false) = drawCircle(color, r * u, p(x, y), style = if (fill) androidx.compose.ui.graphics.drawscope.Fill else stroke)
-        fun path(points: List<Pair<Float, Float>>, close: Boolean = false, fill: Boolean = false) {
-            val shape = Path().apply {
-                if (points.isNotEmpty()) {
-                    moveTo(p(points[0].first, points[0].second).x, p(points[0].first, points[0].second).y)
-                    points.drop(1).forEach { (x, y) -> lineTo(p(x, y).x, p(x, y).y) }
-                    if (close) close()
+        geometry.forEach { shape ->
+            val shapeColor = color.copy(alpha = color.alpha * shape.opacity)
+            when (shape.type) {
+                "path" -> {
+                    val raw = PathParser().parsePathString(shape.d ?: return@forEach).toPath()
+                    val path = androidx.compose.ui.graphics.Path().also { target ->
+                        target.addPath(raw)
+                        target.translate(Offset(dx, dy))
+                        target.transform(androidx.compose.ui.graphics.Matrix().apply { scale(u, u) })
+                    }
+                    if (shape.fill) drawPath(path, shapeColor, style = Fill)
+                    if (shape.stroke) drawPath(path, shapeColor, style = stroke)
                 }
-            }
-            drawPath(shape, color, style = if (fill) androidx.compose.ui.graphics.drawscope.Fill else stroke)
-        }
-
-        when (glyph) {
-            Glyph.RECORD -> circle(12f, 12f, 5.2f, fill = true)
-            Glyph.PLAY -> path(listOf(8.5f to 6.2f, 18f to 12f, 8.5f to 17.8f), close = true, fill = true)
-            Glyph.PAUSE -> {
-                drawRoundRect(color, p(7f, 6f), Size(3.4f * u, 12f * u), CornerRadius(1.2f * u))
-                drawRoundRect(color, p(13.6f, 6f), Size(3.4f * u, 12f * u), CornerRadius(1.2f * u))
-            }
-            Glyph.STOP -> drawRoundRect(color, p(7.5f, 7.5f), Size(9f * u, 9f * u), CornerRadius(2f * u))
-            Glyph.SEND -> {
-                path(listOf(3.3f to 11.1f, 20.5f to 4.2f, 13.5f to 20.4f, 10.6f to 13.7f), close = true)
-                line(10.6f, 13.7f, 20.5f, 4.2f)
-            }
-            Glyph.HOME -> {
-                path(listOf(3.8f to 11f, 12f to 4.4f, 20.2f to 11f))
-                path(listOf(6.2f to 9.4f, 6.2f to 19.2f, 17.8f to 19.2f, 17.8f to 9.4f))
-                line(10f, 19.2f, 10f, 14f); line(14f, 14f, 14f, 19.2f)
-            }
-            Glyph.FOLDER -> {
-                val shape = Path().apply {
-                    moveTo(p(3.3f, 7.3f).x, p(3.3f, 7.3f).y)
-                    lineTo(p(9.2f, 7.3f).x, p(9.2f, 7.3f).y)
-                    lineTo(p(11.2f, 9.2f).x, p(11.2f, 9.2f).y)
-                    lineTo(p(20.7f, 9.2f).x, p(20.7f, 9.2f).y)
-                    lineTo(p(19.5f, 18.3f).x, p(19.5f, 18.3f).y)
-                    lineTo(p(4.5f, 18.3f).x, p(4.5f, 18.3f).y)
-                    close()
+                "line" -> if (shape.stroke) drawLine(shapeColor, p(shape.x1 ?: 0f, shape.y1 ?: 0f), p(shape.x2 ?: 0f, shape.y2 ?: 0f), GENERATED_KASHA_ICON_STROKE * u)
+                "circle" -> {
+                    val center = p(shape.cx ?: 0f, shape.cy ?: 0f)
+                    val radius = (shape.r ?: 0f) * u
+                    if (shape.fill) drawCircle(shapeColor, radius, center, style = Fill)
+                    if (shape.stroke) drawCircle(shapeColor, radius, center, style = stroke)
                 }
-                drawPath(shape, color, style = stroke)
-            }
-            Glyph.TASKS -> {
-                drawRoundRect(color, p(4f, 4f), Size(16f * u, 16f * u), CornerRadius(3f * u), style = stroke)
-                path(listOf(7f to 9f, 8.6f to 10.5f, 11f to 7.5f))
-                line(13f, 9f, 17f, 9f)
-                path(listOf(7f to 15f, 8.6f to 16.5f, 11f to 13.5f))
-                line(13f, 15f, 17f, 15f)
-            }
-            Glyph.SETTINGS -> {
-                circle(12f, 12f, 3.1f)
-                repeat(8) { i ->
-                    val a = i * 45.0 * PI / 180.0
-                    val x1 = 12f + cos(a).toFloat() * 5.2f
-                    val y1 = 12f + sin(a).toFloat() * 5.2f
-                    val x2 = 12f + cos(a).toFloat() * 8f
-                    val y2 = 12f + sin(a).toFloat() * 8f
-                    line(x1, y1, x2, y2)
+                "rect" -> {
+                    val topLeft = p(shape.x ?: 0f, shape.y ?: 0f)
+                    val sizePx = Size((shape.width ?: 0f) * u, (shape.height ?: 0f) * u)
+                    val corner = CornerRadius((shape.rx ?: 0f) * u)
+                    if (shape.fill) drawRoundRect(shapeColor, topLeft, sizePx, corner, style = Fill)
+                    if (shape.stroke) drawRoundRect(shapeColor, topLeft, sizePx, corner, style = stroke)
                 }
-            }
-            Glyph.BACK -> { line(18f, 5f, 11f, 12f); line(11f, 12f, 18f, 19f) }
-            Glyph.NEXT -> { line(6f, 5f, 13f, 12f); line(13f, 12f, 6f, 19f) }
-            Glyph.UP -> { line(5f, 15f, 12f, 8f); line(12f, 8f, 19f, 15f) }
-            Glyph.DOWN -> { line(5f, 9f, 12f, 16f); line(12f, 16f, 19f, 9f) }
-            Glyph.PLUS -> { line(12f, 5f, 12f, 19f); line(5f, 12f, 19f, 12f) }
-            Glyph.DELETE -> {
-                path(listOf(7f to 8f, 8f to 20f, 16f to 20f, 17f to 8f))
-                line(5.5f, 8f, 18.5f, 8f); line(9f, 5f, 15f, 5f)
-                line(10f, 11f, 10.5f, 17f); line(14f, 11f, 13.5f, 17f)
-            }
-            Glyph.MAGIC -> {
-                line(6f, 18f, 16.5f, 7.5f); line(14.8f, 5.8f, 18.2f, 9.2f)
-                line(6f, 5f, 6f, 8f); line(4.5f, 6.5f, 7.5f, 6.5f)
-                line(18.5f, 15.5f, 18.5f, 19f); line(16.8f, 17.2f, 20.2f, 17.2f)
-            }
-            Glyph.MORE -> { circle(6f, 12f, 1.35f, true); circle(12f, 12f, 1.35f, true); circle(18f, 12f, 1.35f, true) }
-            Glyph.PIN -> {
-                path(listOf(8f to 4.5f, 16f to 4.5f, 14.5f to 10f, 17.5f to 13f, 6.5f to 13f, 9.5f to 10f), close = true)
-                line(12f, 13f, 12f, 20f)
-            }
-            Glyph.EDIT -> {
-                path(listOf(5f to 16.5f, 5f to 19f, 7.5f to 19f, 18.7f to 7.8f, 16.2f to 5.3f), close = true)
-                line(14.8f, 6.7f, 17.3f, 9.2f)
-            }
-            Glyph.CHECK -> path(listOf(5.5f to 12.5f, 10f to 17f, 18.8f to 7.5f))
-            Glyph.ARCHIVE -> {
-                drawRoundRect(color, p(5f, 8f), Size(14f * u, 11f * u), CornerRadius(2f * u), style = stroke)
-                drawRoundRect(color, p(4f, 5f), Size(16f * u, 4f * u), CornerRadius(1.5f * u), style = stroke)
-                line(9f, 12f, 15f, 12f)
-            }
-            Glyph.CLOCK -> {
-                circle(12f, 12f, 8f)
-                line(12f, 7.5f, 12f, 12f); line(12f, 12f, 15.5f, 14f)
             }
         }
     }
