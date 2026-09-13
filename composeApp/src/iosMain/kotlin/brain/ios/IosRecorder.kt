@@ -46,14 +46,7 @@ internal class IosRecorder(
         check(currentPhase == "idle") { "recordingAlreadyStarted" }
         check(pendingPath() == null) { "pendingRecordingExists" }
         check(requestMicrophonePermission()) { "microphonePermissionDenied" }
-
-        val session = AVAudioSession.sharedInstance()
-        check(session.setCategory(
-            AVAudioSessionCategoryPlayAndRecord,
-            withOptions = AVAudioSessionCategoryOptionAllowBluetooth,
-            error = null,
-        )) { "audioSessionUnavailable" }
-        check(session.setActive(true, withOptions = 0uL, error = null)) { "audioSessionUnavailable" }
+        IosAudioSessionBridge.activateRecording()
 
         val path = IosPaths.child(IosPaths.pending, "${NSUUID().UUIDString.lowercase()}.m4a")
         val settings = mapOf<Any?, Any>(
@@ -65,11 +58,7 @@ internal class IosRecorder(
         created.meteringEnabled = true
         if (!created.prepareToRecord() || !created.record()) {
             created.stop()
-            session.setActive(
-                false,
-                withOptions = AVAudioSessionSetActiveOptionNotifyOthersOnDeactivation,
-                error = null,
-            )
+            IosAudioSessionBridge.deactivate()
             IosPaths.remove(path)
             error("audioFailed")
         }
@@ -88,6 +77,7 @@ internal class IosRecorder(
 
     override suspend fun resume() {
         check(currentPhase == "paused")
+        IosAudioSessionBridge.activateRecording()
         check(recorder?.record() == true) { "audioFailed" }
         currentPhase = "recording"
     }
@@ -97,11 +87,7 @@ internal class IosRecorder(
         val source = currentPath ?: error("recordingNotStarted")
         val duration = active.currentTime
         active.stop()
-        AVAudioSession.sharedInstance().setActive(
-            false,
-            withOptions = AVAudioSessionSetActiveOptionNotifyOthersOnDeactivation,
-            error = null,
-        )
+        IosAudioSessionBridge.deactivate()
         recorder = null
         currentPath = null
         currentPhase = "idle"
