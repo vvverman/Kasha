@@ -63,7 +63,6 @@ internal class RecordingForegroundService : Service() {
         fun paused(context: Context) = updateNotification(context, paused = true)
 
         fun stop(context: Context) {
-            serviceActive = false
             desiredPaused = false
             context.stopService(Intent(context, RecordingForegroundService::class.java))
         }
