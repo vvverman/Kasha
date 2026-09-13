@@ -42,7 +42,7 @@ internal class RecordingForegroundService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val notification = Notification.Builder(this, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_btn_speak_now)
+            .setSmallIcon(R.drawable.ic_kasha_notification)
             .setContentTitle(if (paused) "Kasha · запись на паузе" else "Kasha · идёт запись")
             .setContentText(if (paused) "Откройте Kasha, чтобы продолжить или завершить" else "Микрофон используется для текущей записи")
             .setContentIntent(openApp)
