@@ -98,6 +98,16 @@ with sync_playwright() as pw:
     def button(name):
         click('button', name)
 
+    def restore_sort_screen(pref_key):
+        visible_item(page.get_by_role('button', name='Главная', exact=True), 'Главная')
+        if pref_key == 'projectSort':
+            button('Проекты')
+        elif pref_key == 'noteSort':
+            button('Проекты')
+            click('button', re.compile(r'^Альфа сортировка'))
+        elif pref_key == 'taskSort':
+            button('Задачи')
+
     def select_sort(pref_key, target):
         current = api('preferences')[pref_key]
         if current == target:
@@ -105,8 +115,10 @@ with sync_playwright() as pw:
         button(SORT_LABELS[current])
         button(SORT_LABELS[target])
         wait(lambda: api('preferences')[pref_key] == target, f'{pref_key}={target}')
-        page.keyboard.press('Escape')
-        page.wait_for_timeout(180)
+        # Compose Web DropdownMenu может оставаться отдельным accessibility popup
+        # после выбора. Reload одновременно проверяет persistence и возвращает чистый UI tree.
+        page.reload(wait_until='networkidle')
+        restore_sort_screen(pref_key)
 
     def field(label, value):
         _, box = visible_item(page.get_by_role('textbox', name=label, exact=True), label)
