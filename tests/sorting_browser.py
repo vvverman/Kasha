@@ -105,6 +105,8 @@ with sync_playwright() as pw:
         button(SORT_LABELS[current])
         button(SORT_LABELS[target])
         wait(lambda: api('preferences')[pref_key] == target, f'{pref_key}={target}')
+        page.keyboard.press('Escape')
+        page.wait_for_timeout(180)
 
     def field(label, value):
         _, box = visible_item(page.get_by_role('textbox', name=label, exact=True), label)
