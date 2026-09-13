@@ -170,6 +170,27 @@ class StudioStateTest {
     }
 
     @Test
+    fun pausedRecordingFreezesWaveformUntilResume() = runTest {
+        val repo = Repo(); val recorder = Recorder(repo); val state = StudioState(repo, recorder, Audio())
+        state.launch(); state.startRecording()
+        val polling = backgroundScope.launch { state.poll() }
+        advanceTimeBy(150); runCurrent()
+        assertTrue(state.liveWave.any { it > 0f })
+
+        state.pauseRecording()
+        val pausedWave = state.liveWave
+        val pausedElapsed = state.elapsed
+        advanceTimeBy(300); runCurrent()
+        assertEquals(pausedWave, state.liveWave)
+        assertEquals(pausedElapsed, state.elapsed)
+
+        state.resumeRecording()
+        advanceTimeBy(150); runCurrent()
+        assertNotEquals(pausedWave, state.liveWave)
+        polling.cancel()
+    }
+
+    @Test
     fun noteDraftHasOnlyTextAndTitleFollowsFirstLine() = runTest {
         val repo = Repo(); repo.createDemo(); repo.ready()
         val state = StudioState(repo, Recorder(repo), Audio()); state.launch()
