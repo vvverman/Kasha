@@ -3,6 +3,7 @@ package ru.vrmn.kasha.android
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -32,10 +33,19 @@ internal class RecordingForegroundService : Service() {
 
     private fun showForeground(paused: Boolean) {
         ensureChannel()
+        val openApp = PendingIntent.getActivity(
+            this,
+            0,
+            Intent(this, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
         val notification = Notification.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setContentTitle(if (paused) "Kasha · запись на паузе" else "Kasha · идёт запись")
             .setContentText(if (paused) "Откройте Kasha, чтобы продолжить или завершить" else "Микрофон используется для текущей записи")
+            .setContentIntent(openApp)
             .setOngoing(true)
             .setCategory(Notification.CATEGORY_SERVICE)
             .setOnlyAlertOnce(true)
