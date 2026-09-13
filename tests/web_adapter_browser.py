@@ -7,6 +7,7 @@ import urllib.request
 from playwright.sync_api import sync_playwright
 
 BASE = 'http://127.0.0.1:8787'
+WORKING = {'RECORDING', 'QUEUED', 'TRANSCRIBING', 'COMPACTING', 'POLISHING'}
 
 
 def api(path, data=None, method=None):
@@ -21,6 +22,16 @@ def api(path, data=None, method=None):
     )
     with urllib.request.urlopen(request, timeout=10) as response:
         return json.load(response)
+
+
+def wait_capture_idle(capture_id, timeout=20):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        capture = next((c for c in api('snapshot')['captures'] if c['id'] == capture_id), None)
+        if capture is None or capture['status'] not in WORKING:
+            return capture
+        time.sleep(0.1)
+    raise AssertionError('Capture не завершил обработку перед discard: ' + capture_id)
 
 
 for _ in range(90):
@@ -172,6 +183,7 @@ with sync_playwright() as pw:
 
         page.reload(wait_until='networkidle')
         assert page.evaluate('kashaPlatform.pending()') is True
+        wait_capture_idle(recovered['id'])
         api('captures/' + recovered['id'], method='DELETE')
         receipt_text = page.evaluate('(base) => kashaPlatform.recover(base)', BASE)
         assert not receipt_text.startswith('ERROR:'), receipt_text
@@ -186,6 +198,7 @@ with sync_playwright() as pw:
         runtime_rejected = page.evaluate('(base) => kashaPlatform.stop(base)', BASE)
         assert runtime_rejected.startswith('ERROR:'), runtime_rejected
         assert page.evaluate('kashaPlatform.pending()') is True
+        wait_capture_idle(receipt['id'])
         api('captures/' + receipt['id'], method='DELETE')
         final_receipt_text = page.evaluate('(base) => kashaPlatform.recover(base)', BASE)
         assert not final_receipt_text.startswith('ERROR:'), final_receipt_text
