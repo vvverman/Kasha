@@ -185,7 +185,7 @@ internal class IosRecorder(
                     state = RecorderSessionState(
                         phase = RecorderPhase.INTERRUPTED,
                         activeSessionId = requireActiveSessionId(),
-                        issue = RecorderIssue(RecorderIssueKind.INTERRUPTION, recoverable = true),
+                        issue = RecorderIssue(RecorderIssueKind.INTERRUPTION, recoverable = false),
                     )
                 }
             }
