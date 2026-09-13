@@ -89,4 +89,50 @@ class AndroidStudioRepositoryTest {
             root.deleteRecursively()
         }
     }
+
+    @Test
+    fun orphanFinalizedAudioReturnsToPendingAfterCrashBeforeStateCommit() {
+        val root = Files.createTempDirectory("kasha-android-orphan-").toFile()
+        try {
+            val storage = AndroidStorage(root)
+            val pending = storage.newPendingFile().apply { writeBytes(byteArrayOf(12, 13, 14, 15)) }
+            val captureId = storage.pendingId(pending)
+            val finalized = storage.acceptPending(pending, captureId)
+            assertTrue(finalized.isFile)
+            assertFalse(pending.exists())
+
+            val repository = AndroidStudioRepository(root, intelligence, "ru-RU")
+            val recovered = repository.pendingFiles().single()
+
+            assertEquals(captureId, recovered.nameWithoutExtension)
+            assertArrayEquals(byteArrayOf(12, 13, 14, 15), recovered.readBytes())
+            assertTrue(repository.snapshotBlocking().captures.isEmpty())
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun stagedDeleteIsRestoredWhenStateStillReferencesCapture() = runBlocking {
+        val root = Files.createTempDirectory("kasha-android-delete-recovery-").toFile()
+        try {
+            val first = AndroidStudioRepository(root, intelligence, "ru-RU")
+            val pending = first.newPendingFile().apply { writeBytes(byteArrayOf(21, 22, 23)) }
+            val capture = first.acceptPending(pending, 1.0, listOf(0.5f))
+            val storage = AndroidStorage(root)
+            val staged = storage.stageDeleteCaptureAudio(capture.id)
+            assertNotNull(staged)
+            assertFalse(first.audioFileExists(capture.id))
+
+            val second = AndroidStudioRepository(root, intelligence, "ru-RU")
+            assertTrue(second.audioFile(capture.id).isFile)
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    private fun AndroidStudioRepository.snapshotBlocking(): AppSnapshot = runBlocking { snapshot() }
+    private fun AndroidStudioRepository.audioFileExists(captureId: String): Boolean = runBlocking {
+        runCatching { audioFile(captureId).isFile }.getOrDefault(false)
+    }
 }
