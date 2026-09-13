@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
-import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.style.*
 import androidx.compose.ui.unit.*
 import brain.model.CaptureStatus
@@ -90,7 +89,7 @@ internal fun HomeScreen(s: StudioState) {
 @Composable
 internal fun GlobalPlayer(s: StudioState) {
     val scope = rememberCoroutineScope(); val c = MaterialTheme.colorScheme; val loaded = s.loadedAudio
-    KashaPanel(Modifier.fillMaxWidth().semantics { contentDescription = "global-player" }, padding = 12.dp) {
+    KashaPanel(Modifier.fillMaxWidth(), padding = 12.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             when {
                 s.controlBusy -> ProcessingRing(Modifier.size(46.dp))
