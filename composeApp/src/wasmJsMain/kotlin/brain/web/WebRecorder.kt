@@ -13,7 +13,7 @@ private fun platformBase():JsString=js("globalThis.kashaPlatform.baseUrl()")
 private fun platformLanguage():JsString=js("navigator.language || 'en'")
 class BrowserRecorder(private val baseUrl:String):RecorderGateway {
     private val json=Json{ignoreUnknownKeys=true}
-    override suspend fun hasConsent()=consent()
+    override suspend fun hasConsent()=consent().await().toString()=="true"
     override suspend fun hasPending()=pending().await().toString()=="true"
     override fun phase()=recorderPhase().toString()
     override fun level()=recorderLevel().toFloat()
@@ -24,7 +24,7 @@ class BrowserRecorder(private val baseUrl:String):RecorderGateway {
     override suspend fun recoverPending():Capture=json.decodeFromString(checked(recoverRecorder(baseUrl.toJsString()).await()))
     private fun checked(value:JsString):String=value.toString().also{check(!it.startsWith("ERROR:")){"audioFailed"}}
 }
-private fun consent():Boolean=js("globalThis.kashaPlatform.consent()")
+private fun consent():Promise<JsString> = js("globalThis.kashaPlatform.consent().then(v => String(v))")
 private fun pending():Promise<JsString> = js("globalThis.kashaPlatform.pending().then(v => String(v))")
 private fun recorderPhase():JsString=js("globalThis.kashaPlatform.phase()")
 private fun recorderLevel():Double=js("globalThis.kashaPlatform.level()")
