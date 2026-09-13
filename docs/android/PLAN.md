@@ -13,7 +13,7 @@
 ## Последовательность
 
 - [x] 1. Аудит Android-зоны: SPEC/design/main/Gradle/Core ports и точные gaps.
-- [ ] 2. Минимальный Android application shell: `androidApp`, Manifest, Activity/composition root, общий `composeApp`.
+- [x] 2. Минимальный Android application shell: `androidApp`, Manifest, Activity/composition root, общий `composeApp`.
 - [ ] 3. Persistence/filesystem adapter на `StudioRepository` и `BrainData`.
 - [ ] 4. Microphone/recording: permission, pause/resume/finalize, pending/recovery, levels, lifecycle/interruption/background.
 - [ ] 5. Playback/audio focus: playback, pause/resume и поддержанные общим контрактом действия, route/focus.
