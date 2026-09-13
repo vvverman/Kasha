@@ -18,27 +18,42 @@
   };
   const failure=e=>'ERROR:'+(e?.message||String(e));
   const release=()=>{stream?.getTracks().forEach(t=>t.stop());stream=null;analyser=null;context?.close().catch(()=>{});context=null;};
+  const removeSession=async id=>{
+    if(!id)return;
+    await writes.catch(()=>{});
+    const database=await db();
+    const chunks=(await all('chunks')).filter(x=>x.id===id);
+    await new Promise((resolve,reject)=>{const tx=database.transaction(['sessions','chunks'],'readwrite');tx.objectStore('sessions').delete(id);chunks.forEach(x=>tx.objectStore('chunks').delete([x.id,x.index]));tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error||Error('Audio cleanup failed'));});
+  };
   const upload=async base=>{
     await writes;
     const saved=(await all('sessions')).sort((a,b)=>a.created-b.created)[0];
     if(!saved)throw Error('No pending recording');
     const chunks=(await all('chunks')).filter(x=>x.id===saved.id).sort((a,b)=>a.index-b.index);
-    if(!chunks.length)throw Error('No audio samples');
+    if(!chunks.length){await removeSession(saved.id);throw Error('No audio samples');}
     const blob=new Blob(chunks.map(x=>x.blob),{type:saved.mime});
     const form=new FormData();const ext=saved.mime.includes('mp4')?'m4a':saved.mime.includes('ogg')?'ogg':'webm';
     form.append('audio',blob,'capture.'+ext);
     const response=await fetch(base+'/api/captures/audio',{method:'POST',headers:{'X-Kasha-Client':'web','X-Capture-Id':saved.id},body:form});
     const text=await response.text();if(!response.ok)throw Error(text);
     const receipt=JSON.parse(text);if(receipt.id!==saved.id)throw Error('Invalid recording receipt');
-    const database=await db();
-    await new Promise((resolve,reject)=>{const tx=database.transaction(['sessions','chunks'],'readwrite');tx.objectStore('sessions').delete(saved.id);chunks.forEach(x=>tx.objectStore('chunks').delete([x.id,x.index]));tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);});
+    await removeSession(saved.id);
     return text;
   };
   const stopAudio=()=>{generation++;player?.pause();player=null;};
   globalThis.kashaPlatform={
     baseUrl:()=>location.port==='8080'?'http://127.0.0.1:8787':location.origin,
     consent:()=>{try{return localStorage.getItem('kasha.mic-consent')==='yes';}catch{return false;}},
-    pending:async()=>(await all('sessions')).length>0&&(!recorder||recorder.state==='inactive'),
+    pending:async()=>{
+      if(recorder&&recorder.state!=='inactive')return false;
+      const sessions=(await all('sessions')).sort((a,b)=>a.created-b.created);
+      for(const saved of sessions){
+        const chunks=(await all('chunks')).filter(x=>x.id===saved.id);
+        if(chunks.some(x=>x.blob?.size>0))return true;
+        await removeSession(saved.id).catch(()=>{});
+      }
+      return false;
+    },
     phase:()=>recorder?.state==='recording'?'recording':recorder?.state==='paused'?'paused':'idle',
     level:()=>{
       if(!analyser||recorder?.state!=='recording')return 0;
@@ -47,15 +62,16 @@
       return Math.max(0,Math.min(1,Math.sqrt(sum/values.length)*5));
     },
     start:async()=>{
+      let sessionId=null;
       try{
         if(recorder&&recorder.state!=='inactive')return 'ok';
-        if((await all('sessions')).length)throw Error('Recover pending audio first');
+        if(await globalThis.kashaPlatform.pending())throw Error('Recover pending audio first');
         if(player&&!player.paused&&!player.ended)throw Error('Stop playback first');
         if(!navigator.mediaDevices?.getUserMedia||!globalThis.MediaRecorder)throw Error('Microphone unavailable');
         stream=await navigator.mediaDevices.getUserMedia({audio:true});
         const mime=['audio/webm;codecs=opus','audio/mp4','audio/ogg;codecs=opus'].find(t=>MediaRecorder.isTypeSupported(t));
         const own=new MediaRecorder(stream,mime?{mimeType:mime}:undefined);recorder=own;
-        const id=crypto.randomUUID();let index=0,total=0,persistError=null;
+        const id=crypto.randomUUID();sessionId=id;let index=0,total=0,persistError=null;
         await put('sessions',{id,mime:own.mimeType||mime||'audio/webm',created:Date.now()});
         context=new (globalThis.AudioContext||globalThis.webkitAudioContext)();
         analyser=context.createAnalyser();analyser.fftSize=1024;context.createMediaStreamSource(stream).connect(analyser);
@@ -72,7 +88,7 @@
         });stopped.catch(()=>{});own.start(500);
         try{localStorage.setItem('kasha.mic-consent','yes');}catch{}
         return 'ok';
-      }catch(e){release();return failure(e);}
+      }catch(e){release();recorder=null;stopped=null;if(sessionId)await removeSession(sessionId).catch(()=>{});return failure(e);}
     },
     pause:()=>{try{if(recorder?.state!=='recording')throw Error('Not recording');recorder.pause();return 'ok';}catch(e){return failure(e);}},
     resume:()=>{try{if(recorder?.state!=='paused')throw Error('Not paused');recorder.resume();return 'ok';}catch(e){return failure(e);}},
