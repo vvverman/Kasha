@@ -1,44 +1,55 @@
 package brain.studio
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.unit.dp
 import brain.model.SortMode
 
+/**
+ * Одна команда сортировки вместо ряда постоянных pills.
+ * Текущий режим всегда виден; остальные варианты открываются только по запросу.
+ */
 @Composable
-fun KashaSortBar(mode: SortMode, labels: Map<SortMode, String>, onSelect: (SortMode) -> Unit, modifier: Modifier = Modifier) {
-    val c = MaterialTheme.colorScheme
-    Row(
-        modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).selectableGroup(),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        SortMode.entries.forEach { item ->
-            val selected = item == mode
-            Text(
-                labels.getValue(item),
-                Modifier.clip(RoundedCornerShape(999.dp))
-                    .background(if (selected) c.primary else c.surfaceVariant.copy(alpha = .52f))
-                    .selectable(
-                        selected = selected,
-                        role = Role.RadioButton,
-                        onClick = { onSelect(item) },
-                    )
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                style = MaterialTheme.typography.labelMedium,
-                color = if (selected) c.onPrimary else c.onSurfaceVariant,
-                maxLines = 1,
-            )
+fun KashaSortBar(
+    mode: SortMode,
+    labels: Map<SortMode, String>,
+    onSelect: (SortMode) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Box(modifier.fillMaxWidth()) {
+        KashaButton(
+            label = labels.getValue(mode),
+            onClick = { expanded = true },
+            glyph = Glyph.SORT,
+        )
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            SortMode.entries.forEach { item ->
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            labels.getValue(item),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    },
+                    onClick = {
+                        expanded = false
+                        if (item != mode) onSelect(item)
+                    },
+                    leadingIcon = if (item == mode) {
+                        { KashaIcon(Glyph.CHECK) }
+                    } else null,
+                )
+            }
         }
     }
 }
