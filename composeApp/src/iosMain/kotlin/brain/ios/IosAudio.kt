@@ -20,14 +20,17 @@ internal class IosAudio(
         stop()
 
         val session = AVAudioSession.sharedInstance()
-        session.setCategory(AVAudioSessionCategoryPlayback, error = null)
+        check(session.setCategory(AVAudioSessionCategoryPlayback, error = null)) { "audioSessionUnavailable" }
+        check(session.setActive(true, error = null)) { "audioSessionUnavailable" }
 
         val created = AVAudioPlayer(NSURL.fileURLWithPath(path), error = null)
         created.enableRate = true
         created.rate = rate.toFloat().coerceIn(1f, 2f)
         created.currentTime = fromSeconds.coerceAtLeast(0.0).coerceAtMost(created.duration)
-        check(created.prepareToPlay()) { "audioFailed" }
-        check(created.play()) { "audioFailed" }
+        if (!created.prepareToPlay() || !created.play()) {
+            session.setActive(false, error = null)
+            error("audioFailed")
+        }
         player = created
         paused = false
     }
@@ -40,6 +43,7 @@ internal class IosAudio(
 
     override suspend fun resume() {
         val active = player ?: return
+        check(AVAudioSession.sharedInstance().setActive(true, error = null)) { "audioSessionUnavailable" }
         check(active.play()) { "audioFailed" }
         paused = false
     }
@@ -67,5 +71,6 @@ internal class IosAudio(
         player?.stop()
         player = null
         paused = false
+        AVAudioSession.sharedInstance().setActive(false, error = null)
     }
 }
