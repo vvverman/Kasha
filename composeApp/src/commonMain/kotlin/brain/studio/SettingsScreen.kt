@@ -77,7 +77,6 @@ internal fun SettingsScreen(s: StudioState) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 20.dp)) {
         Heading(s.tr("settings"))
 
-        // 1. Запись
         Text(s.tr("recordSettings"), style = MaterialTheme.typography.titleSmall)
         Spacer(Modifier.height(10.dp))
         KashaPanel(Modifier.fillMaxWidth(), padding = 16.dp) {
@@ -94,11 +93,9 @@ internal fun SettingsScreen(s: StudioState) {
             ToggleRow(s.tr("autoRoute"), p.autoRoute) { value -> save { it.copy(autoRoute = value) } }
         }
 
-        // 2. AI
         Spacer(Modifier.height(28.dp))
         AiSettingsSection(s)
 
-        // 3. Интерфейс
         Spacer(Modifier.height(28.dp))
         Text(s.tr("appearance"), style = MaterialTheme.typography.titleSmall)
         Spacer(Modifier.height(10.dp))
@@ -122,14 +119,13 @@ internal fun SettingsScreen(s: StudioState) {
             }
         }
 
-        // 4. Приватность
         Spacer(Modifier.height(28.dp))
         Text(KashaCopy.text(s.language, "aiPrivacy") ?: "", style = MaterialTheme.typography.titleSmall)
         Spacer(Modifier.height(10.dp))
         val externalAi = AiRole.entries.any { role -> AiCatalog.selectedDescriptor(p.ai.engineId(role))?.isExternal == true }
         KashaPanel(Modifier.fillMaxWidth(), padding = 16.dp) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                KashaIcon(if (externalAi) Glyph.INFO else Glyph.CHECK, Modifier.size(21.dp), c.onSurfaceVariant)
+                KashaIcon(if (externalAi) Glyph.EXTERNAL else Glyph.CHECK, Modifier.size(21.dp), c.onSurfaceVariant)
                 Spacer(Modifier.width(12.dp))
                 Text(
                     if (externalAi) KashaCopy.text(s.language, "aiPrivacyWarning") ?: ""
@@ -140,7 +136,6 @@ internal fun SettingsScreen(s: StudioState) {
             }
         }
 
-        // 5. О приложении — без выдуманной версии. Показываем только подтверждённый runtime-факт.
         if (s.repository.simulated) {
             Spacer(Modifier.height(28.dp))
             Text(s.tr("about"), style = MaterialTheme.typography.titleSmall)
