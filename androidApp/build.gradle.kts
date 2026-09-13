@@ -26,6 +26,7 @@ android {
 }
 
 dependencies {
+    implementation(project(":kashaCore"))
     implementation(project(":composeApp"))
     implementation(libs.androidx.activity.compose)
     implementation(libs.kotlinx.coroutines.core)
