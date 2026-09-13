@@ -164,7 +164,7 @@ private fun TaskDetailScreen(s: StudioState, task: Task) {
         }
         Action(
             taskText(s, "deleteTask"),
-            { scope.launch { s.deleteTask(task.id) } },
+            { s.confirmDelete = true },
             glyph = Glyph.DELETE,
             modifier = Modifier.fillMaxWidth(),
         )
