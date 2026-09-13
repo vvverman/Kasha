@@ -213,10 +213,8 @@ with sync_playwright() as pw:
         click_card('Позвонить в сервис повторно')
         assert page.get_by_role('button', name='Выполнить', exact=True).count() == 0
         button('Удалить')
-        visible_item(page.get_by_text('Удалить задачу', exact=True), 'подтверждение удаления задачи')
-        _, confirm_delete_box = visible_item(page.get_by_role('button', name='Удалить', exact=True).last, 'подтверждение удаления задачи')
-        page.mouse.click(confirm_delete_box['x'] + confirm_delete_box['width'] / 2, confirm_delete_box['y'] + confirm_delete_box['height'] / 2)
-        page.wait_for_timeout(250)
+        visible_item(page.get_by_role('button', name='Удалить', exact=True), 'подтверждение удаления задачи')
+        button('Удалить')
         wait(lambda: not api('snapshot')['tasks'], 'удаление задачи из архива')
         checks.append('выполнение, архив и подтверждённое удаление задачи')
 
