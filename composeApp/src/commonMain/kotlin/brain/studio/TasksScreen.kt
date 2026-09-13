@@ -174,9 +174,11 @@ internal fun TaskScheduleScreen(s: StudioState) {
     val scope = rememberCoroutineScope()
     val target = s.taskScheduleTarget
     val existing = target?.takeUnless { it == "new" }?.let { id -> s.snapshot.tasks.firstOrNull { it.id == id } }
-    val initialDue = existing?.dueAt?.takeIf { it > Clock.System.now().toEpochMilliseconds() } ?: TaskSchedule.defaultDue()
-    var date by remember(target, initialDue) { mutableStateOf(TaskSchedule.formatDate(initialDue)) }
-    var time by remember(target, initialDue) { mutableStateOf(TaskSchedule.formatTime(initialDue)) }
+    val initialDue = remember(target) {
+        existing?.dueAt?.takeIf { it > Clock.System.now().toEpochMilliseconds() } ?: TaskSchedule.defaultDue()
+    }
+    var date by remember(target) { mutableStateOf(TaskSchedule.formatDate(initialDue)) }
+    var time by remember(target) { mutableStateOf(TaskSchedule.formatTime(initialDue)) }
     var repeat by remember(target) { mutableStateOf(existing?.reminderRepeat ?: ReminderRepeat.HOURLY) }
     val dueAt = TaskSchedule.parse(date, time)
     val valid = dueAt != null && dueAt > Clock.System.now().toEpochMilliseconds()
