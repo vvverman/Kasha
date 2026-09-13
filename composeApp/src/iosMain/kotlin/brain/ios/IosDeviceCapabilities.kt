@@ -72,7 +72,7 @@ internal class IosDeviceCapabilities : DeviceCapabilityGateway {
     private suspend fun notificationState(): DevicePermissionState = suspendCancellableCoroutine { continuation ->
         UNUserNotificationCenter.currentNotificationCenter().getNotificationSettingsWithCompletionHandler { settings ->
             if (continuation.isActive) {
-                continuation.resume(mapNotificationStatus(settings.authorizationStatus.value))
+                continuation.resume(mapNotificationStatus(settings?.authorizationStatus ?: -1L))
             }
         }
     }
