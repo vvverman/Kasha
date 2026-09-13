@@ -270,13 +270,19 @@ fun KashaListCard(onClick: () -> Unit, modifier: Modifier = Modifier, content: @
     val interactions = remember { MutableInteractionSource() }
     val hovered by interactions.collectIsHoveredAsState()
     val pressed by interactions.collectIsPressedAsState()
-    val shape = RoundedCornerShape(20.dp)
-    val bg = when { pressed -> k.secondaryPressedFill; hovered -> k.secondaryHoverFill; else -> k.surface }
+    val focused by interactions.collectIsFocusedAsState()
+    val shape = RoundedCornerShape(12.dp)
+    val bg = when {
+        pressed -> k.overlayPressed
+        hovered -> k.overlayHover
+        else -> Color.Transparent
+    }
     Row(
         modifier.fillMaxWidth().heightIn(min = KashaUi.rowHeight).clip(shape).background(bg)
-            .border(1.dp, k.borderHairline, shape).hoverable(interactions)
+            .border(KashaUi.focusRingWidth, if (focused) k.focusRing else Color.Transparent, shape)
+            .hoverable(interactions).focusable(true, interactions)
             .clickable(interactionSource = interactions, indication = null, role = Role.Button, onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         content = content,
     )
