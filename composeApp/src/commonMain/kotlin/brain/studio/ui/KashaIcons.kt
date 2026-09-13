@@ -14,6 +14,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.PathParser
 
@@ -105,14 +106,14 @@ fun KashaIcon(
             val shapeColor = color.copy(alpha = color.alpha * shape.opacity)
             when (shape.type) {
                 "path" -> {
-                    val raw = PathParser().parsePathString(shape.d ?: return@forEach).toPath()
-                    val path = androidx.compose.ui.graphics.Path().also { target ->
-                        target.addPath(raw)
-                        target.translate(Offset(dx, dy))
-                        target.transform(androidx.compose.ui.graphics.Matrix().apply { scale(u, u) })
+                    val path = PathParser().parsePathString(shape.d ?: return@forEach).toPath()
+                    withTransform({
+                        translate(dx, dy)
+                        scale(u, u, pivot = Offset.Zero)
+                    }) {
+                        if (shape.fill) drawPath(path, shapeColor, style = Fill)
+                        if (shape.stroke) drawPath(path, shapeColor, style = Stroke(GENERATED_KASHA_ICON_STROKE))
                     }
-                    if (shape.fill) drawPath(path, shapeColor, style = Fill)
-                    if (shape.stroke) drawPath(path, shapeColor, style = stroke)
                 }
                 "line" -> if (shape.stroke) drawLine(shapeColor, p(shape.x1 ?: 0f, shape.y1 ?: 0f), p(shape.x2 ?: 0f, shape.y2 ?: 0f), GENERATED_KASHA_ICON_STROKE * u)
                 "circle" -> {
