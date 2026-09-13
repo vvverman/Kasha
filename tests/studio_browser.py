@@ -213,10 +213,10 @@ with sync_playwright() as pw:
         click_card('Позвонить в сервис повторно')
         assert page.get_by_role('button', name='Выполнить', exact=True).count() == 0
         button('Удалить')
-        visible_item(page.get_by_text('Удалить задачу', exact=True), 'подтверждение удаления задачи')
+        visible_item(page.get_by_role('button', name='Отмена', exact=True), 'подтверждение удаления задачи')
         _, confirm_delete_box = visible_item(
             page.get_by_role('button', name='Удалить', exact=True).last,
-            'подтверждение удаления задачи',
+            'кнопка удаления в подтверждении',
         )
         page.mouse.click(
             confirm_delete_box['x'] + confirm_delete_box['width'] / 2,
