@@ -26,8 +26,9 @@ done < <(find "$APP/Contents" -type f -print0)
 VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist")
 DMG_NAME="Kasha-${VERSION}-macOS-arm64.dmg"
 DMG="$OUT/$DMG_NAME"
-rm -rf desktopApp/bundle/common
-if [ -d desktopApp/build/native ]; then mv desktopApp/build/native desktopApp/build/native-not-on-path; fi
+# После упаковки исходные resources убираются: self-test обязан использовать только содержимое .app.
+rm -rf desktopApp/bundle/common desktopApp/bundle/macos
+if [ -d desktopApp/build/native-macos ]; then mv desktopApp/build/native-macos desktopApp/build/native-not-on-path; fi
 TEST_HOME="$OUT/clean-home"
 mkdir -p "$TEST_HOME"
 phase 'Русский сценарий внутри приложения без сети'
@@ -83,7 +84,6 @@ mkdir -p "$STAGE"
 mv "$APP" "$STAGE/Kasha.app"
 ln -s /Applications "$STAGE/Applications"
 cp desktopApp/packaging/Установка.txt "$STAGE/Установка.txt"
-# Обычное сжатие контейнера без изменения весов нейросетей.
 hdiutil create -volname 'Kasha' -srcfolder "$STAGE" -ov -format UDZO -imagekey zlib-level=1 "$DMG"
 phase 'Проверка готового DMG'
 hdiutil verify "$DMG"
