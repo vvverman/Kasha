@@ -129,6 +129,7 @@ private fun RecordingHome(s: StudioState) {
         val height = maxHeight
         val showOrb = height >= 460.dp
         val compactWave = height < 620.dp
+        val activelyRecording = s.recordPhase == "recording"
         Column(
             Modifier.fillMaxSize().padding(vertical = if (height >= 620.dp) 24.dp else 12.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -137,16 +138,16 @@ private fun RecordingHome(s: StudioState) {
             Text(clock(s.elapsed), style = MaterialTheme.typography.displayLarge)
             Spacer(Modifier.height(4.dp))
             Text(
-                s.tr(if (s.recordPhase == "paused") "paused" else "recording"),
+                s.tr(if (activelyRecording) "recording" else "paused"),
                 style = MaterialTheme.typography.bodySmall,
                 color = c.onSurfaceVariant,
             )
             Spacer(Modifier.height(if (height >= 620.dp) 28.dp else 16.dp))
             if (showOrb) {
                 KashaRecordingOrb(
-                    state = if (s.recordPhase == "paused") KashaOrbState.PAUSED else KashaOrbState.RECORDING,
+                    state = if (activelyRecording) KashaOrbState.RECORDING else KashaOrbState.PAUSED,
                     peaks = s.liveWave,
-                    level = s.liveWave.lastOrNull() ?: 0f,
+                    level = if (activelyRecording) s.liveWave.lastOrNull() ?: 0f else 0f,
                 )
             } else {
                 KashaWaveform(
@@ -218,7 +219,9 @@ internal fun GlobalPlayer(s: StudioState) {
             when {
                 s.controlBusy -> KashaProcessingRing(Modifier.size(46.dp))
                 s.recordPhase == "recording" -> IconAction(s.tr("pause"), Glyph.PAUSE, { scope.launch { s.pauseRecording() } })
-                s.recordPhase == "paused" -> IconAction(s.tr("resume"), Glyph.RECORD, { scope.launch { s.resumeRecording() } })
+                (s.recordPhase == "paused" || s.recordPhase == "interrupted") && s.recorderCanResume ->
+                    IconAction(s.tr("resume"), Glyph.RECORD, { scope.launch { s.resumeRecording() } })
+                s.recording -> Spacer(Modifier.size(46.dp))
                 s.playback.phase == "playing" -> IconAction(s.tr("pause"), Glyph.PAUSE, { scope.launch { s.pausePlayback() } }, true)
                 s.playback.phase == "paused" -> IconAction(s.tr("resume"), Glyph.PLAY, { scope.launch { s.resumePlayback() } }, true)
                 loaded?.audioFinalized == true -> IconAction(s.tr("play"), Glyph.PLAY, { scope.launch { s.play() } }, true)
