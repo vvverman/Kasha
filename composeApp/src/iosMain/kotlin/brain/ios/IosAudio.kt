@@ -5,8 +5,6 @@ package brain.ios
 import brain.domain.AudioGateway
 import brain.studio.AudioTelemetry
 import platform.AVFAudio.AVAudioPlayer
-import platform.AVFAudio.AVAudioSession
-import platform.AVFAudio.AVAudioSessionCategoryPlayback
 import platform.Foundation.NSURL
 
 internal class IosAudio(
@@ -18,16 +16,16 @@ internal class IosAudio(
     override suspend fun playCapture(captureId: String, compact: Boolean, fromSeconds: Double, rate: Double) {
         val path = repository.audioPath(captureId) ?: error("Аудиофайл записи не найден")
         stop()
-
-        val session = AVAudioSession.sharedInstance()
-        session.setCategory(AVAudioSessionCategoryPlayback, error = null)
+        IosAudioSessionBridge.activatePlayback()
 
         val created = AVAudioPlayer(NSURL.fileURLWithPath(path), error = null)
         created.enableRate = true
         created.rate = rate.toFloat().coerceIn(1f, 2f)
         created.currentTime = fromSeconds.coerceAtLeast(0.0).coerceAtMost(created.duration)
-        check(created.prepareToPlay()) { "audioFailed" }
-        check(created.play()) { "audioFailed" }
+        if (!created.prepareToPlay() || !created.play()) {
+            IosAudioSessionBridge.deactivate()
+            error("audioFailed")
+        }
         player = created
         paused = false
     }
@@ -40,6 +38,7 @@ internal class IosAudio(
 
     override suspend fun resume() {
         val active = player ?: return
+        IosAudioSessionBridge.activatePlayback()
         check(active.play()) { "audioFailed" }
         paused = false
     }
@@ -67,5 +66,6 @@ internal class IosAudio(
         player?.stop()
         player = null
         paused = false
+        IosAudioSessionBridge.deactivate()
     }
 }
