@@ -19,14 +19,15 @@ internal class RecordingForegroundService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            ACTION_STOP -> {
-                stopForeground(STOP_FOREGROUND_REMOVE)
-                stopSelf()
-            }
             ACTION_PAUSED -> showForeground(paused = true)
             ACTION_RECORDING, null -> showForeground(paused = false)
         }
         return START_NOT_STICKY
+    }
+
+    override fun onDestroy() {
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        super.onDestroy()
     }
 
     private fun showForeground(paused: Boolean) {
@@ -48,7 +49,6 @@ internal class RecordingForegroundService : Service() {
     }
 
     private fun ensureChannel() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val manager = getSystemService(NotificationManager::class.java)
         if (manager.getNotificationChannel(CHANNEL_ID) != null) return
         manager.createNotificationChannel(
@@ -68,20 +68,17 @@ internal class RecordingForegroundService : Service() {
         private const val NOTIFICATION_ID = 4101
         private const val ACTION_RECORDING = "ru.vrmn.kasha.recording.RECORDING"
         private const val ACTION_PAUSED = "ru.vrmn.kasha.recording.PAUSED"
-        private const val ACTION_STOP = "ru.vrmn.kasha.recording.STOP"
 
         fun start(context: Context) = send(context, ACTION_RECORDING, foreground = true)
         fun recording(context: Context) = send(context, ACTION_RECORDING)
         fun paused(context: Context) = send(context, ACTION_PAUSED)
-        fun stop(context: Context) = send(context, ACTION_STOP)
+        fun stop(context: Context) {
+            context.stopService(Intent(context, RecordingForegroundService::class.java))
+        }
 
         private fun send(context: Context, action: String, foreground: Boolean = false) {
             val intent = Intent(context, RecordingForegroundService::class.java).setAction(action)
-            if (foreground && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
-            }
+            if (foreground) context.startForegroundService(intent) else context.startService(intent)
         }
     }
 }
