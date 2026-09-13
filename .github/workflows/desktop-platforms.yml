@@ -144,8 +144,10 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $env:Path = "$pwd\platforms\desktop\bundle\windows\bin;$env:Path"
           Get-Command ffmpeg.exe
-          ffmpeg.exe -version | Select-Object -First 1
-          if ($LASTEXITCODE -ne 0) { throw "Bundled ffmpeg failed with exit code $LASTEXITCODE" }
+          $ffmpegVersion = & ffmpeg.exe -version 2>&1
+          $ffmpegExitCode = $LASTEXITCODE
+          if ($ffmpegExitCode -ne 0) { throw "Bundled ffmpeg failed with exit code $ffmpegExitCode" }
+          $ffmpegVersion | Select-Object -First 1
           python -m pip install fonttools==4.59.2
           if ($LASTEXITCODE -ne 0) { throw "pip failed with exit code $LASTEXITCODE" }
           python scripts/prepare-fonts.py
