@@ -7,6 +7,7 @@ private enum KashaAudioBridgeEvent {
     static let activatePlayback = Notification.Name("KashaAudioSessionActivatePlayback")
     static let deactivate = Notification.Name("KashaAudioSessionDeactivate")
     static let openSystemSettings = Notification.Name("KashaOpenSystemSettings")
+    static let systemSettingsOpenFailed = Notification.Name("KashaSystemSettingsOpenFailed")
 
     static let interruptionBegan = Notification.Name("KashaAudioSessionInterruptionBegan")
     static let interruptionEnded = Notification.Name("KashaAudioSessionInterruptionEnded")
@@ -83,9 +84,18 @@ final class KashaAudioSessionCoordinator {
     }
 
     private static func openSystemSettings() {
-        let url = URL(string: UIApplication.openSettingsURLString)!
-        guard UIApplication.shared.canOpenURL(url) else { return }
-        UIApplication.shared.open(url, options: [:])
+        guard
+            let url = URL(string: UIApplication.openSettingsURLString),
+            UIApplication.shared.canOpenURL(url)
+        else {
+            NotificationCenter.default.post(name: KashaAudioBridgeEvent.systemSettingsOpenFailed, object: nil)
+            return
+        }
+        UIApplication.shared.open(url, options: [:]) { opened in
+            if !opened {
+                NotificationCenter.default.post(name: KashaAudioBridgeEvent.systemSettingsOpenFailed, object: nil)
+            }
+        }
     }
 
     private func activateRecording() {
