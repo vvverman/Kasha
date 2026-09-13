@@ -1,56 +1,57 @@
-"""Сборка ресурсов Kasha: закреплённый OFL-шрифт Commissioner и проверка всех языков интерфейса."""
+"""Сборка ресурсов Kasha: один закреплённый Geologica Variable и проверка языков."""
+
 import hashlib
 import io
 from pathlib import Path
 from urllib.request import urlopen
+
 from fontTools.ttLib import TTFont
-from fontTools.varLib.instancer import instantiateVariableFont
 
 ROOT = Path(__file__).resolve().parents[1]
-GOOGLE_FONTS_COMMIT = '8e44913e4ff26fc997e6856c1ec40ff4791c98c5'
-BASE = f'https://raw.githubusercontent.com/google/fonts/{GOOGLE_FONTS_COMMIT}/ofl/commissioner/'
-resources = ROOT / 'composeApp/src/commonMain/composeResources'
-font_dir = resources / 'font'
-license_dir = resources / 'files/licenses'
+GOOGLE_FONTS_COMMIT = "685f38d7c9e86b0c8530204c97ddcaf6558dd17b"
+BASE = f"https://raw.githubusercontent.com/googlefonts/geologica/{GOOGLE_FONTS_COMMIT}/"
+FONT_URL = BASE + "fonts/variable/Geologica%5BCRSV%2CSHRP%2Cslnt%2Cwght%5D.ttf"
+LICENSE_URL = BASE + "OFL.txt"
+FONT_BLOB_SHA = "9e7771e32575873bba48b16b6ef1696b63087a2a"
+LICENSE_BLOB_SHA = "ebe73cf731875468cbc35c1d8857ac037328918f"
+FONT_SHA256 = "9124d9e88ac6c11d761f35241713a51d68e2c4ebedce0edaca834717a00959ec"
+LICENSE_SHA256 = "778186245840aea0e60bec6a46e7fb1442e0cd78e41afeadffcd3e8824b379e0"
+
+resources = ROOT / "composeApp/src/commonMain/composeResources"
+font_dir = resources / "font"
+license_dir = resources / "files/licenses"
 font_dir.mkdir(parents=True, exist_ok=True)
 license_dir.mkdir(parents=True, exist_ok=True)
 
-required = set('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzАБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюяІіЇїЄєҐґЎўӘәҒғҚқҢңӨөҰұҮүҺһÑñÁáÉéÍíÓóÚúÜüÇçÀàÂâÊêËëÎîÏïÔôÙùÛûŸÿŒœÄäÖöß')
+required = set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzАБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюяІіЇїЄєҐґЎўӘәҒғҚқҢңӨөҰұҮүҺһÑñÁáÉéÍíÓóÚúÜüÇçÀàÂâÊêËëÎîÏïÔôÙùÛûŸÿŒœÄäÖöß")
+
 
 def blob_sha(data: bytes) -> str:
-    return hashlib.sha1(b'blob ' + str(len(data)).encode() + b'\0' + data).hexdigest()
+    return hashlib.sha1(b"blob " + str(len(data)).encode() + b"\0" + data).hexdigest()
 
-def load(url: str, expected: str) -> bytes:
+
+def load(url: str, expected_blob: str, expected_sha256: str) -> bytes:
     with urlopen(url, timeout=60) as response:
         data = response.read()
-    assert blob_sha(data) == expected, f'Unexpected font blob for {url}'
+    assert blob_sha(data) == expected_blob, f"Unexpected Git blob for {url}"
+    assert hashlib.sha256(data).hexdigest() == expected_sha256, f"Unexpected SHA-256 for {url}"
     return data
 
-def verify_bytes(data: bytes, name: str) -> None:
-    font = TTFont(io.BytesIO(data))
-    missing = sorted(ord(char) for char in required if ord(char) not in font.getBestCmap())
-    assert not missing, f'{name} lacks required glyphs: {missing}'
 
-def save_instance(variable_data: bytes, target: str, weight: int, flair: int = 0) -> None:
-    source = TTFont(io.BytesIO(variable_data))
-    instance = instantiateVariableFont(source, {'wght': weight, 'FLAR': flair, 'VOLM': 0, 'slnt': 0}, inplace=True)
-    path = font_dir / target
-    instance.save(path)
-    verify_bytes(path.read_bytes(), target)
+font_data = load(FONT_URL, FONT_BLOB_SHA, FONT_SHA256)
+font = TTFont(io.BytesIO(font_data))
+missing = sorted(ord(char) for char in required if ord(char) not in font.getBestCmap())
+assert not missing, f"Geologica lacks required glyphs: {missing}"
 
-variable = load(
-    BASE + 'Commissioner%5BFLAR%2CVOLM%2Cslnt%2Cwght%5D.ttf',
-    '2ac22fba70bcf5d36052dfa604b43333b826996f',
-)
-verify_bytes(variable, 'Commissioner variable')
+axes = {axis.axisTag: (axis.minValue, axis.defaultValue, axis.maxValue) for axis in font["fvar"].axes}
+assert axes == {
+    "wght": (100.0, 100.0, 900.0),
+    "CRSV": (0.0, 0.0, 1.0),
+    "SHRP": (0.0, 0.0, 100.0),
+    "slnt": (-12.0, 0.0, 0.0),
+}, axes
 
-# Основной UI остаётся спокойным grotesque. Для display добавляем очень небольшой FLAR:
-# заметный характер на крупных размерах без декоративности и без ощущения Android-шрифта.
-save_instance(variable, 'commissioner_regular.ttf', 400)
-save_instance(variable, 'commissioner_medium.ttf', 500)
-save_instance(variable, 'commissioner_semibold.ttf', 600)
-save_instance(variable, 'commissioner_display_semibold.ttf', 600, flair=10)
-
-license_data = load(BASE + 'OFL.txt', 'eaa7c1c436f0303948dd0d6ec51cfce14bf376e8')
-(license_dir / 'Commissioner-OFL.txt').write_bytes(license_data)
-print('Commissioner: 400/500/600 + display 600 FLAR=10; all 8 Kasha alphabets verified')
+(font_dir / "geologica_variable.ttf").write_bytes(font_data)
+license_data = load(LICENSE_URL, LICENSE_BLOB_SHA, LICENSE_SHA256)
+(license_dir / "Geologica-OFL.txt").write_bytes(license_data)
+print("Geologica Variable: wght/CRSV/SHRP/slnt; all 8 Kasha alphabets verified")

@@ -29,9 +29,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
@@ -45,26 +45,35 @@ import androidx.compose.ui.unit.dp
 
 /** Единственная библиотека продуктовых контролов Kasha. */
 object KashaUi {
-    val controlRadius = 16.dp
-    val panelRadius = 22.dp
-    val fieldRadius = 18.dp
-    val controlHeight = 50.dp
-    val iconSize = 44.dp
+    val controlRadius = KashaMetrics.radiusPrimaryButton
+    val panelRadius = KashaMetrics.radiusFloating
+    val fieldRadius = KashaMetrics.radiusField
+    val controlHeight = KashaMetrics.buttonHeight
+    val iconSize = KashaMetrics.touchTargetPreferred
 }
 
 @Composable
-private fun controlColors(primary: Boolean, hovered: Boolean, pressed: Boolean, focused: Boolean, enabled: Boolean): Pair<Color, Color> {
-    val c = MaterialTheme.colorScheme
-    val base = if (primary) c.primary else c.surface
-    val foreground = if (primary) c.onPrimary else c.onSurface
-    val background = when {
-        !enabled -> base.copy(alpha = if (primary) .42f else .58f)
-        pressed -> if (primary) base.copy(alpha = .82f) else c.surfaceVariant.copy(alpha = .92f)
-        hovered -> if (primary) base.copy(alpha = .9f) else c.surfaceVariant.copy(alpha = .62f)
-        focused -> if (primary) base else c.surfaceVariant.copy(alpha = .42f)
-        else -> base
+private fun controlColors(
+    primary: Boolean,
+    hovered: Boolean,
+    pressed: Boolean,
+    enabled: Boolean,
+): Pair<Color, Color> {
+    val c = KashaTheme.colors
+    if (!enabled) return c.actionDisabledFill to c.actionDisabledContent
+    return if (primary) {
+        when {
+            pressed -> c.accentPressed
+            hovered -> c.accentHover
+            else -> c.accent
+        } to c.onAccent
+    } else {
+        when {
+            pressed -> c.actionSecondaryPressedFill
+            hovered -> c.actionSecondaryHoverFill
+            else -> c.actionSecondaryFill
+        } to c.actionSecondaryContent
     }
-    return background to foreground.copy(alpha = if (enabled) 1f else .58f)
 }
 
 @Composable
@@ -76,35 +85,60 @@ fun KashaButton(
     glyph: Glyph? = null,
     enabled: Boolean = true,
 ) {
-    val c = MaterialTheme.colorScheme
+    val c = KashaTheme.colors
     val interactions = remember { MutableInteractionSource() }
     val hovered by interactions.collectIsHoveredAsState()
     val pressed by interactions.collectIsPressedAsState()
     val focused by interactions.collectIsFocusedAsState()
-    val (bg, fg) = controlColors(primary, hovered, pressed, focused, enabled)
+    val (bg, fg) = controlColors(primary, hovered, pressed, enabled)
+    val shape = RoundedCornerShape(
+        if (primary) KashaMetrics.radiusPrimaryButton else KashaMetrics.radiusSecondaryButton,
+    )
     val border = when {
-        focused -> c.primary.copy(alpha = .62f)
-        hovered && !primary -> c.outline.copy(alpha = .42f)
+        focused -> c.focusRing
+        !primary -> c.hairline
         else -> Color.Transparent
     }
+    val borderWidth = if (focused) KashaMetrics.focusRingWidth else 1.dp
+
     Row(
         modifier
             .heightIn(min = KashaUi.controlHeight)
-            .clip(RoundedCornerShape(KashaUi.controlRadius))
+            .clip(shape)
             .background(bg)
-            .border(1.dp, border, RoundedCornerShape(KashaUi.controlRadius))
+            .border(borderWidth, border, shape)
             .hoverable(interactions, enabled)
             .focusable(enabled, interactions)
-            .clickable(interactionSource = interactions, indication = null, enabled = enabled, role = Role.Button, onClick = onClick)
-            .padding(horizontal = 18.dp, vertical = 14.dp),
+            .clickable(
+                interactionSource = interactions,
+                indication = null,
+                enabled = enabled,
+                role = Role.Button,
+                onClick = onClick,
+            )
+            .padding(
+                horizontal = KashaMetrics.buttonHorizontalPadding,
+                vertical = 14.dp,
+            ),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (glyph != null) {
-            KashaIcon(glyph, Modifier.size(18.dp), fg, animated = hovered || pressed || focused)
+            KashaIcon(
+                glyph,
+                Modifier.size(KashaMetrics.iconGlyph),
+                fg,
+                animated = hovered || pressed || focused,
+            )
             Spacer(Modifier.width(10.dp))
         }
-        Text(label, style = MaterialTheme.typography.labelLarge, color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(
+            label,
+            style = MaterialTheme.typography.labelLarge,
+            color = fg,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -117,50 +151,94 @@ fun KashaIconButton(
     filled: Boolean = false,
     enabled: Boolean = true,
 ) {
-    val c = MaterialTheme.colorScheme
+    val c = KashaTheme.colors
     val interactions = remember { MutableInteractionSource() }
     val hovered by interactions.collectIsHoveredAsState()
     val pressed by interactions.collectIsPressedAsState()
     val focused by interactions.collectIsFocusedAsState()
-    val (bg, fg) = controlColors(filled, hovered, pressed, focused, enabled)
-    val quietBg = when {
-        filled -> bg
-        pressed -> c.surfaceVariant
-        hovered -> c.surfaceVariant.copy(alpha = .72f)
-        else -> c.surfaceVariant.copy(alpha = .46f)
+    val (filledBg, filledFg) = controlColors(true, hovered, pressed, enabled)
+
+    val background = if (filled) {
+        filledBg
+    } else {
+        when {
+            pressed -> c.overlayPressed
+            hovered -> c.overlayHover
+            else -> Color.Transparent
+        }
     }
+    val foreground = when {
+        !enabled -> c.iconDisabled
+        filled -> filledFg
+        else -> c.iconPrimary
+    }
+
     Box(
         modifier
             .size(KashaUi.iconSize)
             .clip(CircleShape)
-            .background(quietBg)
-            .border(1.dp, if (focused) c.primary.copy(alpha = .58f) else Color.Transparent, CircleShape)
+            .background(background)
+            .border(
+                if (focused) KashaMetrics.focusRingWidth else 1.dp,
+                if (focused) c.focusRing else Color.Transparent,
+                CircleShape,
+            )
             .hoverable(interactions, enabled)
             .focusable(enabled, interactions)
-            .clickable(interactionSource = interactions, indication = null, enabled = enabled, role = Role.Button, onClickLabel = label, onClick = onClick)
+            .clickable(
+                interactionSource = interactions,
+                indication = null,
+                enabled = enabled,
+                role = Role.Button,
+                onClickLabel = label,
+                onClick = onClick,
+            )
             .semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {
-        KashaIcon(glyph, Modifier.size(20.dp), if (filled) fg else c.onSurface.copy(alpha = if (enabled) 1f else .45f), animated = hovered || pressed || focused)
+        KashaIcon(
+            glyph,
+            Modifier.size(KashaMetrics.iconGlyph),
+            foreground,
+            animated = hovered || pressed || focused,
+        )
     }
 }
 
 @Composable
-fun KashaQuietButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
-    val c = MaterialTheme.colorScheme
+fun KashaQuietButton(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    val c = KashaTheme.colors
     val interactions = remember { MutableInteractionSource() }
     val hovered by interactions.collectIsHoveredAsState()
     val pressed by interactions.collectIsPressedAsState()
+    val background = when {
+        pressed -> c.overlayPressed
+        hovered -> c.overlayHover
+        else -> Color.Transparent
+    }
+
     Text(
         label,
         modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(if (pressed) c.surfaceVariant else if (hovered) c.surfaceVariant.copy(alpha = .55f) else Color.Transparent)
+            .heightIn(min = KashaMetrics.quietButtonHeight)
+            .clip(RoundedCornerShape(KashaMetrics.radiusSmall))
+            .background(background)
             .hoverable(interactions, enabled)
-            .clickable(interactionSource = interactions, indication = null, enabled = enabled, role = Role.Button, onClick = onClick)
-            .padding(vertical = 11.dp, horizontal = 8.dp),
+            .clickable(
+                interactionSource = interactions,
+                indication = null,
+                enabled = enabled,
+                role = Role.Button,
+                onClick = onClick,
+            )
+            .padding(vertical = 12.dp, horizontal = 10.dp),
         style = MaterialTheme.typography.bodySmall,
-        color = c.onSurfaceVariant.copy(alpha = if (enabled) 1f else .45f),
+        color = if (enabled) c.actionQuietContent else c.actionDisabledContent,
     )
 }
 
@@ -173,49 +251,90 @@ fun KashaField(
     title: Boolean = false,
     multiline: Boolean = false,
     readOnly: Boolean = false,
-    minHeight: Dp = if (multiline) 180.dp else 58.dp,
+    minHeight: Dp = if (multiline) 180.dp else KashaMetrics.fieldHeight,
     onEditRequest: (() -> Unit)? = null,
 ) {
-    val c = MaterialTheme.colorScheme
+    val c = KashaTheme.colors
     val interactions = remember { MutableInteractionSource() }
     val hovered by interactions.collectIsHoveredAsState()
     var focused by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(KashaUi.fieldRadius)
     val borderColor = when {
-        focused -> c.primary.copy(alpha = .72f)
-        hovered -> c.outline.copy(alpha = .58f)
-        else -> c.outline.copy(alpha = .26f)
+        focused -> c.focusRing
+        hovered -> c.fieldOutline
+        else -> c.hairline
     }
-    val background = if (hovered && !focused) c.surfaceVariant.copy(alpha = .32f) else c.surface
+    val borderWidth = if (focused) KashaMetrics.focusRingWidth else 1.dp
+
     Column(modifier) {
-        Text(label, style = MaterialTheme.typography.labelSmall, color = c.onSurfaceVariant)
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            color = c.textSecondary,
+        )
         Spacer(Modifier.height(7.dp))
+
         val boxModifier = Modifier
             .fillMaxWidth()
             .heightIn(min = minHeight)
             .clip(shape)
-            .background(background)
-            .border(1.dp, borderColor, shape)
+            .background(c.fieldFill)
+            .border(borderWidth, borderColor, shape)
             .hoverable(interactions)
-            .then(if (readOnly && onEditRequest != null) Modifier.clickable(interactionSource = interactions, indication = null, role = Role.Button, onClick = onEditRequest) else Modifier)
-            .padding(horizontal = 16.dp, vertical = if (multiline) 15.dp else 13.dp)
-        Row(boxModifier, verticalAlignment = if (multiline) Alignment.Top else Alignment.CenterVertically) {
+            .then(
+                if (readOnly && onEditRequest != null) {
+                    Modifier.clickable(
+                        interactionSource = interactions,
+                        indication = null,
+                        role = Role.Button,
+                        onClick = onEditRequest,
+                    )
+                } else {
+                    Modifier
+                },
+            )
+            .padding(
+                horizontal = KashaMetrics.md,
+                vertical = if (multiline) 15.dp else 13.dp,
+            )
+
+        Row(
+            boxModifier,
+            verticalAlignment = if (multiline) Alignment.Top else Alignment.CenterVertically,
+        ) {
             Box(Modifier.weight(1f)) {
+                val style = if (title) {
+                    MaterialTheme.typography.headlineSmall
+                } else {
+                    MaterialTheme.typography.bodyLarge
+                }
                 if (readOnly) {
-                    Text(value.ifEmpty { label }, style = if (title) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.bodyLarge,
-                        color = if (value.isEmpty()) c.onSurfaceVariant.copy(alpha = .55f) else c.onSurface)
+                    Text(
+                        value.ifEmpty { label },
+                        style = style,
+                        color = if (value.isEmpty()) c.fieldPlaceholder else c.fieldContent,
+                    )
                 } else {
                     BasicTextField(
                         value = value,
                         onValueChange = onValueChange,
-                        modifier = Modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused }.semantics { contentDescription = label },
-                        textStyle = (if (title) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.bodyLarge).copy(color = c.onSurface),
-                        cursorBrush = SolidColor(c.onSurface),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .onFocusChanged { focused = it.isFocused }
+                            .semantics { contentDescription = label },
+                        textStyle = style.copy(color = c.fieldContent),
+                        cursorBrush = SolidColor(c.accentContent),
                         interactionSource = interactions,
                         singleLine = !multiline,
                         decorationBox = { inner ->
                             Box {
-                                if (value.isEmpty()) Text(label, style = if (title) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.bodyLarge, color = c.onSurfaceVariant.copy(alpha = .5f))
+                                if (value.isEmpty()) {
+                                    Text(
+                                        label,
+                                        style = style,
+                                        color = c.fieldPlaceholder,
+                                    )
+                                }
                                 inner()
                             }
                         },
@@ -223,7 +342,12 @@ fun KashaField(
                 }
             }
             Spacer(Modifier.width(12.dp))
-            KashaIcon(Glyph.EDIT, Modifier.size(17.dp), if (focused) c.onSurface else c.onSurfaceVariant.copy(alpha = .72f), animated = focused || hovered)
+            KashaIcon(
+                Glyph.EDIT,
+                Modifier.size(18.dp),
+                if (focused) c.iconPrimary else c.iconSecondary,
+                animated = focused || hovered,
+            )
         }
     }
 }
@@ -241,119 +365,314 @@ fun KashaEditableNote(
     onEditRequest: (() -> Unit)? = null,
 ) {
     Column(modifier) {
-        KashaField(title, onTitleChange, titleLabel, Modifier.fillMaxWidth(), title = true, readOnly = readOnly, onEditRequest = onEditRequest)
+        KashaField(
+            title,
+            onTitleChange,
+            titleLabel,
+            Modifier.fillMaxWidth(),
+            title = true,
+            readOnly = readOnly,
+            onEditRequest = onEditRequest,
+        )
         Spacer(Modifier.height(18.dp))
-        KashaField(body, onBodyChange, bodyLabel, Modifier.fillMaxWidth(), multiline = true, readOnly = readOnly, minHeight = 210.dp, onEditRequest = onEditRequest)
+        KashaField(
+            body,
+            onBodyChange,
+            bodyLabel,
+            Modifier.fillMaxWidth(),
+            multiline = true,
+            readOnly = readOnly,
+            minHeight = 210.dp,
+            onEditRequest = onEditRequest,
+        )
     }
 }
 
 @Composable
-fun KashaSwitchRow(label: String, value: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
-    val c = MaterialTheme.colorScheme
+fun KashaSwitchRow(
+    label: String,
+    value: Boolean,
+    onChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    val c = KashaTheme.colors
     val interactions = remember { MutableInteractionSource() }
     val hovered by interactions.collectIsHoveredAsState()
+
     Row(
-        modifier.fillMaxWidth().heightIn(min = 62.dp).clip(RoundedCornerShape(16.dp))
-            .background(if (hovered) c.surfaceVariant.copy(alpha = .3f) else Color.Transparent)
-            .hoverable(interactions, enabled).toggleable(value = value, enabled = enabled, role = Role.Switch, onValueChange = onChange)
-            .semantics { contentDescription = label }.padding(horizontal = 4.dp),
+        modifier
+            .fillMaxWidth()
+            .heightIn(min = KashaMetrics.rowHeight)
+            .clip(RoundedCornerShape(KashaMetrics.radiusField))
+            .background(if (hovered) c.overlayHover else Color.Transparent)
+            .hoverable(interactions, enabled)
+            .toggleable(
+                value = value,
+                enabled = enabled,
+                role = Role.Switch,
+                onValueChange = onChange,
+            )
+            .semantics { contentDescription = label }
+            .padding(horizontal = KashaMetrics.xxs),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(label, Modifier.weight(1f).padding(end = 20.dp), style = MaterialTheme.typography.bodyMedium, color = c.onSurface.copy(alpha = if (enabled) 1f else .5f))
-        Box(Modifier.size(42.dp, 24.dp).clip(CircleShape).background(if (value) c.primary else c.outline.copy(alpha = .48f)).padding(3.dp),
-            contentAlignment = if (value) Alignment.CenterEnd else Alignment.CenterStart) {
-            Box(Modifier.size(18.dp).clip(CircleShape).background(if (value) c.onPrimary else c.surface))
+        Text(
+            label,
+            Modifier.weight(1f).padding(end = KashaMetrics.lg),
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (enabled) c.textPrimary else c.textDisabled,
+        )
+        Box(
+            Modifier
+                .size(42.dp, 24.dp)
+                .clip(CircleShape)
+                .background(if (value) c.accent else c.surfaceHighest)
+                .padding(3.dp),
+            contentAlignment = if (value) Alignment.CenterEnd else Alignment.CenterStart,
+        ) {
+            Box(
+                Modifier
+                    .size(18.dp)
+                    .clip(CircleShape)
+                    .background(if (value) c.onAccent else c.textPrimary),
+            )
         }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun KashaSlider(value: Float, onValueChange: (Float) -> Unit, range: ClosedFloatingPointRange<Float>, steps: Int, label: String,
-    onFinished: () -> Unit, modifier: Modifier = Modifier) {
-    val c = MaterialTheme.colorScheme
+fun KashaSlider(
+    value: Float,
+    onValueChange: (Float) -> Unit,
+    range: ClosedFloatingPointRange<Float>,
+    steps: Int,
+    label: String,
+    onFinished: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val c = KashaTheme.colors
     Slider(
-        value = value, onValueChange = onValueChange, valueRange = range, steps = steps, onValueChangeFinished = onFinished,
-        modifier = modifier.fillMaxWidth().height(40.dp).semantics { contentDescription = label },
-        thumb = { Box(Modifier.size(14.dp).clip(CircleShape).background(c.primary)) },
+        value = value,
+        onValueChange = onValueChange,
+        valueRange = range,
+        steps = steps,
+        onValueChangeFinished = onFinished,
+        modifier = modifier
+            .fillMaxWidth()
+            .height(KashaMetrics.touchTargetPreferred)
+            .semantics { contentDescription = label },
+        thumb = {
+            Box(
+                Modifier
+                    .size(14.dp)
+                    .clip(CircleShape)
+                    .background(c.accent),
+            )
+        },
         track = {
             Canvas(Modifier.fillMaxWidth().height(3.dp)) {
                 val y = size.height / 2
-                val fraction = ((value - range.start) / (range.endInclusive - range.start)).coerceIn(0f, 1f)
-                drawLine(c.outline.copy(alpha = .28f), Offset(0f, y), Offset(size.width, y), 3.dp.toPx(), StrokeCap.Round)
-                drawLine(c.primary, Offset(0f, y), Offset(size.width * fraction, y), 3.dp.toPx(), StrokeCap.Round)
+                val fraction = (
+                    (value - range.start) /
+                        (range.endInclusive - range.start)
+                    ).coerceIn(0f, 1f)
+                drawLine(
+                    c.controlOutline,
+                    Offset(0f, y),
+                    Offset(size.width, y),
+                    3.dp.toPx(),
+                    StrokeCap.Round,
+                )
+                drawLine(
+                    c.accent,
+                    Offset(0f, y),
+                    Offset(size.width * fraction, y),
+                    3.dp.toPx(),
+                    StrokeCap.Round,
+                )
             }
         },
     )
 }
 
 @Composable
-fun KashaPanel(modifier: Modifier = Modifier, padding: Dp = 16.dp, content: @Composable ColumnScope.() -> Unit) {
-    val c = MaterialTheme.colorScheme
-    Column(modifier.clip(RoundedCornerShape(KashaUi.panelRadius)).background(c.surface)
-        .border(1.dp, c.outline.copy(alpha = .16f), RoundedCornerShape(KashaUi.panelRadius)).padding(padding), content = content)
+fun KashaPanel(
+    modifier: Modifier = Modifier,
+    padding: Dp = KashaMetrics.md,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val c = KashaTheme.colors
+    val shape = RoundedCornerShape(KashaUi.panelRadius)
+    Column(
+        modifier
+            .clip(shape)
+            .background(c.surface)
+            .border(1.dp, c.hairline, shape)
+            .padding(padding),
+        content = content,
+    )
 }
 
+/** Спокойная строка на Canvas: постоянной «карточки» нет, состояния появляются по взаимодействию. */
 @Composable
-fun KashaListCard(onClick: () -> Unit, modifier: Modifier = Modifier, content: @Composable RowScope.() -> Unit) {
-    val c = MaterialTheme.colorScheme
+fun KashaListCard(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable RowScope.() -> Unit,
+) {
+    val c = KashaTheme.colors
     val interactions = remember { MutableInteractionSource() }
     val hovered by interactions.collectIsHoveredAsState()
     val pressed by interactions.collectIsPressedAsState()
+    val focused by interactions.collectIsFocusedAsState()
+    val shape = RoundedCornerShape(KashaMetrics.radiusSurface)
+    val background = when {
+        pressed -> c.overlayPressed
+        hovered || focused -> c.overlayHover
+        else -> Color.Transparent
+    }
+    val outline = if (focused) c.focusRing else Color.Transparent
+
     Row(
-        modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp))
-            .background(if (pressed) c.surfaceVariant.copy(alpha = .65f) else if (hovered) c.surfaceVariant.copy(alpha = .38f) else c.surface)
-            .border(1.dp, c.outline.copy(alpha = if (hovered) .28f else .14f), RoundedCornerShape(18.dp))
-            .hoverable(interactions).clickable(interactionSource = interactions, indication = null, role = Role.Button, onClick = onClick)
-            .padding(16.dp),
+        modifier
+            .fillMaxWidth()
+            .heightIn(min = KashaMetrics.rowHeight)
+            .clip(shape)
+            .background(background)
+            .border(
+                if (focused) KashaMetrics.focusRingWidth else 1.dp,
+                outline,
+                shape,
+            )
+            .hoverable(interactions)
+            .focusable(true, interactions)
+            .clickable(
+                interactionSource = interactions,
+                indication = null,
+                role = Role.Button,
+                onClick = onClick,
+            )
+            .padding(horizontal = KashaMetrics.md, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         content = content,
     )
 }
 
 @Composable
-fun KashaWaveform(peaks: List<Float>, modifier: Modifier = Modifier, progress: Float? = null) {
-    val c = MaterialTheme.colorScheme
+fun KashaWaveform(
+    peaks: List<Float>,
+    modifier: Modifier = Modifier,
+    progress: Float? = null,
+) {
+    val c = KashaTheme.colors
     Canvas(modifier) {
-        val data = if (peaks.isEmpty()) List(80) { 0f } else peaks
-        val step = size.width / data.size
-        data.forEachIndexed { i, p ->
-            val height = (p.coerceIn(0f, 1f) * size.height * .88f).coerceAtLeast(1.2.dp.toPx())
-            val color = if (progress != null && i.toFloat() / data.size > progress) c.onSurface.copy(alpha = .2f) else c.onSurface.copy(alpha = .82f)
-            drawLine(color, Offset((i + .5f) * step, (size.height - height) / 2), Offset((i + .5f) * step, (size.height + height) / 2),
-                (step * .34f).coerceIn(.8.dp.toPx(), 2.2.dp.toPx()), StrokeCap.Round)
+        val data = if (peaks.isEmpty()) List(48) { 0f } else peaks
+        val step = size.width / data.size.coerceAtLeast(1)
+        val barWidth = 2.5.dp.toPx().coerceAtMost(step * .55f)
+        val minHeight = 4.dp.toPx()
+        data.forEachIndexed { index, peak ->
+            val height = (peak.coerceIn(0f, 1f) * size.height)
+                .coerceIn(minHeight, size.height)
+            val fraction = index.toFloat() / data.size.coerceAtLeast(1)
+            val color = when {
+                progress == null -> c.waveform
+                fraction <= progress -> c.waveformPlayed
+                else -> c.waveformUnplayed
+            }
+            val x = (index + .5f) * step
+            drawLine(
+                color,
+                Offset(x, (size.height - height) / 2),
+                Offset(x, (size.height + height) / 2),
+                barWidth,
+                StrokeCap.Round,
+            )
         }
     }
 }
 
 @Composable
 fun KashaProcessingRing(modifier: Modifier = Modifier) {
-    val rotation by rememberInfiniteTransition(label = "processing").animateFloat(0f, 360f, infiniteRepeatable(tween(1800, easing = LinearEasing)), label = "rotation")
-    val c = MaterialTheme.colorScheme
+    val rotation by rememberInfiniteTransition(label = "processing").animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            tween(6000, easing = LinearEasing),
+        ),
+        label = "rotation",
+    )
+    val c = KashaTheme.colors
+
     Canvas(modifier) {
-        drawCircle(c.outline.copy(alpha = .18f), size.minDimension * .4f, style = Stroke(2.dp.toPx()))
-        drawArc(c.primary, rotation, 80f, false, Offset(size.width * .1f, size.height * .1f), Size(size.width * .8f, size.height * .8f), style = Stroke(2.dp.toPx(), cap = StrokeCap.Round))
+        drawCircle(
+            c.hairline,
+            size.minDimension * .4f,
+            style = Stroke(2.dp.toPx()),
+        )
+        drawArc(
+            c.accent,
+            rotation,
+            80f,
+            false,
+            Offset(size.width * .1f, size.height * .1f),
+            Size(size.width * .8f, size.height * .8f),
+            style = Stroke(2.dp.toPx(), cap = StrokeCap.Round),
+        )
     }
 }
 
+/** Главный процедурный объект Kasha. */
 @Composable
-fun KashaCaptureMark(modifier: Modifier = Modifier) {
-    val c = MaterialTheme.colorScheme
-    Canvas(modifier) {
-        val w = size.width; val h = size.height; val left = w * .08f; val top = h * .08f; val cardW = w * .84f; val cardH = h * .8f; val radius = w * .09f
-        drawRoundRect(c.surface, Offset(left, top), Size(cardW, cardH), CornerRadius(radius, radius))
-        drawRoundRect(c.outline.copy(alpha = .2f), Offset(left, top), Size(cardW, cardH), CornerRadius(radius, radius), style = Stroke(1.dp.toPx()))
-        drawCircle(c.primary, radius = w * .035f, center = Offset(w * .2f, h * .21f))
-        drawLine(c.onSurfaceVariant.copy(alpha = .45f), Offset(w * .28f, h * .21f), Offset(w * .57f, h * .21f), 2.dp.toPx(), StrokeCap.Round)
-        val bars = listOf(.18f, .38f, .62f, .84f, .48f, .72f, .34f, .56f, .24f)
-        val startX = w * .2f; val endX = w * .8f; val step = (endX - startX) / (bars.size - 1)
-        bars.forEachIndexed { index, value ->
-            val x = startX + step * index; val barH = h * .22f * value
-            drawLine(c.onSurface, Offset(x, h * .46f - barH / 2), Offset(x, h * .46f + barH / 2), 4.dp.toPx(), StrokeCap.Round)
+fun KashaCaptureOrb(
+    modifier: Modifier = Modifier,
+    recording: Boolean = false,
+) {
+    val c = KashaTheme.colors
+    Box(modifier, contentAlignment = Alignment.Center) {
+        Canvas(Modifier.fillMaxSize()) {
+            val center = Offset(size.width / 2f, size.height / 2f)
+            val radius = size.minDimension * .43f
+
+            drawCircle(
+                color = c.orbBloom,
+                radius = radius * 1.18f,
+                center = center,
+            )
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = if (recording) {
+                        listOf(c.orbHighlight, c.orbBody, c.orbRecordingCore)
+                    } else {
+                        listOf(c.orbHighlight, c.orbCenter, c.orbBody, c.orbInnerMinimum)
+                    },
+                    center = Offset(size.width * .42f, size.height * .37f),
+                    radius = radius * 1.45f,
+                ),
+                radius = radius,
+                center = center,
+            )
+            drawCircle(
+                color = c.waveformEdgeDecorative,
+                radius = radius,
+                center = center,
+                style = Stroke(1.dp.toPx()),
+            )
         }
-        listOf(.64f, .76f, .56f).forEachIndexed { index, widthFraction ->
-            val y = h * (.67f + index * .075f)
-            drawLine(c.onSurfaceVariant.copy(alpha = .34f), Offset(w * .2f, y), Offset(w * widthFraction, y), 2.dp.toPx(), StrokeCap.Round)
+        if (!recording) {
+            KashaIcon(
+                Glyph.MIC,
+                Modifier.size(34.dp),
+                c.orbInk,
+                animated = false,
+            )
         }
     }
+}
+
+/** Совместимость старых call sites во время поэтапной миграции экранов. */
+@Composable
+fun KashaCaptureMark(modifier: Modifier = Modifier) {
+    KashaCaptureOrb(modifier)
 }

@@ -12,7 +12,7 @@ import kotlinx.coroutines.launch
 @Composable
 internal fun AiSettingsSection(s: StudioState) {
     val scope = rememberCoroutineScope()
-    val colors = MaterialTheme.colorScheme
+    val c = KashaTheme.colors
     val services = s.repository as? AiPlatformServices
     val packages = services?.aiPackages ?: NoopAiPackageGateway
     val cloud = services?.cloudAi ?: NoopCloudAiGateway
@@ -54,70 +54,115 @@ internal fun AiSettingsSection(s: StudioState) {
     }
 
     Text(t("ai"), style = MaterialTheme.typography.titleSmall)
-    Spacer(Modifier.height(12.dp))
+    Spacer(Modifier.height(10.dp))
 
     AiRole.entries.forEach { role ->
         val selectedId = s.preferences.ai.engineId(role)
         val selected = AiCatalog.selectedDescriptor(selectedId)
         KashaListCard(
             onClick = { expandedRole = if (expandedRole == role) null else role },
-            modifier = Modifier.padding(bottom = 8.dp),
         ) {
             Column(Modifier.weight(1f)) {
                 Text(roleLabel(role), style = MaterialTheme.typography.bodyMedium)
-                Text(selected?.name ?: selectedId, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    selected?.name ?: selectedId,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = c.textSecondary,
+                )
             }
             Text(
                 if (selected?.locality == AiLocality.CLOUD) t("aiCloud") else t("aiLocal"),
                 style = MaterialTheme.typography.labelSmall,
-                color = colors.onSurfaceVariant,
+                color = c.textSecondary,
             )
         }
 
         if (expandedRole == role) {
-            KashaPanel(Modifier.fillMaxWidth().padding(bottom = 10.dp), padding = 14.dp) {
+            Spacer(Modifier.height(6.dp))
+            KashaPanel(Modifier.fillMaxWidth(), padding = 14.dp) {
                 Text(t("aiModels"), style = MaterialTheme.typography.labelLarge)
                 Spacer(Modifier.height(10.dp))
                 AiCatalog.enginesFor(role).forEach { engine ->
                     val state = stateFor(engine.id)
                     val selectedNow = selectedId == engine.id
-                    Row(Modifier.fillMaxWidth().padding(vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(vertical = 7.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                         Column(Modifier.weight(1f)) {
                             Text(engine.name, style = MaterialTheme.typography.bodyMedium)
                             val meta = buildList {
-                                engine.approximateSizeMb?.let { add(if (it >= 1000) "~${it / 1000.0} GB" else "~$it MB") }
+                                engine.approximateSizeMb?.let {
+                                    add(if (it >= 1000) "~${it / 1000.0} GB" else "~$it MB")
+                                }
                                 add(engine.description)
                             }.joinToString(" · ")
-                            Text(meta, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                            Text(
+                                meta,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = c.textSecondary,
+                            )
                         }
                         when {
-                            selectedNow -> Text(t("aiSelected"), style = MaterialTheme.typography.labelSmall)
-                            state?.installed == true || (!packages.available && engine.defaultInstalled) -> Column(horizontalAlignment = Alignment.End) {
-                                KashaQuietButton(t("aiSelected"), {
-                                    scope.launch { s.savePreferences(s.preferences.copy(ai = s.preferences.ai.with(role, engine.id))) }
-                                })
-                                if (packages.available && !engine.defaultInstalled) {
-                                    KashaQuietButton(t("aiRemove"), {
+                            selectedNow -> Text(
+                                t("aiSelected"),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = c.accentContent,
+                            )
+
+                            state?.installed == true || (!packages.available && engine.defaultInstalled) -> Column(
+                                horizontalAlignment = Alignment.End,
+                            ) {
+                                KashaQuietButton(
+                                    t("aiSelected"),
+                                    {
                                         scope.launch {
-                                            actionError = null
-                                            runCatching { packages.remove(engine.id) }.onFailure { actionError = it.message }
-                                            refreshPlatformState()
+                                            s.savePreferences(
+                                                s.preferences.copy(
+                                                    ai = s.preferences.ai.with(role, engine.id),
+                                                ),
+                                            )
                                         }
-                                    })
+                                    },
+                                )
+                                if (packages.available && !engine.defaultInstalled) {
+                                    KashaQuietButton(
+                                        t("aiRemove"),
+                                        {
+                                            scope.launch {
+                                                actionError = null
+                                                runCatching { packages.remove(engine.id) }
+                                                    .onFailure { actionError = it.message }
+                                                refreshPlatformState()
+                                            }
+                                        },
+                                    )
                                 }
                             }
+
                             engine.installable && packages.available -> KashaQuietButton(
-                                if (state?.downloading == true) "${((state.progress ?: 0f) * 100).toInt()}%" else t("aiDownload"),
+                                if (state?.downloading == true) {
+                                    "${((state.progress ?: 0f) * 100).toInt()}%"
+                                } else {
+                                    t("aiDownload")
+                                },
                                 {
                                     scope.launch {
                                         actionError = null
-                                        runCatching { packages.install(engine.id) }.onFailure { actionError = it.message }
+                                        runCatching { packages.install(engine.id) }
+                                            .onFailure { actionError = it.message }
                                         refreshPlatformState()
                                     }
                                 },
                                 enabled = state?.downloading != true,
                             )
-                            else -> Text(t("aiUnavailable"), style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant)
+
+                            else -> Text(
+                                t("aiUnavailable"),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = c.textTertiary,
+                            )
                         }
                     }
                 }
@@ -129,28 +174,42 @@ internal fun AiSettingsSection(s: StudioState) {
                     Spacer(Modifier.height(6.dp))
                     cloudChoices.forEach { engine ->
                         KashaListCard(
-                            onClick = { scope.launch { s.savePreferences(s.preferences.copy(ai = s.preferences.ai.with(role, engine.id))) } },
-                            modifier = Modifier.padding(bottom = 6.dp),
+                            onClick = {
+                                scope.launch {
+                                    s.savePreferences(
+                                        s.preferences.copy(
+                                            ai = s.preferences.ai.with(role, engine.id),
+                                        ),
+                                    )
+                                }
+                            },
                         ) {
                             Column(Modifier.weight(1f)) {
                                 Text(engine.name, style = MaterialTheme.typography.bodyMedium)
-                                Text(t("aiCloud"), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                                Text(
+                                    t("aiCloud"),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = c.textSecondary,
+                                )
                             }
-                            if (selectedId == engine.id) Text(t("aiSelected"), style = MaterialTheme.typography.labelSmall)
+                            if (selectedId == engine.id) {
+                                KashaIcon(
+                                    Glyph.CHECK,
+                                    Modifier.size(18.dp),
+                                    c.accentContent,
+                                )
+                            }
                         }
                     }
                 }
             }
+            Spacer(Modifier.height(8.dp))
         }
     }
 
-    Spacer(Modifier.height(12.dp))
+    Spacer(Modifier.height(20.dp))
     Text(t("aiCloudProviders"), style = MaterialTheme.typography.titleSmall)
-    Spacer(Modifier.height(8.dp))
-    KashaPanel(Modifier.fillMaxWidth(), padding = 14.dp) {
-        Text(t("aiPrivacyWarning"), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
-    }
-    Spacer(Modifier.height(8.dp))
+    Spacer(Modifier.height(10.dp))
 
     AiCatalog.cloudProviders.forEach { provider ->
         val connected = connections.firstOrNull { it.providerId == provider.id && it.enabled }
@@ -161,27 +220,41 @@ internal fun AiSettingsSection(s: StudioState) {
                 modelIds = existing?.modelIds.orEmpty()
                 endpoint = existing?.endpoint.orEmpty()
                 apiKey = ""
-                consent = existing?.privacyConsentVersion?.let { it >= AiPrivacy.CONSENT_VERSION } == true
+                consent = existing?.privacyConsentVersion?.let {
+                    it >= AiPrivacy.CONSENT_VERSION
+                } == true
                 connectionResult = null
                 actionError = null
             },
-            modifier = Modifier.padding(bottom = 8.dp),
         ) {
             Column(Modifier.weight(1f)) {
                 Text(provider.name, style = MaterialTheme.typography.bodyMedium)
-                Text(provider.description, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    provider.description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = c.textSecondary,
+                )
             }
             Text(
-                if (connected != null) t("aiInstalled") else if (cloud.available) t("aiConnect") else t("aiUnavailable"),
+                if (connected != null) {
+                    t("aiInstalled")
+                } else if (cloud.available) {
+                    t("aiConnect")
+                } else {
+                    t("aiUnavailable")
+                },
                 style = MaterialTheme.typography.labelSmall,
-                color = colors.onSurfaceVariant,
+                color = c.textSecondary,
             )
         }
     }
 
     val provider = providerEditor
     if (provider != null) {
-        val configuredModels = modelIds.filter { (role, model) -> role in provider.roles && model.isNotBlank() }
+        val configuredModels = modelIds.filter { (role, model) ->
+            role in provider.roles && model.isNotBlank()
+        }
         val configuredRoles = configuredModels.keys
         Spacer(Modifier.height(8.dp))
         KashaPanel(Modifier.fillMaxWidth(), padding = 16.dp) {
@@ -198,99 +271,204 @@ internal fun AiSettingsSection(s: StudioState) {
             }
             if (provider.endpointRequired) {
                 Spacer(Modifier.height(12.dp))
-                KashaField(endpoint, { endpoint = it }, t("aiEndpoint"), Modifier.fillMaxWidth())
+                KashaField(
+                    endpoint,
+                    { endpoint = it },
+                    t("aiEndpoint"),
+                    Modifier.fillMaxWidth(),
+                )
             }
             Spacer(Modifier.height(12.dp))
-            KashaField(apiKey, { apiKey = it }, t("aiApiKey"), Modifier.fillMaxWidth())
+            KashaField(
+                apiKey,
+                { apiKey = it },
+                t("aiApiKey"),
+                Modifier.fillMaxWidth(),
+            )
             Spacer(Modifier.height(16.dp))
 
             Text(t("aiPrivacy"), style = MaterialTheme.typography.labelLarge)
             Spacer(Modifier.height(6.dp))
-            Text(t("aiSends") + ":", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+            Text(
+                t("aiSends") + ":",
+                style = MaterialTheme.typography.bodySmall,
+                color = c.textSecondary,
+            )
             AiPrivacy.dataFor(configuredRoles.ifEmpty { provider.roles }).forEach { kind ->
-                Text("• ${dataLabel(kind)}", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                Text(
+                    "• ${dataLabel(kind)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = c.textSecondary,
+                )
             }
             Spacer(Modifier.height(8.dp))
-            KashaSwitchRow(t("aiConsent"), consent, { consent = it }, enabled = cloud.available)
+            KashaSwitchRow(
+                t("aiConsent"),
+                consent,
+                { consent = it },
+                enabled = cloud.available,
+            )
 
             if (connectionResult != null) {
                 Text(
                     if (connectionResult == true) t("aiConnectionOk") else t("aiConnectionFailed"),
                     style = MaterialTheme.typography.bodySmall,
-                    color = colors.onSurfaceVariant,
+                    color = if (connectionResult == true) c.success else c.error,
                 )
                 Spacer(Modifier.height(8.dp))
             }
             if (actionError != null) {
-                Text(actionError.orEmpty(), style = MaterialTheme.typography.bodySmall, color = colors.error)
+                Text(
+                    actionError.orEmpty(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = c.error,
+                )
                 Spacer(Modifier.height(8.dp))
             }
 
-            val canSave = cloud.available && consent && configuredModels.isNotEmpty() && (!provider.endpointRequired || endpoint.isNotBlank())
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                KashaButton(
-                    t("aiTestConnection"),
-                    onClick = {
-                        scope.launch {
-                            actionError = null
-                            val connection = CloudAiConnection(
-                                providerId = provider.id,
-                                modelIds = configuredModels.mapValues { it.value.trim() },
-                                endpoint = endpoint.trim().ifBlank { null },
-                                enabled = true,
-                                privacyConsentVersion = if (consent) AiPrivacy.CONSENT_VERSION else 0,
-                            )
-                            connectionResult = runCatching { cloud.test(connection, apiKey.ifBlank { null }) }
-                                .onFailure { actionError = it.message }
-                                .getOrDefault(false)
-                        }
-                    },
-                    modifier = Modifier.weight(1f),
-                    enabled = canSave,
-                )
-                KashaButton(
-                    t("aiSaveConnection"),
-                    onClick = {
-                        scope.launch {
-                            actionError = null
-                            val connection = CloudAiConnection(
-                                providerId = provider.id,
-                                modelIds = configuredModels.mapValues { it.value.trim() },
-                                endpoint = endpoint.trim().ifBlank { null },
-                                enabled = true,
-                                privacyConsentVersion = AiPrivacy.CONSENT_VERSION,
-                            )
-                            runCatching { cloud.save(connection, apiKey.ifBlank { null }) }
-                                .onSuccess { connections = cloud.connections(); providerEditor = null }
-                                .onFailure { actionError = it.message }
-                        }
-                    },
-                    modifier = Modifier.weight(1f),
-                    primary = true,
-                    enabled = canSave,
-                )
+            val canSave = cloud.available &&
+                consent &&
+                configuredModels.isNotEmpty() &&
+                (!provider.endpointRequired || endpoint.isNotBlank())
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                if (maxWidth >= 320.dp) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        KashaButton(
+                            t("aiTestConnection"),
+                            onClick = {
+                                scope.launch {
+                                    actionError = null
+                                    val connection = CloudAiConnection(
+                                        providerId = provider.id,
+                                        modelIds = configuredModels.mapValues { it.value.trim() },
+                                        endpoint = endpoint.trim().ifBlank { null },
+                                        enabled = true,
+                                        privacyConsentVersion = if (consent) AiPrivacy.CONSENT_VERSION else 0,
+                                    )
+                                    connectionResult = runCatching {
+                                        cloud.test(connection, apiKey.ifBlank { null })
+                                    }.onFailure {
+                                        actionError = it.message
+                                    }.getOrDefault(false)
+                                }
+                            },
+                            modifier = Modifier.weight(1f),
+                            enabled = canSave,
+                        )
+                        KashaButton(
+                            t("aiSaveConnection"),
+                            onClick = {
+                                scope.launch {
+                                    actionError = null
+                                    val connection = CloudAiConnection(
+                                        providerId = provider.id,
+                                        modelIds = configuredModels.mapValues { it.value.trim() },
+                                        endpoint = endpoint.trim().ifBlank { null },
+                                        enabled = true,
+                                        privacyConsentVersion = AiPrivacy.CONSENT_VERSION,
+                                    )
+                                    runCatching {
+                                        cloud.save(connection, apiKey.ifBlank { null })
+                                    }.onSuccess {
+                                        connections = cloud.connections()
+                                        providerEditor = null
+                                    }.onFailure {
+                                        actionError = it.message
+                                    }
+                                }
+                            },
+                            modifier = Modifier.weight(1f),
+                            primary = true,
+                            enabled = canSave,
+                        )
+                    }
+                } else {
+                    Column(
+                        Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        KashaButton(
+                            t("aiTestConnection"),
+                            onClick = {
+                                scope.launch {
+                                    actionError = null
+                                    val connection = CloudAiConnection(
+                                        providerId = provider.id,
+                                        modelIds = configuredModels.mapValues { it.value.trim() },
+                                        endpoint = endpoint.trim().ifBlank { null },
+                                        enabled = true,
+                                        privacyConsentVersion = if (consent) AiPrivacy.CONSENT_VERSION else 0,
+                                    )
+                                    connectionResult = runCatching {
+                                        cloud.test(connection, apiKey.ifBlank { null })
+                                    }.onFailure {
+                                        actionError = it.message
+                                    }.getOrDefault(false)
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = canSave,
+                        )
+                        KashaButton(
+                            t("aiSaveConnection"),
+                            onClick = {
+                                scope.launch {
+                                    actionError = null
+                                    val connection = CloudAiConnection(
+                                        providerId = provider.id,
+                                        modelIds = configuredModels.mapValues { it.value.trim() },
+                                        endpoint = endpoint.trim().ifBlank { null },
+                                        enabled = true,
+                                        privacyConsentVersion = AiPrivacy.CONSENT_VERSION,
+                                    )
+                                    runCatching {
+                                        cloud.save(connection, apiKey.ifBlank { null })
+                                    }.onSuccess {
+                                        connections = cloud.connections()
+                                        providerEditor = null
+                                    }.onFailure {
+                                        actionError = it.message
+                                    }
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            primary = true,
+                            enabled = canSave,
+                        )
+                    }
+                }
             }
+
             val existing = connections.firstOrNull { it.providerId == provider.id }
             if (existing != null) {
                 Spacer(Modifier.height(8.dp))
-                KashaQuietButton(t("aiDisconnect"), {
-                    scope.launch {
-                        cloud.remove(provider.id)
-                        connections = cloud.connections()
-                        providerEditor = null
-                        var next = s.preferences.ai
-                        AiRole.entries.forEach { role ->
-                            if (AiCatalog.cloudProviderId(next.engineId(role)) == provider.id) {
-                                next = next.with(role, when (role) {
-                                    AiRole.SPEECH_TO_TEXT -> AiCatalog.DEFAULT_STT
-                                    AiRole.TEXT -> AiCatalog.DEFAULT_TEXT
-                                    AiRole.ROUTING -> AiCatalog.DEFAULT_ROUTING
-                                })
+                KashaQuietButton(
+                    t("aiDisconnect"),
+                    {
+                        scope.launch {
+                            cloud.remove(provider.id)
+                            connections = cloud.connections()
+                            providerEditor = null
+                            var next = s.preferences.ai
+                            AiRole.entries.forEach { role ->
+                                if (AiCatalog.cloudProviderId(next.engineId(role)) == provider.id) {
+                                    next = next.with(
+                                        role,
+                                        when (role) {
+                                            AiRole.SPEECH_TO_TEXT -> AiCatalog.DEFAULT_STT
+                                            AiRole.TEXT -> AiCatalog.DEFAULT_TEXT
+                                            AiRole.ROUTING -> AiCatalog.DEFAULT_ROUTING
+                                        },
+                                    )
+                                }
                             }
+                            s.savePreferences(s.preferences.copy(ai = next))
                         }
-                        s.savePreferences(s.preferences.copy(ai = next))
-                    }
-                })
+                    },
+                )
             }
         }
     }

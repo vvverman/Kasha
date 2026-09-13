@@ -5,17 +5,17 @@ object Copy {
     private val rows = """
 firstProject|Твой первый проект|Your first project|Tu primer proyecto|Ton premier projet|Dein erstes Projekt|Твій перший проєкт|Твой першы праект|Алғашқы жобаңыз
 createProject|Создать проект|Create project|Crear proyecto|Créer un projet|Projekt erstellen|Створити проєкт|Стварыць праект|Жоба жасау
-submitRecording|Отправить|Send|Enviar|Envoyer|Senden|Надіслати|Адправіць|Жіберу
+submitRecording|Завершить|Finish|Finalizar|Terminer|Beenden|Завершити|Завяршыць|Аяқтау
 home|Главная|Home|Inicio|Accueil|Start|Головна|Галоўная|Басты
 projects|Проекты|Projects|Proyectos|Projets|Projekte|Проєкти|Праекты|Жобалар
 settings|Настройки|Settings|Ajustes|Réglages|Einstellungen|Налаштування|Налады|Баптаулар
 appLanguage|Язык приложения|App language|Idioma|Langue|App-Sprache|Мова застосунку|Мова праграмы|Қолданба тілі
 system|Системная|System|Sistema|Système|System|Системна|Сістэмная|Жүйелік
-systemLanguage|Язык системы|System language|Idioma del sistema|Langue du système|Systemsprache|Мова системи|Мова сістэмы|Жүйе тілі
+systemLanguage|Язык системы|System language|Idioma del sistema|Langue|Systemsprache|Мова системи|Мова сістэмы|Жүйе тілі
 light|Светлая|Light|Claro|Clair|Hell|Світла|Светлая|Ашық
 dark|Тёмная|Dark|Oscuro|Sombre|Dunkel|Темна|Цёмная|Қараңғы
 theme|Тема|Appearance|Tema|Apparence|Darstellung|Тема|Тэма|Тақырып
-record|Запись|Record|Grabar|Enregistrer|Aufnehmen|Запис|Запіс|Жазу
+record|Начать запись|Start recording|Iniciar grabación|Commencer l’enregistrement|Aufnahme starten|Почати запис|Пачаць запіс|Жазуды бастау
 pause|Пауза|Pause|Pausa|Pause|Pause|Пауза|Паўза|Кідірту
 resume|Продолжить|Resume|Continuar|Reprendre|Fortsetzen|Продовжити|Працягнуць|Жалғастыру
 stop|Стоп|Stop|Detener|Arrêter|Stopp|Стоп|Стоп|Тоқтату
@@ -24,13 +24,13 @@ speed|Скорость|Speed|Velocidad|Vitesse|Tempo|Швидкість|Хутк
 recording|Идёт запись|Recording|Grabando|Enregistrement|Aufnahme läuft|Триває запис|Ідзе запіс|Жазылуда
 paused|Запись на паузе|Recording paused|Grabación en pausa|Enregistrement en pause|Aufnahme pausiert|Запис на паузі|Запіс на паўзе|Жазу кідіртілді
 processing|Обрабатываем запись|Processing recording|Procesando grabación|Traitement en cours|Aufnahme verarbeiten|Обробляємо запис|Апрацоўваем запіс|Жазба өңделуде
-transcribing|Распознаём речь|Transcribing|Transcribiendo|Transcription|Transkription|Розпізнаємо мовлення|Распазнаём маўленне|Сөйлеуді тану
-compacting|Сокращаем паузы|Removing pauses|Reduciendo pausas|Réduction des pauses|Pausen kürzen|Скорочуємо паузи|Скарачаем паўзы|Үзілістерді қысқарту
-preparing|Готовим заметку|Preparing note|Preparando nota|Préparation de la note|Notiz vorbereiten|Готуємо нотатку|Рыхтуем нататку|Жазбаны дайындау
+transcribing|Расшифровываем|Transcribing|Transcribiendo|Transcription|Transkription|Розшифровуємо|Расшыфроўваем|Транскрипциялау
+compacting|Подготавливаем аудио|Preparing audio|Preparando audio|Préparation de l’audio|Audio vorbereiten|Готуємо аудіо|Рыхтуем аўдыя|Аудионы дайындау
+preparing|Готовим текст|Preparing text|Preparando texto|Préparation du texte|Text vorbereiten|Готуємо текст|Рыхтуем тэкст|Мәтінді дайындау
 untitled|Название заметки|Note title|Título de la nota|Titre de la note|Titel der Notiz|Назва нотатки|Назва нататкі|Жазба атауы
 body|Текст заметки|Note text|Texto de la nota|Texte de la note|Notiztext|Текст нотатки|Тэкст нататкі|Жазба мәтіні
-emptyTitle|Освободите\nмысли.|Make room\nfor thoughts.|Espacio para\ntus ideas.|Libérez\nvos idées.|Raum für\nGedanken.|Звільніть\nдумки.|Вызваліце\nдумкі.|Ойларға\nорын беріңіз.
-emptyBody|Нажмите запись. Остальное — после.|Press record. Everything else can wait.|Pulsa grabar. Lo demás puede esperar.|Enregistrez. Le reste peut attendre.|Aufnehmen. Alles andere kann warten.|Натисніть запис. Решта — потім.|Націсніце запіс. Астатняе — потым.|Жазуды басыңыз. Қалғаны — кейін.
+emptyTitle|Мысль начинается с голоса|A thought begins with a voice|Un pensamiento empieza con la voz|Une pensée commence par la voix|Ein Gedanke beginnt mit der Stimme|Думка починається з голосу|Думка пачынаецца з голасу|Ой дауыстан басталады
+emptyBody|Запишите, что важно. Текст можно сохранить в заметки или задачи.|Record what matters. You can save the text to notes or tasks.|Graba lo importante. Puedes guardar el texto en notas o tareas.|Enregistrez l’essentiel. Vous pouvez enregistrer le texte dans les notes ou les tâches.|Halte fest, was wichtig ist. Den Text kannst du in Notizen oder Aufgaben speichern.|Запишіть те, що важливо. Текст можна зберегти в нотатки або завдання.|Запішыце тое, што важна. Тэкст можна захаваць у нататкі або задачы.|Маңыздысын жазып алыңыз. Мәтінді жазбаларға немесе тапсырмаларға сақтауға болады.
 send|Отправить в проект|Send to project|Enviar al proyecto|Envoyer au projet|Zum Projekt senden|Надіслати в проєкт|Адправіць у праект|Жобаға жіберу
 tidy|Привести в порядок|Tidy up|Ordenar texto|Mettre en forme|Text aufräumen|Упорядкувати|Упарадкаваць|Ретке келтіру
 tidying|Приводим в порядок|Tidying up|Ordenando|Mise en forme|Text wird aufgeräumt|Упорядковуємо|Упарадкоўваем|Реттелуде
@@ -93,7 +93,7 @@ ok|Понятно|OK|Entendido|Compris|OK|Зрозуміло|Зразумела|
 processingFailed|Обработка не завершилась. Можно повторить.|Processing did not finish. You can retry.|El proceso no terminó. Puedes reintentar.|Le traitement a échoué. Réessayez.|Verarbeitung fehlgeschlagen. Erneut versuchen.|Обробку не завершено. Можна повторити.|Апрацоўка не завершана. Можна паўтарыць.|Өңдеу аяқталмады. Қайталап көруге болады.
     """.trimIndent().lineSequence().filter { it.isNotBlank() }.associate { line ->
         val cells = line.split('|'); require(cells.size == 9) { "Incomplete localization: ${cells.first()}" }
-        cells.first() to cells.drop(1).map { it.replace("\\n", "\n") }
+        cells.first() to cells.drop(1).map { it.replace("\\\n", "\n") }
     }
     fun has(key: String) = key in rows
     fun text(language: String, key: String): String = rows.getValue(key)[Languages.codes.indexOf(language).coerceAtLeast(0)]

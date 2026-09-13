@@ -23,7 +23,7 @@ import kotlin.math.sin
 
 /** Небольшой собственный набор Kasha. Никаких внешних icon packs в runtime. */
 enum class Glyph {
-    RECORD, PLAY, PAUSE, STOP, SEND, HOME, FOLDER, TASKS, SETTINGS,
+    RECORD, MIC, PLAY, PAUSE, STOP, SEND, HOME, FOLDER, TASKS, SETTINGS,
     BACK, NEXT, PLUS, DELETE, MAGIC, MORE, PIN, EDIT, UP, DOWN, CHECK,
     ARCHIVE, CLOCK,
 }
@@ -38,6 +38,7 @@ private data class Motion(
 /** Короткие функциональные движения на hover/press/focus. */
 private fun motion(glyph: Glyph): Motion = when (glyph) {
     Glyph.RECORD -> Motion(scale = 1.10f)
+    Glyph.MIC -> Motion(y = -1.2f, scale = 1.05f)
     Glyph.PLAY -> Motion(x = 1.8f, scale = 1.06f)
     Glyph.PAUSE -> Motion(scale = .92f)
     Glyph.STOP -> Motion(rotation = 8f, scale = .94f)
@@ -105,6 +106,18 @@ fun KashaIcon(
 
         when (glyph) {
             Glyph.RECORD -> circle(12f, 12f, 5.2f, fill = true)
+            Glyph.MIC -> {
+                drawRoundRect(
+                    color,
+                    p(8.5f, 3.8f),
+                    Size(7f * u, 10.6f * u),
+                    CornerRadius(3.5f * u),
+                    style = stroke,
+                )
+                path(listOf(6f to 11.5f, 6f to 12.6f, 6.4f to 14.2f, 7.2f to 15.6f, 8.4f to 16.7f, 10f to 17.4f, 12f to 17.6f, 14f to 17.4f, 15.6f to 16.7f, 16.8f to 15.6f, 17.6f to 14.2f, 18f to 12.6f, 18f to 11.5f))
+                line(12f, 17.6f, 12f, 20.2f)
+                line(8.8f, 20.2f, 15.2f, 20.2f)
+            }
             Glyph.PLAY -> path(listOf(8.5f to 6.2f, 18f to 12f, 8.5f to 17.8f), close = true, fill = true)
             Glyph.PAUSE -> {
                 drawRoundRect(color, p(7f, 6f), Size(3.4f * u, 12f * u), CornerRadius(1.2f * u))

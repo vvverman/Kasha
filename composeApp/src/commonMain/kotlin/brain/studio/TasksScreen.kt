@@ -6,8 +6,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import brain.domain.TaskSchedule
@@ -19,17 +21,26 @@ import kotlin.time.Clock
 
 private fun taskText(s: StudioState, key: String) = KashaCopy.text(s.language, key) ?: key
 
-private fun repeatText(s: StudioState, repeat: ReminderRepeat): String = taskText(s, when (repeat) {
-    ReminderRepeat.TEN_MINUTES -> "every10m"
-    ReminderRepeat.THIRTY_MINUTES -> "every30m"
-    ReminderRepeat.HOURLY -> "hourly"
-    ReminderRepeat.DAILY -> "daily"
-    ReminderRepeat.WEEKLY -> "weekly"
-    ReminderRepeat.WEEKENDS -> "weekends"
-    ReminderRepeat.WEEKDAYS -> "weekdays"
-})
+private fun repeatText(s: StudioState, repeat: ReminderRepeat): String = taskText(
+    s,
+    when (repeat) {
+        ReminderRepeat.TEN_MINUTES -> "every10m"
+        ReminderRepeat.THIRTY_MINUTES -> "every30m"
+        ReminderRepeat.HOURLY -> "hourly"
+        ReminderRepeat.DAILY -> "daily"
+        ReminderRepeat.WEEKLY -> "weekly"
+        ReminderRepeat.WEEKENDS -> "weekends"
+        ReminderRepeat.WEEKDAYS -> "weekdays"
+    },
+)
 
-private fun taskTitle(task: Task): String = task.text.lineSequence().map(String::trim).firstOrNull { it.isNotEmpty() }?.take(90) ?: "—"
+private fun taskTitle(task: Task): String =
+    task.text
+        .lineSequence()
+        .map(String::trim)
+        .firstOrNull { it.isNotEmpty() }
+        ?.take(90)
+        ?: "—"
 
 @Composable
 internal fun TasksScreen(s: StudioState) {
@@ -39,6 +50,7 @@ internal fun TasksScreen(s: StudioState) {
         return
     }
 
+    val c = KashaTheme.colors
     val scope = rememberCoroutineScope()
     val labels = mapOf(
         SortMode.ALPHABETICAL to taskText(s, "sortAlphabetical"),
@@ -48,15 +60,24 @@ internal fun TasksScreen(s: StudioState) {
     )
 
     Column(Modifier.fillMaxSize()) {
-        Heading(if (s.taskArchive) taskText(s, "completedTasks") else taskText(s, "tasks")) {
+        Heading(
+            if (s.taskArchive) taskText(s, "completedTasks") else taskText(s, "tasks"),
+        ) {
             IconAction(
                 taskText(s, if (s.taskArchive) "activeTasks" else "archive"),
                 Glyph.ARCHIVE,
-                { s.taskArchive = !s.taskArchive; s.selectedTaskId = null },
+                {
+                    s.taskArchive = !s.taskArchive
+                    s.selectedTaskId = null
+                },
                 filled = s.taskArchive,
             )
         }
-        KashaSortBar(s.preferences.taskSort, labels, { scope.launch { s.setTaskSort(it) } })
+        KashaSortBar(
+            s.preferences.taskSort,
+            labels,
+            { scope.launch { s.setTaskSort(it) } },
+        )
         Spacer(Modifier.height(14.dp))
 
         val tasks = s.tasks()
@@ -64,7 +85,7 @@ internal fun TasksScreen(s: StudioState) {
             Text(
                 taskText(s, "noTasks"),
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = c.textSecondary,
             )
         } else {
             KashaReorderableList(
@@ -73,25 +94,49 @@ internal fun TasksScreen(s: StudioState) {
                 manual = !s.taskArchive && s.preferences.taskSort == SortMode.MANUAL,
                 onManualOrder = { ids -> scope.launch { s.reorderTasks(ids) } },
                 modifier = Modifier.fillMaxSize(),
-                spacing = 10.dp,
+                spacing = 2.dp,
             ) { item, dragging ->
                 KashaListCard(
                     onClick = { s.openTask(item.id) },
                     modifier = Modifier.graphicsLayer { alpha = if (dragging) .72f else 1f },
                 ) {
+                    if (item.completed) {
+                        KashaIcon(
+                            Glyph.CHECK,
+                            Modifier.size(22.dp),
+                            c.iconSecondary,
+                        )
+                    } else {
+                        IconAction(
+                            taskText(s, "completeTask"),
+                            Glyph.CHECK,
+                            { scope.launch { s.completeTask(item.id) } },
+                        )
+                    }
+                    Spacer(Modifier.width(10.dp))
                     Column(Modifier.weight(1f)) {
-                        Text(taskTitle(item), style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Text(
+                            taskTitle(item),
+                            style = MaterialTheme.typography.titleMedium,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                         if (item.dueAt > 0) {
                             Spacer(Modifier.height(6.dp))
                             Text(
                                 "${taskText(s, "dueLabel")}: ${TaskSchedule.formatDate(item.dueAt)} · ${TaskSchedule.formatTime(item.dueAt)}",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = c.textSecondary,
                             )
                         }
                     }
                     Spacer(Modifier.width(10.dp))
-                    KashaIcon(Glyph.NEXT, Modifier.size(17.dp), MaterialTheme.colorScheme.onSurfaceVariant, animated = dragging)
+                    KashaIcon(
+                        Glyph.NEXT,
+                        Modifier.size(18.dp),
+                        c.iconSecondary,
+                        animated = dragging,
+                    )
                 }
             }
         }
@@ -100,13 +145,20 @@ internal fun TasksScreen(s: StudioState) {
 
 @Composable
 private fun TaskDetailScreen(s: StudioState, task: Task) {
+    val c = KashaTheme.colors
     val scope = rememberCoroutineScope()
     var text by remember(task.id, task.updatedAt) { mutableStateOf(task.text) }
+    var confirmDelete by remember(task.id) { mutableStateOf(false) }
     val changed = text != task.text
 
     Column(Modifier.fillMaxSize().padding(bottom = 12.dp)) {
         Heading(taskTitle(task), s::closeTask, s.tr("back"))
-        Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) {
+        Column(
+            Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState()),
+        ) {
             KashaNoteText(
                 value = text,
                 onValueChange = { text = it },
@@ -124,81 +176,184 @@ private fun TaskDetailScreen(s: StudioState, task: Task) {
                 Text(
                     "${taskText(s, "repeatReminder")}: ${repeatText(s, task.reminderRepeat)}",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = c.textSecondary,
                 )
             }
             if (task.completed) {
                 Spacer(Modifier.height(12.dp))
-                Text(taskText(s, "completedLabel"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    taskText(s, "completedLabel"),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = c.textSecondary,
+                )
             }
             if (changed && !task.completed) {
                 Spacer(Modifier.height(18.dp))
-                Action(s.tr("save"), { scope.launch { s.saveTask(task.id, text) } }, enabled = text.isNotBlank() && !s.busy, modifier = Modifier.fillMaxWidth())
+                Action(
+                    s.tr("save"),
+                    { scope.launch { s.saveTask(task.id, text) } },
+                    enabled = text.isNotBlank() && !s.busy,
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
         }
 
-        if (!task.completed) {
+        if (confirmDelete) {
+            KashaPanel(Modifier.fillMaxWidth(), padding = 16.dp) {
+                Text(
+                    taskText(s, "deleteTask"),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = c.textPrimary,
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    taskTitle(task),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = c.textSecondary,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.height(14.dp))
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    QuietAction(
+                        s.tr("cancel"),
+                        { confirmDelete = false },
+                    )
+                    Action(
+                        taskText(s, "deleteTask"),
+                        { scope.launch { s.deleteTask(task.id) } },
+                        glyph = Glyph.DELETE,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+        } else {
+            if (!task.completed) {
+                Action(
+                    taskText(s, "completeTask"),
+                    {
+                        scope.launch {
+                            if (changed && text.isNotBlank()) s.saveTask(task.id, text)
+                            s.completeTask(task.id)
+                        }
+                    },
+                    primary = true,
+                    glyph = Glyph.CHECK,
+                    enabled = text.isNotBlank() && !s.busy,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(10.dp))
+                Action(
+                    taskText(s, "changeTime"),
+                    { s.editTaskSchedule(task.id) },
+                    glyph = Glyph.CLOCK,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(10.dp))
+            }
             Action(
-                taskText(s, "completeTask"),
-                {
-                    scope.launch {
-                        if (changed && text.isNotBlank()) s.saveTask(task.id, text)
-                        s.completeTask(task.id)
-                    }
-                },
-                primary = true,
-                glyph = Glyph.CHECK,
-                enabled = text.isNotBlank() && !s.busy,
+                taskText(s, "deleteTask"),
+                { confirmDelete = true },
+                glyph = Glyph.DELETE,
                 modifier = Modifier.fillMaxWidth(),
             )
-            Spacer(Modifier.height(10.dp))
-            Action(
-                taskText(s, "changeTime"),
-                { s.editTaskSchedule(task.id) },
-                glyph = Glyph.CLOCK,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Spacer(Modifier.height(10.dp))
         }
-        Action(
-            taskText(s, "deleteTask"),
-            { scope.launch { s.deleteTask(task.id) } },
-            glyph = Glyph.DELETE,
-            modifier = Modifier.fillMaxWidth(),
-        )
     }
 }
 
 @Composable
 internal fun TaskScheduleScreen(s: StudioState) {
+    val c = KashaTheme.colors
     val scope = rememberCoroutineScope()
     val target = s.taskScheduleTarget
-    val existing = target?.takeUnless { it == "new" }?.let { id -> s.snapshot.tasks.firstOrNull { it.id == id } }
-    val initialDue = existing?.dueAt?.takeIf { it > Clock.System.now().toEpochMilliseconds() } ?: TaskSchedule.defaultDue()
+    val existing = target
+        ?.takeUnless { it == "new" }
+        ?.let { id -> s.snapshot.tasks.firstOrNull { it.id == id } }
+    val initialDue = existing
+        ?.dueAt
+        ?.takeIf { it > Clock.System.now().toEpochMilliseconds() }
+        ?: TaskSchedule.defaultDue()
     var date by remember(target, initialDue) { mutableStateOf(TaskSchedule.formatDate(initialDue)) }
     var time by remember(target, initialDue) { mutableStateOf(TaskSchedule.formatTime(initialDue)) }
     var repeat by remember(target) { mutableStateOf(existing?.reminderRepeat ?: ReminderRepeat.HOURLY) }
     val dueAt = TaskSchedule.parse(date, time)
     val valid = dueAt != null && dueAt > Clock.System.now().toEpochMilliseconds()
+    val fontScale = LocalDensity.current.fontScale
 
     Column(Modifier.fillMaxSize().padding(bottom = 12.dp)) {
         Heading(taskText(s, "reminder"), s::cancelTaskSchedule, s.tr("back"))
-        Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                KashaField(date, { date = it }, taskText(s, "dueDate"), Modifier.weight(1f))
-                KashaField(time, { time = it }, taskText(s, "dueTime"), Modifier.width(112.dp))
+        Column(
+            Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState()),
+        ) {
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                if (maxWidth >= 330.dp && fontScale <= 1.3f) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        KashaField(
+                            date,
+                            { date = it },
+                            taskText(s, "dueDate"),
+                            Modifier.weight(1f),
+                        )
+                        KashaField(
+                            time,
+                            { time = it },
+                            taskText(s, "dueTime"),
+                            Modifier.width(112.dp),
+                        )
+                    }
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        KashaField(
+                            date,
+                            { date = it },
+                            taskText(s, "dueDate"),
+                            Modifier.fillMaxWidth(),
+                        )
+                        KashaField(
+                            time,
+                            { time = it },
+                            taskText(s, "dueTime"),
+                            Modifier.fillMaxWidth(),
+                        )
+                    }
+                }
             }
             if (!valid) {
                 Spacer(Modifier.height(8.dp))
-                Text(taskText(s, "invalidSchedule"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                Text(
+                    taskText(s, "invalidSchedule"),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = c.error,
+                )
             }
             Spacer(Modifier.height(24.dp))
-            Text(taskText(s, "repeatReminder"), style = MaterialTheme.typography.titleSmall)
-            Spacer(Modifier.height(10.dp))
+            Text(
+                taskText(s, "repeatReminder"),
+                style = MaterialTheme.typography.titleSmall,
+            )
+            Spacer(Modifier.height(8.dp))
             ReminderRepeat.entries.forEach { option ->
-                KashaListCard(onClick = { repeat = option }, modifier = Modifier.padding(bottom = 8.dp)) {
-                    Text(repeatText(s, option), Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-                    if (repeat == option) KashaIcon(Glyph.CHECK, Modifier.size(18.dp), animated = true)
+                KashaListCard(onClick = { repeat = option }) {
+                    Text(
+                        repeatText(s, option),
+                        Modifier.weight(1f),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    if (repeat == option) {
+                        KashaIcon(
+                            Glyph.CHECK,
+                            Modifier.size(18.dp),
+                            c.accentContent,
+                            animated = true,
+                        )
+                    }
                 }
             }
         }

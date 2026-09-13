@@ -1,4 +1,18 @@
 <!DOCTYPE html>
-<html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Kasha Test</title>
-<style>html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#f2f1f5}#webApp{width:100%;max-width:430px;height:100%;margin:auto}</style>
-<script src="browser-platform.js"></script><script src="composeApp.js" defer></script></head><body><div id="webApp"></div><noscript>Для приложения нужен JavaScript.</noscript></body></html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <title>Kasha Test</title>
+  <style>
+    html,body,#webApp{width:100%;height:100%;margin:0}
+    html,body{overflow:hidden;background:#191715}
+    #webApp{min-width:0;min-height:0}
+    @media (prefers-color-scheme: light){html,body{background:#F7F5EE}}
+  </style>
+  <script src="browser-platform.js"></script>
+  <script src="composeApp.js" defer></script>
+</head>
+<body><div id="webApp"></div><noscript>Для приложения нужен JavaScript.</noscript></body>
+</html>
