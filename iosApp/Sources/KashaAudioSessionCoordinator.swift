@@ -6,6 +6,8 @@ private enum KashaAudioBridgeEvent {
     static let activateRecording = Notification.Name("KashaAudioSessionActivateRecording")
     static let activatePlayback = Notification.Name("KashaAudioSessionActivatePlayback")
     static let deactivate = Notification.Name("KashaAudioSessionDeactivate")
+    static let openSystemSettings = Notification.Name("KashaOpenSystemSettings")
+    static let systemSettingsOpenFailed = Notification.Name("KashaSystemSettingsOpenFailed")
 
     static let interruptionBegan = Notification.Name("KashaAudioSessionInterruptionBegan")
     static let interruptionEnded = Notification.Name("KashaAudioSessionInterruptionEnded")
@@ -13,7 +15,7 @@ private enum KashaAudioBridgeEvent {
     static let applicationDidBecomeActive = Notification.Name("KashaApplicationDidBecomeActive")
 }
 
-/// Тонкий нативный владелец AVAudioSession.
+/// Тонкий нативный владелец AVAudioSession и системных переходов iOS.
 /// Recorder/player и продуктовый state остаются в общем Kotlin-слое.
 final class KashaAudioSessionCoordinator {
     static let shared = KashaAudioSessionCoordinator()
@@ -45,6 +47,13 @@ final class KashaAudioSessionCoordinator {
                 self?.deactivate()
             },
             center.addObserver(
+                forName: KashaAudioBridgeEvent.openSystemSettings,
+                object: nil,
+                queue: .main
+            ) { _ in
+                Self.openSystemSettings()
+            },
+            center.addObserver(
                 forName: AVAudioSession.interruptionNotification,
                 object: nil,
                 queue: nil
@@ -71,6 +80,21 @@ final class KashaAudioSessionCoordinator {
     deinit {
         observers.forEach { observer in
             NotificationCenter.default.removeObserver(observer)
+        }
+    }
+
+    private static func openSystemSettings() {
+        guard
+            let url = URL(string: UIApplication.openSettingsURLString),
+            UIApplication.shared.canOpenURL(url)
+        else {
+            NotificationCenter.default.post(name: KashaAudioBridgeEvent.systemSettingsOpenFailed, object: nil)
+            return
+        }
+        UIApplication.shared.open(url, options: [:]) { opened in
+            if !opened {
+                NotificationCenter.default.post(name: KashaAudioBridgeEvent.systemSettingsOpenFailed, object: nil)
+            }
         }
     }
 

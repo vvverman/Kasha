@@ -1,16 +1,26 @@
 package brain.ios
 
 import brain.model.*
+import brain.studio.AiPackageGateway
+import brain.studio.AiPlatformServices
+import brain.studio.CloudAiGateway
+import brain.studio.DeviceCapabilityGateway
+import brain.studio.NoopAiPackageGateway
+import brain.studio.NoopCloudAiGateway
 import brain.studio.StudioRepository
 
 /**
  * Side-effect adapter вокруг общего repository: Core меняет Task, iOS только
- * синхронизирует системные UNUserNotificationCenter requests.
+ * синхронизирует системные UNUserNotificationCenter requests и публикует
+ * platform capabilities без переноса системной логики в Core.
  */
 internal class IosReminderRepository(
     private val delegate: IosRepository,
     private val reminders: IosReminder,
-) : StudioRepository by delegate {
+    override val deviceCapabilities: DeviceCapabilityGateway,
+) : StudioRepository by delegate, AiPlatformServices {
+    override val aiPackages: AiPackageGateway = NoopAiPackageGateway
+    override val cloudAi: CloudAiGateway = NoopCloudAiGateway
 
     suspend fun syncReminders() {
         reminders.sync(delegate.snapshot().tasks)
