@@ -1,0 +1,3 @@
+# Canonical design assets are verified by pinned hashes and must not be rewritten by host Git settings.
+docs/design/assets/fonts/OFL.txt text eol=lf
+docs/design/assets/fonts/*.ttf binary
