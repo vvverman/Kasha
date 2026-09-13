@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$(dirname "$0")/../.."
-OUT="$PWD/studio-output"
-APP="$PWD/desktopApp/build/compose/binaries/main/app/Kasha Test.app"
+REPO="$(cd "$(dirname "$0")/../../.." && pwd)"
+cd "$REPO"
+OUT="$REPO/studio-output"
+APP="$REPO/platforms/desktop/build/compose/binaries/main/app/Kasha Test.app"
 mkdir -p "$OUT"
 exec > >(tee "$OUT/package.log") 2>&1
 RES="$APP/Contents/app/resources"
@@ -14,10 +15,13 @@ chmod 755 "$RES/bin/ffmpeg"
 while IFS= read -r -d '' file; do
  if /usr/bin/file -b "$file" | grep -q 'Mach-O'; then codesign --force --sign - --timestamp=none "$file"; fi
 done < <(find "$APP/Contents" -type f -print0)
-codesign --force --deep --sign - --timestamp=none --entitlements desktopApp/packaging/entitlements.plist "$APP"
+codesign --force --deep --sign - --timestamp=none --entitlements platforms/desktop/packaging/entitlements.plist "$APP"
 codesign --verify --deep --strict "$APP"
+VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist")
+DMG_NAME="Kasha-Test-${VERSION}-macOS-arm64.dmg"
+DMG="$OUT/$DMG_NAME"
 # Не даём приложению случайно использовать сборочный каталог или Java из PATH.
-mv desktopApp/bundle-test/common desktopApp/bundle-test/build-copy-not-used
+mv platforms/desktop/bundle-test/common platforms/desktop/bundle-test/build-copy-not-used
 mkdir -p "$OUT/clean-home"
 env -i HOME="$OUT/clean-home" PATH=/usr/bin:/bin:/usr/sbin:/sbin TMPDIR="${TMPDIR:-/tmp}" \
  /usr/bin/sandbox-exec -p '(version 1)(allow default)(deny network*)' \
@@ -32,18 +36,19 @@ mkdir -p "$STAGE"
 mv "$APP" "$STAGE/Kasha Test.app"
 ln -s /Applications "$STAGE/Applications"
 cp docs/TEST_BUILD.md "$STAGE/Прочитать.md"
-hdiutil create -volname 'Kasha Test' -srcfolder "$STAGE" -ov -format UDZO "$OUT/Kasha-Test-1.1.4-macOS-arm64.dmg"
-hdiutil verify "$OUT/Kasha-Test-1.1.4-macOS-arm64.dmg"
+hdiutil create -volname 'Kasha Test' -srcfolder "$STAGE" -ov -format UDZO "$DMG"
+hdiutil verify "$DMG"
 mkdir -p "$OUT/mounted"
-hdiutil attach -nobrowse -readonly -mountpoint "$OUT/mounted" "$OUT/Kasha-Test-1.1.4-macOS-arm64.dmg"
+hdiutil attach -nobrowse -readonly -mountpoint "$OUT/mounted" "$DMG"
 codesign --verify --deep --strict "$OUT/mounted/Kasha Test.app"
 test -x "$OUT/mounted/Kasha Test.app/Contents/app/resources/bin/ffmpeg"
 test ! -d "$OUT/mounted/Kasha Test.app/Contents/app/resources/models"
 hdiutil detach "$OUT/mounted"
-(cd "$OUT" && shasum -a 256 Kasha-Test-1.1.4-macOS-arm64.dmg > SHA256SUMS.txt)
+(cd "$OUT" && shasum -a 256 "$DMG_NAME" > SHA256SUMS.txt)
+export KASHA_TEST_DMG_NAME="$DMG_NAME"
 python3 - <<'PY'
-import pathlib,json,platform
-p=pathlib.Path('studio-output');dmg=p/'Kasha-Test-1.1.4-macOS-arm64.dmg'
+import os,pathlib,json,platform
+p=pathlib.Path('studio-output');dmg=p/os.environ['KASHA_TEST_DMG_NAME']
 r={'passed':True,'file':dmg.name,'bytes':dmg.stat().st_size,'arch':platform.machine(),'macOS':platform.mac_ver()[0],
  'simulatedAI':True,'modelFiles':0,'bundledJava':True,'notarized':False,'physicalMicrophoneTested':False,
  'selfTest':json.loads((p/'self-test/self-test.json').read_text())}
