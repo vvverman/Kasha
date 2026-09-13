@@ -1,5 +1,15 @@
 name: Android shell verification
 on:
+  push:
+    branches: [platform/android-production]
+    paths:
+      - 'androidApp/**'
+      - 'composeApp/**'
+      - 'kashaCore/**'
+      - 'gradle/**'
+      - 'build.gradle.kts'
+      - 'settings.gradle.kts'
+      - '.github/workflows/android-shell.yml'
   pull_request:
     paths:
       - 'androidApp/**'
