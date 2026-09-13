@@ -195,7 +195,7 @@ internal class AndroidRecorder(
                         activeSessionId = sessionId,
                         issue = RecorderIssue(
                             RecorderIssueKind.INPUT_UNAVAILABLE,
-                            recoverable = newDeviceId != null,
+                            recoverable = false,
                         ),
                     )
                     runCatching { RecordingForegroundService.paused(appContext) }
@@ -338,15 +338,30 @@ internal class AndroidRecorder(
                 if (session.phase == RecorderPhase.INTERRUPTED) {
                     if (newDeviceId != previous) {
                         routedDeviceId = newDeviceId
+                        val currentIssue = session.issue ?: return@withLock
                         val sessionId = activeSessionId ?: return@withLock
-                        session = RecorderSessionState(
-                            phase = RecorderPhase.INTERRUPTED,
-                            activeSessionId = sessionId,
-                            issue = RecorderIssue(
-                                RecorderIssueKind.INPUT_UNAVAILABLE,
-                                recoverable = newDeviceId != null,
-                            ),
-                        )
+                        when (currentIssue.kind) {
+                            RecorderIssueKind.INPUT_UNAVAILABLE -> {
+                                session = RecorderSessionState(
+                                    phase = RecorderPhase.INTERRUPTED,
+                                    activeSessionId = sessionId,
+                                    issue = RecorderIssue(
+                                        RecorderIssueKind.INPUT_UNAVAILABLE,
+                                        recoverable = newDeviceId != null,
+                                    ),
+                                )
+                            }
+                            RecorderIssueKind.INTERRUPTION -> {
+                                if (newDeviceId == null && currentIssue.recoverable) {
+                                    session = RecorderSessionState(
+                                        phase = RecorderPhase.INTERRUPTED,
+                                        activeSessionId = sessionId,
+                                        issue = RecorderIssue(RecorderIssueKind.INTERRUPTION, recoverable = false),
+                                    )
+                                }
+                            }
+                            else -> Unit
+                        }
                     }
                     return@withLock
                 }
@@ -360,7 +375,7 @@ internal class AndroidRecorder(
                     interruptActive(
                         source = source,
                         kind = RecorderIssueKind.INPUT_UNAVAILABLE,
-                        recoverable = newDeviceId != null,
+                        recoverable = false,
                     )
                 }
             }
@@ -392,7 +407,10 @@ internal class AndroidRecorder(
                     session = RecorderSessionState(
                         phase = RecorderPhase.INTERRUPTED,
                         activeSessionId = sessionId,
-                        issue = RecorderIssue(RecorderIssueKind.INTERRUPTION, recoverable = true),
+                        issue = RecorderIssue(
+                            RecorderIssueKind.INTERRUPTION,
+                            recoverable = routedDeviceId != null,
+                        ),
                     )
                 }
             }
