@@ -20,6 +20,8 @@ interface BrainRepository {
     suspend fun distributeTask(id: String, request: TaskDistributionRequest): Task
     suspend fun updateNote(id: String, update: NoteUpdate): Note
     suspend fun pinNote(id: String, pinned: Boolean): Note = error("Закрепление заметок не поддержано этим адаптером")
+    suspend fun orderNotePins(projectId: String, ids: List<String>): Unit =
+        error("Порядок закреплённых заметок не поддержан этим адаптером")
     suspend fun orderNotes(projectId: String, ids: List<String>)
     suspend fun updateTask(id: String, update: TaskUpdate): Task
     suspend fun rescheduleTask(id: String, update: TaskScheduleUpdate): Task = error("Изменение срока задачи не поддержано этим адаптером")

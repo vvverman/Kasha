@@ -31,39 +31,33 @@ object ProjectOrder {
 object UserSort {
     private fun Project.modified() = if (updatedAt > 0) updatedAt else createdAt
 
-    fun projects(items: List<Project>, mode: SortMode): List<Project> {
-        if (mode == SortMode.MANUAL) return items.sortedWith(compareBy<Project> { it.manualOrder }.thenBy { it.id })
-        return items.sortedWith(
-            compareByDescending<Project> { it.pinned }
-                .thenComparator { a, b ->
-                    if (a.pinned && b.pinned && a.pinOrder != b.pinOrder) return@thenComparator a.pinOrder.compareTo(b.pinOrder)
-                    when (mode) {
-                        SortMode.ALPHABETICAL -> a.title.lowercase().compareTo(b.title.lowercase())
-                        SortMode.CREATED -> b.createdAt.compareTo(a.createdAt)
-                        SortMode.UPDATED -> b.modified().compareTo(a.modified())
-                        SortMode.MANUAL -> 0
-                    }
+    fun projects(items: List<Project>, mode: SortMode): List<Project> = items.sortedWith(
+        compareByDescending<Project> { it.pinned }
+            .thenComparator { a, b ->
+                if (a.pinned && b.pinned && a.pinOrder != b.pinOrder) return@thenComparator a.pinOrder.compareTo(b.pinOrder)
+                when (mode) {
+                    SortMode.ALPHABETICAL -> a.title.lowercase().compareTo(b.title.lowercase())
+                    SortMode.CREATED -> b.createdAt.compareTo(a.createdAt)
+                    SortMode.UPDATED -> b.modified().compareTo(a.modified())
+                    SortMode.MANUAL -> a.manualOrder.compareTo(b.manualOrder)
                 }
-                .thenBy { it.id }
-        )
-    }
+            }
+            .thenBy { it.id }
+    )
 
-    fun notes(items: List<Note>, mode: SortMode): List<Note> {
-        if (mode == SortMode.MANUAL) return items.sortedWith(compareBy<Note> { it.manualOrder }.thenBy { it.id })
-        return items.sortedWith(
-            compareByDescending<Note> { it.pinned }
-                .thenComparator { a, b ->
-                    if (a.pinned && b.pinned && a.pinOrder != b.pinOrder) return@thenComparator a.pinOrder.compareTo(b.pinOrder)
-                    when (mode) {
-                        SortMode.ALPHABETICAL -> NoteText.title(a.body).lowercase().compareTo(NoteText.title(b.body).lowercase())
-                        SortMode.CREATED -> b.createdAt.compareTo(a.createdAt)
-                        SortMode.UPDATED -> b.updatedAt.compareTo(a.updatedAt)
-                        SortMode.MANUAL -> 0
-                    }
+    fun notes(items: List<Note>, mode: SortMode): List<Note> = items.sortedWith(
+        compareByDescending<Note> { it.pinned }
+            .thenComparator { a, b ->
+                if (a.pinned && b.pinned && a.pinOrder != b.pinOrder) return@thenComparator a.pinOrder.compareTo(b.pinOrder)
+                when (mode) {
+                    SortMode.ALPHABETICAL -> NoteText.title(a.body).lowercase().compareTo(NoteText.title(b.body).lowercase())
+                    SortMode.CREATED -> b.createdAt.compareTo(a.createdAt)
+                    SortMode.UPDATED -> b.updatedAt.compareTo(a.updatedAt)
+                    SortMode.MANUAL -> a.manualOrder.compareTo(b.manualOrder)
                 }
-                .thenBy { it.id }
-        )
-    }
+            }
+            .thenBy { it.id }
+    )
 
     fun tasks(items: List<Task>, mode: SortMode): List<Task> = items.sortedWith(
         Comparator { a, b ->
