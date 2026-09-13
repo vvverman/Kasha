@@ -1,7 +1,7 @@
 name: Android shell verification
 on:
   push:
-    branches: [platform/android-production]
+    branches: [platform/android-production, platform/android-recorder-contract]
     paths:
       - 'androidApp/**'
       - 'composeApp/**'
