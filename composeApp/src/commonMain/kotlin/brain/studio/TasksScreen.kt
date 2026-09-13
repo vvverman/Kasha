@@ -60,6 +60,7 @@ internal fun TasksScreen(s: StudioState) {
         Spacer(Modifier.height(14.dp))
 
         val tasks = s.tasks()
+        val listState = rememberKashaListState(if (s.taskArchive) "tasks:archive" else "tasks:active")
         if (tasks.isEmpty()) {
             Text(taskText(s, "noTasks"), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         } else {
@@ -72,6 +73,7 @@ internal fun TasksScreen(s: StudioState) {
                 spacing = 10.dp,
                 moveUpLabel = s.tr("up"),
                 moveDownLabel = s.tr("down"),
+                listState = listState,
             ) { item, dragging ->
                 KashaListCard(
                     onClick = { s.openTask(item.id) },
