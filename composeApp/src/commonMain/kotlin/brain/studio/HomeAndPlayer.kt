@@ -1,10 +1,12 @@
 package brain.studio
 
 import androidx.compose.foundation.*
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.style.*
 import androidx.compose.ui.unit.*
 import brain.model.CaptureStatus
@@ -236,10 +238,18 @@ internal fun GlobalPlayer(s: StudioState) {
                     Text(clock(s.elapsed), style = MaterialTheme.typography.labelSmall, color = c.onSurfaceVariant)
                 } else if (loaded?.audioFinalized == true) {
                     Text(loaded.title, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    val duration = s.playback.duration.takeIf { it > 0.0 } ?: loaded.durationSeconds
                     KashaWaveform(
                         loaded.waveform,
-                        Modifier.fillMaxWidth().height(22.dp),
-                        if (s.playback.duration > 0) (s.playback.position / s.playback.duration).toFloat() else 0f,
+                        Modifier.fillMaxWidth().height(22.dp).pointerInput(loaded.id, duration) {
+                            detectTapGestures { offset ->
+                                if (duration > 0.0 && size.width > 0) {
+                                    val target = duration * (offset.x / size.width.toFloat()).coerceIn(0f, 1f)
+                                    scope.launch { s.seekPlayback(target) }
+                                }
+                            }
+                        },
+                        if (duration > 0) (s.playback.position / duration).toFloat() else 0f,
                     )
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         Text(clock(s.playback.position.toLong()), style = MaterialTheme.typography.labelSmall, color = c.onSurfaceVariant)
@@ -251,7 +261,10 @@ internal fun GlobalPlayer(s: StudioState) {
             }
             Spacer(Modifier.width(10.dp))
             when {
-                s.recording && !s.controlBusy -> Action(s.tr("submitRecording"), { scope.launch { s.stopRecording() } }, primary = true, glyph = Glyph.SEND)
+                s.recording && !s.controlBusy -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    IconAction(s.tr("delete"), Glyph.DELETE, { s.confirmDelete = true })
+                    Action(s.tr("submitRecording"), { scope.launch { s.stopRecording() } }, primary = true, glyph = Glyph.SEND)
+                }
                 s.playback.phase != "idle" -> IconAction(s.tr("stop"), Glyph.STOP, s::stopPlayback)
                 s.current == null && loaded != null && !s.pending -> IconAction(s.tr("record"), Glyph.RECORD, { scope.launch { s.startRecording() } })
             }
