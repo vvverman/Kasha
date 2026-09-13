@@ -53,6 +53,9 @@ jobs:
         run: bash platforms/desktop/packaging/build-native-linux.sh
       - name: Tests and Linux packages
         run: |
+          export PATH="$PWD/platforms/desktop/bundle/linux/bin:$PATH"
+          command -v ffmpeg
+          ffmpeg -version | head -n 1
           python3 -m pip install fonttools==4.59.2
           python3 scripts/prepare-fonts.py
           gradle :kashaCore:jvmTest :aiCatalog:jvmTest :aiConnectors:jvmTest :composeApp:jvmTest :runtime:test :desktopApp:test
@@ -123,6 +126,9 @@ jobs:
       - name: Tests and Windows packages
         shell: pwsh
         run: |
+          $env:Path = "$pwd\platforms\desktop\bundle\windows\bin;$env:Path"
+          Get-Command ffmpeg.exe
+          ffmpeg.exe -version | Select-Object -First 1
           python -m pip install fonttools==4.59.2
           python scripts/prepare-fonts.py
           gradle :kashaCore:jvmTest :aiCatalog:jvmTest :aiConnectors:jvmTest :composeApp:jvmTest :runtime:test :desktopApp:test
