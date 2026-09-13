@@ -3,8 +3,8 @@ package brain.studio
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -13,49 +13,55 @@ import androidx.compose.ui.unit.sp
 import brain.studio.resources.*
 import org.jetbrains.compose.resources.Font
 
-private val LightInk = Color(0xFF1D1B18)
-private val LightPaper = Color(0xFFF7F5EE)
-private val LightSurface = Color(0xFFFFFEFA)
-private val DarkPaper = Color(0xFF191715)
-private val DarkSurface = Color(0xFF24211E)
+object KashaTheme {
+    val colors: KashaColors
+        @Composable get() = LocalKashaColors.current
+}
 
 @Composable
 fun StudioTheme(theme: String, content: @Composable () -> Unit) {
     val dark = theme == "dark" || (theme == "system" && isSystemInDarkTheme())
-    val textFamily = FontFamily(
-        Font(Res.font.commissioner_regular, FontWeight.Normal),
-        Font(Res.font.commissioner_medium, FontWeight.Medium),
-        Font(Res.font.commissioner_semibold, FontWeight.SemiBold),
+    val geologica = FontFamily(
+        Font(Res.font.geologica_variable, FontWeight.Normal),
+        Font(Res.font.geologica_variable, FontWeight.Medium),
+        Font(Res.font.geologica_variable, FontWeight.SemiBold),
     )
-    val displayFamily = FontFamily(Font(Res.font.commissioner_display_semibold, FontWeight.SemiBold))
-
-    val colors = if (!dark) lightColorScheme(
-        primary = LightInk, onPrimary = LightSurface, background = LightPaper,
-        surface = LightSurface, onSurface = LightInk, onBackground = LightInk,
-        surfaceVariant = Color(0xFFEDE9DF), onSurfaceVariant = Color(0xFF706B63),
-        outline = Color(0xFFBAB4AA), error = Color(0xFFA33A35),
-    ) else darkColorScheme(
-        primary = Color(0xFFF5F0E8), onPrimary = DarkPaper, background = DarkPaper,
-        surface = DarkSurface, onSurface = Color(0xFFF5F1EA), onBackground = Color(0xFFF5F1EA),
-        surfaceVariant = Color(0xFF302C28), onSurfaceVariant = Color(0xFFB4ADA5),
-        outline = Color(0xFF625B54), error = Color(0xFFEE9A92),
+    val kasha = if (dark) KashaDarkColors else KashaLightColors
+    val colors = if (dark) darkColorScheme(
+        primary = kasha.accent, onPrimary = kasha.onAccent,
+        primaryContainer = kasha.accentContainer, onPrimaryContainer = kasha.textPrimary,
+        background = kasha.canvas, onBackground = kasha.textPrimary,
+        surface = kasha.surface, onSurface = kasha.textPrimary,
+        surfaceVariant = kasha.surfaceHigh, onSurfaceVariant = kasha.textSecondary,
+        outline = kasha.controlOutline, outlineVariant = kasha.hairline,
+        error = kasha.error, onError = kasha.onAccent,
+    ) else lightColorScheme(
+        primary = kasha.accent, onPrimary = kasha.onAccent,
+        primaryContainer = kasha.accentContainer, onPrimaryContainer = kasha.textPrimary,
+        background = kasha.canvas, onBackground = kasha.textPrimary,
+        surface = kasha.surface, onSurface = kasha.textPrimary,
+        surfaceVariant = kasha.surfaceHighest, onSurfaceVariant = kasha.textSecondary,
+        outline = kasha.controlOutline, outlineVariant = kasha.hairline,
+        error = kasha.error, onError = kasha.onAccent,
     )
 
     fun text(size: Int, line: Int, weight: FontWeight = FontWeight.Normal) = TextStyle(
-        fontFamily = textFamily, fontSize = size.sp, lineHeight = line.sp, fontWeight = weight,
+        fontFamily = geologica, fontSize = size.sp, lineHeight = line.sp, fontWeight = weight,
     )
     fun display(size: Int, line: Int) = TextStyle(
-        fontFamily = displayFamily, fontSize = size.sp, lineHeight = line.sp, fontWeight = FontWeight.SemiBold,
+        fontFamily = geologica, fontSize = size.sp, lineHeight = line.sp, fontWeight = FontWeight.SemiBold,
     )
 
     val typography = Typography(
-        displayLarge = display(46, 50), displayMedium = display(38, 43), displaySmall = display(32, 37),
-        headlineLarge = display(28, 34), headlineMedium = display(24, 30), headlineSmall = display(20, 26),
-        titleLarge = text(20, 27, FontWeight.Medium), titleMedium = text(17, 24, FontWeight.Medium), titleSmall = text(15, 21, FontWeight.Medium),
-        bodyLarge = text(17, 26), bodyMedium = text(15, 22), bodySmall = text(13, 19),
-        labelLarge = text(15, 20, FontWeight.Medium), labelMedium = text(13, 18, FontWeight.Medium), labelSmall = text(11, 16, FontWeight.Medium),
+        displayLarge = display(46, 48), displayMedium = text(38, 42, FontWeight(550)), displaySmall = text(30, 35, FontWeight(580)),
+        headlineLarge = text(30, 35, FontWeight(580)), headlineMedium = text(25, 30, FontWeight(560)), headlineSmall = text(21, 27, FontWeight(540)),
+        titleLarge = text(18, 24, FontWeight(520)), titleMedium = text(18, 24, FontWeight(520)), titleSmall = text(13, 18, FontWeight.Medium),
+        bodyLarge = text(17, 25), bodyMedium = text(16, 23), bodySmall = text(14, 20),
+        labelLarge = text(13, 18, FontWeight.Medium), labelMedium = text(12, 16, FontWeight.Medium), labelSmall = text(11, 15, FontWeight.Medium),
     )
-    MaterialTheme(colorScheme = colors, typography = typography, content = content)
+    CompositionLocalProvider(LocalKashaColors provides kasha) {
+        MaterialTheme(colorScheme = colors, typography = typography, content = content)
+    }
 }
 
 @Composable

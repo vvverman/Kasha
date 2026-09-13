@@ -45,11 +45,11 @@ import androidx.compose.ui.unit.dp
 
 /** Единственная библиотека продуктовых контролов Kasha. */
 object KashaUi {
-    val controlRadius = 16.dp
-    val panelRadius = 22.dp
-    val fieldRadius = 18.dp
-    val controlHeight = 50.dp
-    val iconSize = 44.dp
+    val controlRadius = KashaMetrics.radiusPrimaryButton
+    val panelRadius = KashaMetrics.radiusFloating
+    val fieldRadius = KashaMetrics.radiusField
+    val controlHeight = KashaMetrics.buttonHeight
+    val iconSize = KashaMetrics.touchTargetPreferred
 }
 
 @Composable
