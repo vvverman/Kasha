@@ -1,5 +1,6 @@
 import org.gradle.api.tasks.Exec
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
@@ -77,8 +78,9 @@ kotlin {
     }
 }
 
-tasks.configureEach {
-    if (name.startsWith("compileKotlin") || name.contains("KotlinMetadata")) {
-        dependsOn(generateKashaIcons)
-    }
+// GeneratedKashaIcons.kt lives in commonMain, so every platform compilation that consumes
+// commonMain must wait for the canonical registry generator. Using the task type also covers
+// Android's compileAndroidMain, whose name does not match compileKotlin*.
+tasks.withType<KotlinCompilationTask<*>>().configureEach {
+    dependsOn(generateKashaIcons)
 }
