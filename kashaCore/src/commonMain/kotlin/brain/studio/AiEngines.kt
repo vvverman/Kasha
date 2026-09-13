@@ -12,7 +12,14 @@ enum class AiLocality { LOCAL, CLOUD, NATIVE }
 
 /** Какие пользовательские данные потенциально покидают устройство. */
 @Serializable
-enum class AiDataKind { AUDIO, NOTE_TEXT, PROJECT_TITLES, PROJECT_INSTRUCTIONS }
+enum class AiDataKind {
+    AUDIO,
+    NOTE_TEXT,
+    PROJECT_IDS,
+    PROJECT_TITLES,
+    PROJECT_DESCRIPTIONS,
+    PROJECT_INSTRUCTIONS,
+}
 
 /** Метаданные движка. Конкретный каталог живёт вне kashaCore. */
 @Serializable
@@ -165,12 +172,22 @@ class CompositeIntelligence(
 }
 
 object AiPrivacy {
-    const val CONSENT_VERSION = 1
+    /**
+     * v2 добавляет фактически отправляемые в ROUTING поля project.id и project.description.
+     * Согласие v1 больше не считается достаточным для внешнего routing.
+     */
+    const val CONSENT_VERSION = 2
 
     fun dataFor(role: AiRole): Set<AiDataKind> = when (role) {
         AiRole.SPEECH_TO_TEXT -> setOf(AiDataKind.AUDIO)
         AiRole.TEXT -> setOf(AiDataKind.NOTE_TEXT)
-        AiRole.ROUTING -> setOf(AiDataKind.NOTE_TEXT, AiDataKind.PROJECT_TITLES, AiDataKind.PROJECT_INSTRUCTIONS)
+        AiRole.ROUTING -> setOf(
+            AiDataKind.NOTE_TEXT,
+            AiDataKind.PROJECT_IDS,
+            AiDataKind.PROJECT_TITLES,
+            AiDataKind.PROJECT_DESCRIPTIONS,
+            AiDataKind.PROJECT_INSTRUCTIONS,
+        )
     }
 
     fun dataFor(roles: Set<AiRole>): Set<AiDataKind> = roles.flatMap(::dataFor).toSet()

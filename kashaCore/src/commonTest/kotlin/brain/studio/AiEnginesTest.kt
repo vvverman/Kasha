@@ -28,9 +28,42 @@ class AiEnginesTest {
         assertEquals(setOf(AiDataKind.AUDIO), AiPrivacy.dataFor(AiRole.SPEECH_TO_TEXT))
         assertEquals(setOf(AiDataKind.NOTE_TEXT), AiPrivacy.dataFor(AiRole.TEXT))
         assertEquals(
-            setOf(AiDataKind.NOTE_TEXT, AiDataKind.PROJECT_TITLES, AiDataKind.PROJECT_INSTRUCTIONS),
+            setOf(
+                AiDataKind.NOTE_TEXT,
+                AiDataKind.PROJECT_IDS,
+                AiDataKind.PROJECT_TITLES,
+                AiDataKind.PROJECT_DESCRIPTIONS,
+                AiDataKind.PROJECT_INSTRUCTIONS,
+            ),
             AiPrivacy.dataFor(AiRole.ROUTING),
         )
+    }
+
+    @Test
+    fun combinedExternalPrivacyIsUnionOfSelectedRoles() {
+        assertEquals(
+            setOf(
+                AiDataKind.AUDIO,
+                AiDataKind.NOTE_TEXT,
+                AiDataKind.PROJECT_IDS,
+                AiDataKind.PROJECT_TITLES,
+                AiDataKind.PROJECT_DESCRIPTIONS,
+                AiDataKind.PROJECT_INSTRUCTIONS,
+            ),
+            AiPrivacy.dataFor(setOf(AiRole.SPEECH_TO_TEXT, AiRole.ROUTING)),
+        )
+    }
+
+    @Test
+    fun routingPayloadExpansionInvalidatesLegacyConsent() {
+        assertEquals(2, AiPrivacy.CONSENT_VERSION)
+        val oldConnection = CloudAiConnection(
+            providerId = "provider",
+            modelIds = mapOf(AiRole.ROUTING to "model"),
+            enabled = true,
+            privacyConsentVersion = 1,
+        )
+        assertTrue(oldConnection.privacyConsentVersion < AiPrivacy.CONSENT_VERSION)
     }
 
     @Test

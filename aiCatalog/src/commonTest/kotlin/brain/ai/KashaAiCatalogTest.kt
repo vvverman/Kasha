@@ -44,4 +44,18 @@ class KashaAiCatalogTest {
         assertEquals(AiRole.TEXT, KashaAiCatalog.cloudRole(id))
         assertTrue(KashaAiCatalog.supportsSelection(id, AiRole.TEXT))
     }
+
+    @Test
+    fun legacyConsentDoesNotExposeCloudChoice() {
+        val legacy = CloudAiConnection(
+            providerId = "openai",
+            modelIds = mapOf(AiRole.ROUTING to "test-model"),
+            enabled = true,
+            privacyConsentVersion = 1,
+        )
+        assertTrue(KashaAiCatalog.connectedCloudChoices(AiRole.ROUTING, listOf(legacy)).isEmpty())
+
+        val current = legacy.copy(privacyConsentVersion = AiPrivacy.CONSENT_VERSION)
+        assertEquals(1, KashaAiCatalog.connectedCloudChoices(AiRole.ROUTING, listOf(current)).size)
+    }
 }
