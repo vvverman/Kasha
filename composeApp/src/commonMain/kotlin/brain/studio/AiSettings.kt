@@ -43,6 +43,22 @@ internal fun AiSettingsSection(s: StudioState) {
         AiDataKind.PROJECT_INSTRUCTIONS -> t("aiDataProjectInstructions")
     }
     fun stateFor(id: String): AiPackageState? = packageStates.firstOrNull { it.engineId == id }
+    fun selectedReady(role: AiRole, engineId: String, descriptor: AiEngineDescriptor?): Boolean {
+        if (descriptor == null) return false
+        return when (descriptor.locality) {
+            AiLocality.LOCAL -> packages.available && stateFor(engineId)?.installed == true
+            AiLocality.CLOUD -> {
+                val providerId = AiCatalog.cloudProviderId(engineId) ?: return false
+                connections.any {
+                    it.providerId == providerId &&
+                        it.enabled &&
+                        it.privacyConsentVersion >= AiPrivacy.CONSENT_VERSION &&
+                        it.modelFor(role) != null
+                }
+            }
+            AiLocality.NATIVE -> false
+        }
+    }
     fun refreshPlatformState() {
         scope.launch {
             packageStates = runCatching { packages.states() }.getOrDefault(emptyList())
@@ -61,6 +77,7 @@ internal fun AiSettingsSection(s: StudioState) {
     AiRole.entries.forEach { role ->
         val selectedId = s.preferences.ai.engineId(role)
         val selected = AiCatalog.selectedDescriptor(selectedId)
+        val ready = selectedReady(role, selectedId, selected)
         KashaListCard(
             onClick = { expandedRole = if (expandedRole == role) null else role },
             modifier = Modifier.padding(bottom = 8.dp),
@@ -69,11 +86,18 @@ internal fun AiSettingsSection(s: StudioState) {
                 Text(roleLabel(role), style = MaterialTheme.typography.bodyMedium)
                 Text(selected?.name ?: selectedId, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
             }
-            Text(
-                if (selected?.locality == AiLocality.CLOUD) t("aiCloud") else t("aiLocal"),
-                style = MaterialTheme.typography.labelSmall,
-                color = colors.onSurfaceVariant,
-            )
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    if (selected?.locality == AiLocality.CLOUD) t("aiCloud") else t("aiLocal"),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = colors.onSurfaceVariant,
+                )
+                Text(
+                    if (ready) t("aiInstalled") else t("aiUnavailable"),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = colors.onSurfaceVariant,
+                )
+            }
         }
 
         if (expandedRole == role) {
@@ -93,8 +117,12 @@ internal fun AiSettingsSection(s: StudioState) {
                             Text(meta, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
                         }
                         when {
-                            selectedNow -> Text(t("aiSelected"), style = MaterialTheme.typography.labelSmall)
-                            state?.installed == true || (!packages.available && engine.defaultInstalled) -> Column(horizontalAlignment = Alignment.End) {
+                            selectedNow -> Text(
+                                if (state?.installed == true) t("aiSelected") else t("aiUnavailable"),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = colors.onSurfaceVariant,
+                            )
+                            state?.installed == true -> Column(horizontalAlignment = Alignment.End) {
                                 KashaQuietButton(t("aiSelected"), {
                                     scope.launch { s.savePreferences(s.preferences.copy(ai = s.preferences.ai.with(role, engine.id))) }
                                 })
