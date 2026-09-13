@@ -26,6 +26,10 @@
     <string>Kasha записывает голос в локальный аудиофайл на этом iPhone.</string>
     <key>NSSpeechRecognitionUsageDescription</key>
     <string>Kasha расшифровывает ваши голосовые записи. На поддерживаемых устройствах распознавание принудительно выполняется на устройстве.</string>
+    <key>UIBackgroundModes</key>
+    <array>
+        <string>audio</string>
+    </array>
     <key>UILaunchScreen</key>
     <dict/>
     <key>UIRequiresFullScreen</key>
