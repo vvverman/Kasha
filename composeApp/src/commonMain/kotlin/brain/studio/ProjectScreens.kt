@@ -9,6 +9,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import brain.domain.NoteText
+import brain.domain.TaskSchedule
 import brain.model.*
 import kotlinx.coroutines.launch
 
@@ -90,7 +91,7 @@ internal fun ProjectsScreen(s: StudioState) {
                 modifier = Modifier.fillMaxSize(),
                 moveUpLabel = s.tr("up"),
                 moveDownLabel = s.tr("down"),
-            ) { n, dragging -> NoteLine(n, dragging) { s.openNote(n.id) } }
+            ) { n, dragging -> NoteLine(s, n, dragging) { s.openNote(n.id) } }
         }
         else -> Column {
             Heading(s.tr("projects")) { IconAction(s.tr("newProject"), Glyph.PLUS, { s.beginProjectCreation() }) }
@@ -115,17 +116,29 @@ internal fun ProjectsScreen(s: StudioState) {
 }
 
 @Composable
-private fun NoteLine(note: Note, dragging: Boolean = false, onClick: () -> Unit) {
+private fun NoteLine(s: StudioState, note: Note, dragging: Boolean = false, onClick: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    val hasAudio = s.noteSources(note.id).isNotEmpty()
+    val timestamp = note.updatedAt.takeIf { it > 0 } ?: note.createdAt
     KashaListCard(onClick = onClick, modifier = Modifier.graphicsLayer { alpha = if (dragging) .72f else 1f }) {
         Column(Modifier.weight(1f)) {
-            Text(NoteText.title(note.body), style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(NoteText.title(note.body), style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
             val preview = NoteText.preview(note.body)
             if (preview.isNotBlank()) {
                 Spacer(Modifier.height(6.dp))
-                Text(preview, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(preview, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
+            if (timestamp > 0 || hasAudio) {
+                Spacer(Modifier.height(7.dp))
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (timestamp > 0) {
+                        Text("${TaskSchedule.formatDate(timestamp)} · ${TaskSchedule.formatTime(timestamp)}", style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant, maxLines = 1)
+                    }
+                    if (hasAudio) KashaIcon(Glyph.PLAY, Modifier.size(17.dp), colors.onSurfaceVariant)
+                }
             }
         }
-        if (note.pinned) { Spacer(Modifier.width(10.dp)); KashaIcon(Glyph.PIN, Modifier.size(16.dp), MaterialTheme.colorScheme.onSurfaceVariant, animated = dragging) }
+        if (note.pinned) { Spacer(Modifier.width(10.dp)); KashaIcon(Glyph.PIN, Modifier.size(16.dp), colors.onSurfaceVariant, animated = dragging) }
     }
 }
 
@@ -136,12 +149,7 @@ private fun NoteEditorScreen(s: StudioState, note: Note) {
     Column(Modifier.fillMaxSize().padding(bottom = 14.dp)) {
         Heading(NoteText.title(body), s::cancelNoteEdit, s.tr("back"))
         Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) {
-            KashaNoteText(
-                value = body,
-                onValueChange = { body = it },
-                placeholder = tx(s, "noteText"),
-                modifier = Modifier.fillMaxWidth(),
-            )
+            KashaNoteText(value = body, onValueChange = { body = it }, placeholder = tx(s, "noteText"), modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(18.dp))
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -152,30 +160,20 @@ private fun NoteEditorScreen(s: StudioState, note: Note) {
     }
 }
 
-/** Выбор проекта теперь относится только к сохранению заметки. */
 @Composable
 internal fun DestinationScreen(s: StudioState) {
     val scope = rememberCoroutineScope()
     val project = s.snapshot.projects.firstOrNull { it.id == s.targetProjectId }
     Column(Modifier.fillMaxSize()) {
-        Heading(if (project == null) s.tr("chooseProject") else project.title, {
-            if (project == null) s.choosingProject = false else s.targetProjectId = null
-        }, s.tr("back"))
-
+        Heading(if (project == null) s.tr("chooseProject") else project.title, { if (project == null) s.choosingProject = false else s.targetProjectId = null }, s.tr("back"))
         if (project == null) {
-            Action(s.tr("createProject"), { s.beginProjectCreation(fromPicker = true) }, glyph = Glyph.PLUS,
-                enabled = !s.busy, modifier = Modifier.fillMaxWidth())
+            Action(s.tr("createProject"), { s.beginProjectCreation(fromPicker = true) }, glyph = Glyph.PLUS, enabled = !s.busy, modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(16.dp))
-            KashaReorderableList(
-                items = s.orderedProjects(), key = { it.id }, manual = false, onManualOrder = {}, modifier = Modifier.weight(1f), spacing = 12.dp,
-            ) { p, _ -> ProjectLine(p, { s.targetProjectId = p.id }) }
+            KashaReorderableList(items = s.orderedProjects(), key = { it.id }, manual = false, onManualOrder = {}, modifier = Modifier.weight(1f), spacing = 12.dp) { p, _ -> ProjectLine(p, { s.targetProjectId = p.id }) }
         } else {
-            Action(s.tr("newNote"), { scope.launch { s.distribute(project.id) } }, primary = true, glyph = Glyph.PLUS,
-                enabled = !s.busy, modifier = Modifier.fillMaxWidth())
+            Action(s.tr("newNote"), { scope.launch { s.distribute(project.id) } }, primary = true, glyph = Glyph.PLUS, enabled = !s.busy, modifier = Modifier.fillMaxWidth())
             Text(s.tr("appendHint"), Modifier.padding(vertical = 22.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            KashaReorderableList(
-                items = s.projectNotes(project.id), key = { it.id }, manual = false, onManualOrder = {}, modifier = Modifier.weight(1f),
-            ) { n, _ -> NoteLine(n) { if (!s.busy) scope.launch { s.distribute(project.id, n.id) } } }
+            KashaReorderableList(items = s.projectNotes(project.id), key = { it.id }, manual = false, onManualOrder = {}, modifier = Modifier.weight(1f)) { n, _ -> NoteLine(s, n) { if (!s.busy) scope.launch { s.distribute(project.id, n.id) } } }
         }
     }
 }
@@ -194,8 +192,7 @@ internal fun ProjectEditor(s: StudioState) {
         Spacer(Modifier.height(7.dp))
         Text(s.tr("instructionHint"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(22.dp))
-        Action(s.tr("save"), { scope.launch { if (project == null) s.createProject(title, instruction) else s.updateProject(project.id, title, instruction) } },
-            primary = true, enabled = title.isNotBlank() && !s.busy, modifier = Modifier.fillMaxWidth())
+        Action(s.tr("save"), { scope.launch { if (project == null) s.createProject(title, instruction) else s.updateProject(project.id, title, instruction) } }, primary = true, enabled = title.isNotBlank() && !s.busy, modifier = Modifier.fillMaxWidth())
         if (project != null) {
             ToggleRow(s.tr("pin"), project.pinned) { scope.launch { s.pin(project) } }
             if (project.pinned) Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
