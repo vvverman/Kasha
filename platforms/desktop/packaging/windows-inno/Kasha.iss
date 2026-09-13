@@ -41,7 +41,7 @@ VersionInfoProductVersion={#AppVersion}
 Source: "{#AppImage}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{autoprograms}\Kasha"; Filename: "{app}\Kasha.exe"; WorkingDir: "{app}"
+Name: "{autoprograms}\Kasha"; Filename: "{app}\Kasha.exe"; WorkingDir: "{app}"; AppUserModelID: "ru.vrmn.kasha"
 
 [Run]
 Filename: "{app}\Kasha.exe"; Description: "Запустить Kasha"; Flags: nowait postinstall skipifsilent
