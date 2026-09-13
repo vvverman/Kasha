@@ -1,4 +1,6 @@
+import org.gradle.api.tasks.Exec
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
@@ -12,6 +14,16 @@ compose.resources {
     publicResClass = true
     packageOfResClass = "brain.studio.resources"
     generateResClass = always
+}
+
+val generateKashaIcons by tasks.registering(Exec::class) {
+    group = "build setup"
+    description = "Generate Compose runtime geometry from the canonical Kasha Icons registry"
+    workingDir(rootProject.projectDir)
+    commandLine("python3", "scripts/generate-kasha-icons.py")
+    inputs.file(rootProject.file("docs/design/icons/registry.json"))
+    inputs.file(rootProject.file("scripts/generate-kasha-icons.py"))
+    outputs.file(project.file("src/commonMain/kotlin/brain/studio/ui/GeneratedKashaIcons.kt"))
 }
 
 kotlin {
@@ -64,4 +76,11 @@ kotlin {
             implementation(libs.ktor.client.js)
         }
     }
+}
+
+// GeneratedKashaIcons.kt lives in commonMain, so every platform compilation that consumes
+// commonMain must wait for the canonical registry generator. Using the task type also covers
+// Android's compileAndroidMain, whose name does not match compileKotlin*.
+tasks.withType<KotlinCompilationTask<*>>().configureEach {
+    dependsOn(generateKashaIcons)
 }

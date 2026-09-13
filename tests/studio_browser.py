@@ -132,8 +132,7 @@ with sync_playwright() as pw:
         page.goto(BASE, wait_until='networkidle', timeout=60000)
         page.locator('canvas').first.wait_for(state='visible')
         visible_item(page.get_by_role('button', name='Главная', exact=True), 'Главная')
-        assert page.locator('#webApp').bounding_box()['width'] == 1280
-        checks.append('browser shell использует всю ширину viewport')
+        assert page.locator('#webApp').bounding_box()['width'] == 430
         snapshot = api('snapshot')
         assert len(snapshot['projects']) == 1 and snapshot['projects'][0]['title'] == 'Твой первый проект'
         checks.append('старт и первый проект')

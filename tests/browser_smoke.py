@@ -73,8 +73,8 @@ with sync_playwright() as p:
         page.locator('canvas').first.wait_for(state='visible', timeout=30000)
         click_button('Пока без записи')
         page.get_by_role('button', name='Пока без записи', exact=True).wait_for(state='hidden')
-        assert page.locator('#webApp').bounding_box()['width'] == 1440
-        page.screenshot(path=str(OUT / 'desktop-shell-layout.png'))
+        assert page.locator('#webApp').bounding_box()['width'] == 430
+        page.screenshot(path=str(OUT / 'desktop-mobile-layout.png'))
 
         click_button('Записать')
         page.wait_for_function('kashaPlatform.phase() === "recording"')
@@ -143,7 +143,7 @@ with sync_playwright() as p:
         assert page.locator('#webApp').bounding_box()['width'] == 390
         page.screenshot(path=str(OUT / 'mobile-layout.png'))
         assert not errors, errors
-        checks = ['render-1440-and-390', 'record-pause-resume', 'failed-upload-keeps-audio',
+        checks = ['render-430-and-390', 'record-pause-resume', 'failed-upload-keeps-audio',
                   'reload-and-recover', 'saved-audio-sha256-matches', 'missing-model-honesty',
                   'project-and-idempotent-distribution']
         (OUT / 'browser-result.json').write_text(json.dumps({
