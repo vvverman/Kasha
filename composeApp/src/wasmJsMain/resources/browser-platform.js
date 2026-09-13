@@ -53,7 +53,21 @@
   const stopAudio=()=>{generation++;player?.pause();player=null;};
   globalThis.kashaPlatform={
     baseUrl:()=>location.port==='8080'?'http://127.0.0.1:8787':location.origin,
-    consent:()=>{try{return localStorage.getItem('kasha.mic-consent')==='yes';}catch{return false;}},
+    consent:async()=>{
+      try{
+        if(navigator.permissions?.query){
+          try{
+            const status=await navigator.permissions.query({name:'microphone'});
+            if(status.state==='granted'){
+              try{localStorage.setItem('kasha.mic-consent','yes');}catch{}
+              return true;
+            }
+            return false;
+          }catch{}
+        }
+        try{return localStorage.getItem('kasha.mic-consent')==='yes';}catch{return false;}
+      }catch{return false;}
+    },
     pending:async()=>Boolean(await pendingSession()),
     phase:()=>recorder?.state==='recording'?'recording':recorder?.state==='paused'?'paused':'idle',
     level:()=>{
@@ -67,7 +81,7 @@
       try{
         if(recorder&&recorder.state!=='inactive')return 'ok';
         if(await pendingSession())throw Error('Recover pending audio first');
-        if(player&&!player.paused&&!player.ended)throw Error('Stop playback first');
+        if(player&&!player.ended)throw Error('Stop playback first');
         if(!navigator.mediaDevices?.getUserMedia||!globalThis.MediaRecorder)throw Error('Microphone unavailable');
         stream=await navigator.mediaDevices.getUserMedia({audio:true});
         const mime=['audio/webm;codecs=opus','audio/mp4','audio/ogg;codecs=opus'].find(t=>MediaRecorder.isTypeSupported(t));
