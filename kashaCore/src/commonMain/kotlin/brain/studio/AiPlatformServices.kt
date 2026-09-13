@@ -3,7 +3,7 @@ package brain.studio
 import kotlinx.serialization.Serializable
 
 @Serializable
-enum class DevicePermissionKind { MICROPHONE, SPEECH_RECOGNITION }
+enum class DevicePermissionKind { MICROPHONE, SPEECH_RECOGNITION, NOTIFICATIONS }
 
 @Serializable
 enum class DevicePermissionState { GRANTED, DENIED, NOT_DETERMINED, UNAVAILABLE }
