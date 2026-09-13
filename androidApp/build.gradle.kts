@@ -38,5 +38,6 @@ dependencies {
     implementation(compose.foundation)
     implementation(compose.material3)
     implementation(libs.kotlinx.coroutines.core)
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
     implementation(libs.kotlinx.serialization.json)
 }
