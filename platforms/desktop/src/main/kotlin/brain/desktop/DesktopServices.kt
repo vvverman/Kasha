@@ -44,7 +44,13 @@ class DesktopServices(val root: Path, val resources: Path, cpuOnly: Boolean = fa
     }
     override fun close() {
         if(!closed.compareAndSet(false,true))return
-        recorder.close();audio.stop();scope.cancel()
+        try {
+            recorder.close()
+        } catch (e: Exception) {
+            closed.set(false)
+            throw e
+        }
+        audio.stop();scope.cancel()
         runBlocking { withTimeoutOrNull(5000){scope.coroutineContext[Job]?.join()} }
         instanceLock.close()
     }
