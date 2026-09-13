@@ -399,9 +399,8 @@ internal class AndroidRecorder(
 
                 // Один framework callback может одновременно сообщить и новый route, и silencing.
                 // Системное прерывание имеет приоритет, чтобы причина не зависела от порядка корутин.
-                if (deviceId != null && deviceId != routedDeviceId) routedDeviceId = deviceId
-
                 if (silenced) {
+                    if (deviceId != null) routedDeviceId = deviceId
                     when (session.phase) {
                         RecorderPhase.RECORDING,
                         RecorderPhase.PAUSED -> interruptActive(
@@ -430,6 +429,7 @@ internal class AndroidRecorder(
                     session.phase == RecorderPhase.INTERRUPTED &&
                     session.issue?.kind == RecorderIssueKind.INTERRUPTION
                 ) {
+                    if (deviceId != null) routedDeviceId = deviceId
                     val sessionId = activeSessionId ?: return@withLock
                     session = RecorderSessionState(
                         phase = RecorderPhase.INTERRUPTED,
