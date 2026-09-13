@@ -74,6 +74,24 @@ for file in core_files:
         if token in body:
             errors.append(f"Core boundary violation: {file.relative_to(root)} contains {token}")
 
+# Reusable JVM infrastructure must not own concrete desktop OS adapters.
+jvm_infra = root / "modules/infrastructure/jvm"
+forbidden_jvm_platform = (
+    "/usr/bin/security",
+    "secret-tool",
+    "DataProtectionScope",
+    "LOCALAPPDATA",
+    "Windows.UI.Notifications",
+    "notify-send",
+    "/usr/bin/osascript",
+)
+if jvm_infra.exists():
+    for file in jvm_infra.rglob("*.kt"):
+        body = file.read_text(encoding="utf-8")
+        for token in forbidden_jvm_platform:
+            if token in body:
+                errors.append(f"desktop OS adapter leaked into reusable JVM infrastructure: {file.relative_to(root)} contains {token}")
+
 # Concrete provider URLs belong only to ai/connectors (legacy JVM adapter is forbidden after migration).
 provider_hosts = ("api.openai.com", "api.anthropic.com", "generativelanguage.googleapis.com", "openrouter.ai")
 for scope in (root / "modules", root / "platforms"):
