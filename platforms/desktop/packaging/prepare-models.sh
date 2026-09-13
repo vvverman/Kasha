@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$(dirname "$0")/../.."
-COMMON="$PWD/desktopApp/bundle/common"
+REPO="$(cd "$(dirname "$0")/../../.." && pwd)"
+cd "$REPO"
+COMMON="$REPO/platforms/desktop/bundle/common"
 mkdir -p "$COMMON/models" "$COMMON/licenses"
 
 hash256() {
@@ -37,4 +38,4 @@ printf '%s\n' \
   'Java: Eclipse Temurin 21, GPLv2 with Classpath Exception, licenses in runtime/legal.' \
   'Compose/Kotlin/Ktor: Apache-2.0; library notices retained inside their JARs.' \
   > "$COMMON/licenses/NOTICE.txt"
-cp desktopApp/packaging/Установка.txt "$COMMON/Установка.txt"
+cp platforms/desktop/packaging/Установка.txt "$COMMON/Установка.txt"

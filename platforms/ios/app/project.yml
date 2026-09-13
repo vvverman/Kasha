@@ -41,5 +41,5 @@ targets:
         CODE_SIGNING_ALLOWED: NO
         CODE_SIGNING_REQUIRED: NO
     dependencies:
-      - framework: ../composeApp/build/bin/iosArm64/releaseFramework/KashaShared.framework
+      - framework: ../shared/build/bin/iosArm64/releaseFramework/KashaShared.framework
         embed: false

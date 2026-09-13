@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
 # Выполняется только на сборочном Mac. На компьютере пользователя эти инструменты не нужны.
 set -euo pipefail
-cd "$(dirname "$0")/../.."
+REPO="$(cd "$(dirname "$0")/../../.." && pwd)"
+cd "$REPO"
 [ "$(uname -m)" = arm64 ] || { echo 'Нужен сборочный Mac arm64'; exit 1; }
 export MACOSX_DEPLOYMENT_TARGET=13.3
-ROOT="$PWD/desktopApp/build/native-macos"
-COMMON="$PWD/desktopApp/bundle/common"
-RES="$PWD/desktopApp/bundle/macos"
+ROOT="$REPO/platforms/desktop/build/native-macos"
+COMMON="$REPO/platforms/desktop/bundle/common"
+RES="$REPO/platforms/desktop/bundle/macos"
 mkdir -p "$ROOT" "$RES/bin" "$COMMON/licenses"
 
-bash desktopApp/packaging/prepare-models.sh
+bash platforms/desktop/packaging/prepare-models.sh
 
 checkout() {
   local repo="$1" rev="$2" dir="$3"

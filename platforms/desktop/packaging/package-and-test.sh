@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$(dirname "$0")/../.."
-OUT="$PWD/macos-output"
-APP="$PWD/desktopApp/build/compose/binaries/main/app/Kasha.app"
+REPO="$(cd "$(dirname "$0")/../../.." && pwd)"
+cd "$REPO"
+OUT="$REPO/macos-output"
+APP="$REPO/platforms/desktop/build/compose/binaries/main/app/Kasha.app"
 mkdir -p "$OUT"
 exec > >(tee -a "$OUT/packaging.log") 2>&1
 [ -d "$APP" ]
@@ -20,19 +21,18 @@ while IFS= read -r -d '' file; do
   /usr/bin/codesign --force --sign - --timestamp=none "$file"
  fi
 done < <(find "$APP/Contents" -type f -print0)
-/usr/bin/codesign --force --deep --sign - --timestamp=none --entitlements desktopApp/packaging/entitlements.plist "$APP"
+/usr/bin/codesign --force --deep --sign - --timestamp=none --entitlements platforms/desktop/packaging/entitlements.plist "$APP"
 /usr/bin/codesign --verify --deep --strict --verbose=2 "$APP"
 /usr/libexec/PlistBuddy -c 'Print :NSMicrophoneUsageDescription' "$APP/Contents/Info.plist"
 VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist")
 DMG_NAME="Kasha-${VERSION}-macOS-arm64.dmg"
 DMG="$OUT/$DMG_NAME"
-# После упаковки исходные resources убираются: self-test обязан использовать только содержимое .app.
-rm -rf desktopApp/bundle/common desktopApp/bundle/macos
-if [ -d desktopApp/build/native-macos ]; then mv desktopApp/build/native-macos desktopApp/build/native-not-on-path; fi
+rm -rf platforms/desktop/bundle/common platforms/desktop/bundle/macos
+if [ -d platforms/desktop/build/native-macos ]; then mv platforms/desktop/build/native-macos platforms/desktop/build/native-not-on-path; fi
 TEST_HOME="$OUT/clean-home"
 mkdir -p "$TEST_HOME"
 phase 'Русский сценарий внутри приложения без сети'
-python3 - "$APP" "$OUT" "$PWD/model-test/russian.wav" "${TMPDIR:-/tmp}" <<'PY'
+python3 - "$APP" "$OUT" "$REPO/model-test/russian.wav" "${TMPDIR:-/tmp}" <<'PY'
 import json, os, pathlib, signal, subprocess, sys, time
 app, out, fixture = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2]), sys.argv[3]
 env = {'HOME':str(out/'clean-home'), 'PATH':'/usr/bin:/bin:/usr/sbin:/sbin', 'TMPDIR':sys.argv[4]}
@@ -83,7 +83,7 @@ STAGE="$OUT/volume"
 mkdir -p "$STAGE"
 mv "$APP" "$STAGE/Kasha.app"
 ln -s /Applications "$STAGE/Applications"
-cp desktopApp/packaging/Установка.txt "$STAGE/Установка.txt"
+cp platforms/desktop/packaging/Установка.txt "$STAGE/Установка.txt"
 hdiutil create -volname 'Kasha' -srcfolder "$STAGE" -ov -format UDZO -imagekey zlib-level=1 "$DMG"
 phase 'Проверка готового DMG'
 hdiutil verify "$DMG"

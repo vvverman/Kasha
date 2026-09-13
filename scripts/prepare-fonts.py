@@ -9,7 +9,7 @@ from fontTools.varLib.instancer import instantiateVariableFont
 ROOT = Path(__file__).resolve().parents[1]
 GOOGLE_FONTS_COMMIT = '8e44913e4ff26fc997e6856c1ec40ff4791c98c5'
 BASE = f'https://raw.githubusercontent.com/google/fonts/{GOOGLE_FONTS_COMMIT}/ofl/commissioner/'
-resources = ROOT / 'composeApp/src/commonMain/composeResources'
+resources = ROOT / 'modules/ui/src/commonMain/composeResources'
 font_dir = resources / 'font'
 license_dir = resources / 'files/licenses'
 font_dir.mkdir(parents=True, exist_ok=True)
@@ -44,8 +44,6 @@ variable = load(
 )
 verify_bytes(variable, 'Commissioner variable')
 
-# Основной UI остаётся спокойным grotesque. Для display добавляем очень небольшой FLAR:
-# заметный характер на крупных размерах без декоративности и без ощущения Android-шрифта.
 save_instance(variable, 'commissioner_regular.ttf', 400)
 save_instance(variable, 'commissioner_medium.ttf', 500)
 save_instance(variable, 'commissioner_semibold.ttf', 600)

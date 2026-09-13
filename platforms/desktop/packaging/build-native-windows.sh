@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 # Запускается из MSYS2 UCRT64/MINGW64 на Windows CI.
 set -euo pipefail
-cd "$(dirname "$0")/../.."
+REPO="$(cd "$(dirname "$0")/../../.." && pwd)"
+cd "$REPO"
 case "${MSYSTEM:-}" in UCRT64|MINGW64) ;; *) echo 'Нужен MSYS2 UCRT64/MINGW64'; exit 1;; esac
-ROOT="$PWD/desktopApp/build/native-windows"
-COMMON="$PWD/desktopApp/bundle/common"
-RES="$PWD/desktopApp/bundle/windows"
+ROOT="$REPO/platforms/desktop/build/native-windows"
+COMMON="$REPO/platforms/desktop/bundle/common"
+RES="$REPO/platforms/desktop/bundle/windows"
 mkdir -p "$ROOT" "$RES/bin" "$COMMON/licenses"
 
-bash desktopApp/packaging/prepare-models.sh
+bash platforms/desktop/packaging/prepare-models.sh
 
 checkout() {
   local repo="$1" rev="$2" dir="$3"

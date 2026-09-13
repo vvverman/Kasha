@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$(dirname "$0")/../.."
+REPO="$(cd "$(dirname "$0")/../../.." && pwd)"
+cd "$REPO"
 [ "$(uname -s)" = Linux ] || { echo 'Нужен Linux build host'; exit 1; }
-ROOT="$PWD/desktopApp/build/native-linux"
-COMMON="$PWD/desktopApp/bundle/common"
-RES="$PWD/desktopApp/bundle/linux"
+ROOT="$REPO/platforms/desktop/build/native-linux"
+COMMON="$REPO/platforms/desktop/bundle/common"
+RES="$REPO/platforms/desktop/bundle/linux"
 mkdir -p "$ROOT" "$RES/bin" "$COMMON/licenses"
 
-bash desktopApp/packaging/prepare-models.sh
+bash platforms/desktop/packaging/prepare-models.sh
 
 checkout() {
   local repo="$1" rev="$2" dir="$3"
