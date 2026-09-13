@@ -6,7 +6,14 @@ import android.content.pm.PackageManager
 import android.media.MediaMetadataRetriever
 import android.media.MediaRecorder
 import android.os.Build
-import brain.domain.RecorderGateway
+import android.os.Process
+import brain.domain.PendingRecording
+import brain.domain.RecorderIssue
+import brain.domain.RecorderIssueKind
+import brain.domain.RecorderPermission
+import brain.domain.RecorderPhase
+import brain.domain.RecorderSessionGateway
+import brain.domain.RecorderSessionState
 import brain.model.Capture
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -27,43 +34,78 @@ import kotlin.time.TimeSource
  * Тонкий Android recorder adapter. Он управляет только Android MediaRecorder и
  * app-private pending-файлом; capture/state/business rules остаются в Core/repository.
  *
- * Runtime permission здесь не запрашивается: platform adapter лишь сообщает факт
- * разрешения и отказывает честно. UX запроса permission — общий capture-flow (#25).
+ * Runtime permission здесь не запрашивается: adapter лишь сообщает фактический статус.
+ * UX запроса разрешения и reconciliation принадлежат общему capture-flow.
  */
 internal class AndroidRecorder(
     context: Context,
     private val repository: AndroidStudioRepository,
     private val scope: CoroutineScope,
-) : RecorderGateway, AutoCloseable {
+) : RecorderSessionGateway, AutoCloseable {
     private val appContext = context.applicationContext
     private val control = Mutex()
 
-    @Volatile private var currentPhase = PHASE_IDLE
     @Volatile private var recorder: MediaRecorder? = null
     @Volatile private var latestLevel = 0f
+    @Volatile private var session = RecorderSessionState()
     private var sampler: Job? = null
     private var pendingFile: File? = null
+    private var activeSessionId: String? = null
     private var recordedMillis = 0L
     private var mark: TimeMark? = null
     private val waveform = mutableListOf<Float>()
 
-    override suspend fun hasConsent(): Boolean =
-        appContext.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+    override suspend fun permission(): RecorderPermission {
+        val packageManager = appContext.packageManager
+        if (!packageManager.hasSystemFeature(PackageManager.FEATURE_MICROPHONE)) {
+            return RecorderPermission.UNAVAILABLE
+        }
+        if (appContext.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            return RecorderPermission.GRANTED
+        }
 
-    override suspend fun hasPending(): Boolean =
-        currentPhase == PHASE_IDLE && repository.pendingFiles().isNotEmpty()
+        val flags = runCatching {
+            packageManager.getPermissionFlags(
+                Manifest.permission.RECORD_AUDIO,
+                appContext.packageName,
+                Process.myUserHandle(),
+            )
+        }.getOrDefault(0)
+        val userDecided = flags and (
+            PackageManager.FLAG_PERMISSION_USER_SET or PackageManager.FLAG_PERMISSION_USER_FIXED
+        ) != 0
+        return if (userDecided) RecorderPermission.DENIED else RecorderPermission.NOT_DETERMINED
+    }
 
-    override fun phase(): String = currentPhase
-    override fun level(): Float = if (currentPhase == PHASE_RECORDING) latestLevel else 0f
+    override fun sessionState(): RecorderSessionState = session
+
+    override suspend fun pendingRecordings(): List<PendingRecording> = withContext(Dispatchers.IO) {
+        val activeId = session.activeSessionId
+        repository.pendingFiles()
+            .filterNot { it.nameWithoutExtension == activeId }
+            .map { file ->
+                val duration = mediaDurationSeconds(file)
+                PendingRecording(
+                    id = file.nameWithoutExtension,
+                    createdAt = file.lastModified().takeIf { it > 0L },
+                    durationMillis = duration.takeIf { it > 0.0 }?.times(1_000.0)?.toLong(),
+                )
+            }
+    }
+
+    override fun level(): Float = if (session.phase == RecorderPhase.RECORDING) latestLevel else 0f
 
     override suspend fun start() = control.withLock {
         withContext(Dispatchers.IO) {
-            check(currentPhase == PHASE_IDLE) { "recordingAlreadyStarted" }
+            check(session.phase == RecorderPhase.IDLE) { "recordingAlreadyStarted" }
             check(repository.pendingFiles().isEmpty()) { "pendingRecordingExists" }
-            check(hasConsent()) { "microphonePermissionDenied" }
+            check(permission() == RecorderPermission.GRANTED) { "microphonePermissionDenied" }
 
             val file = repository.newPendingFile()
+            val sessionId = file.nameWithoutExtension
             val created = createMediaRecorder()
+            activeSessionId = sessionId
+            pendingFile = file
             try {
                 RecordingForegroundService.start(appContext)
                 val prefs = repository.preferences()
@@ -75,16 +117,16 @@ internal class AndroidRecorder(
                     setAudioSamplingRate(SAMPLE_RATE)
                     setAudioEncodingBitRate(prefs.bitrate * 1_000)
                     setOutputFile(file.absolutePath)
+                    setOnErrorListener { source, _, _ -> handleRecorderError(source) }
                     prepare()
                     start()
                 }
                 recorder = created
-                pendingFile = file
                 recordedMillis = 0L
                 mark = TimeSource.Monotonic.markNow()
                 latestLevel = 0f
                 synchronized(waveform) { waveform.clear() }
-                currentPhase = PHASE_RECORDING
+                session = RecorderSessionState(RecorderPhase.RECORDING, sessionId)
                 startSampler(created)
             } catch (error: Throwable) {
                 runCatching { RecordingForegroundService.stop(appContext) }
@@ -93,6 +135,7 @@ internal class AndroidRecorder(
                 runCatching { created.reset() }
                 created.release()
                 file.delete()
+                releaseSession(RecorderIssue(RecorderIssueKind.IO_FAILURE, recoverable = false))
                 throw IllegalStateException("audioStartFailed", error)
             }
         }
@@ -100,14 +143,15 @@ internal class AndroidRecorder(
 
     override suspend fun pause() = control.withLock {
         withContext(Dispatchers.IO) {
-            check(currentPhase == PHASE_RECORDING) { "recordingNotActive" }
+            check(session.phase == RecorderPhase.RECORDING) { "recordingNotActive" }
             val active = recorder ?: error("recordingNotStarted")
+            val sessionId = activeSessionId ?: error("recordingSessionMissing")
             try {
                 active.pause()
                 recordedMillis += mark?.elapsedNow()?.inWholeMilliseconds ?: 0L
                 mark = null
                 latestLevel = 0f
-                currentPhase = PHASE_PAUSED
+                session = RecorderSessionState(RecorderPhase.PAUSED, sessionId)
                 runCatching { RecordingForegroundService.paused(appContext) }
                 Unit
             } catch (error: Throwable) {
@@ -118,12 +162,17 @@ internal class AndroidRecorder(
 
     override suspend fun resume() = control.withLock {
         withContext(Dispatchers.IO) {
-            check(currentPhase == PHASE_PAUSED) { "recordingNotPaused" }
+            check(
+                session.phase == RecorderPhase.PAUSED ||
+                    (session.phase == RecorderPhase.INTERRUPTED && session.issue?.recoverable == true)
+            ) { "recordingNotResumable" }
             val active = recorder ?: error("recordingNotStarted")
+            val sessionId = activeSessionId ?: error("recordingSessionMissing")
             try {
                 active.resume()
                 mark = TimeSource.Monotonic.markNow()
-                currentPhase = PHASE_RECORDING
+                latestLevel = 0f
+                session = RecorderSessionState(RecorderPhase.RECORDING, sessionId)
                 runCatching { RecordingForegroundService.recording(appContext) }
                 Unit
             } catch (error: Throwable) {
@@ -134,28 +183,33 @@ internal class AndroidRecorder(
 
     override suspend fun stopAndUpload(): Capture = control.withLock {
         withContext(Dispatchers.IO) {
-            check(currentPhase == PHASE_RECORDING || currentPhase == PHASE_PAUSED) { "recordingNotStarted" }
+            check(
+                session.phase == RecorderPhase.RECORDING ||
+                    session.phase == RecorderPhase.PAUSED ||
+                    session.phase == RecorderPhase.INTERRUPTED
+            ) { "recordingNotStarted" }
             val active = recorder ?: error("recordingNotStarted")
             val source = pendingFile ?: error("recordingNotStarted")
+            val sessionId = activeSessionId ?: error("recordingSessionMissing")
 
-            if (currentPhase == PHASE_RECORDING) {
+            if (session.phase == RecorderPhase.RECORDING) {
                 recordedMillis += mark?.elapsedNow()?.inWholeMilliseconds ?: 0L
             }
             mark = null
             latestLevel = 0f
-            currentPhase = PHASE_FINALIZING
+            session = RecorderSessionState(RecorderPhase.FINALIZING, sessionId)
             stopSampler()
 
             try {
                 active.stop()
             } catch (error: Throwable) {
                 runCatching { RecordingForegroundService.stop(appContext) }
-                releaseHardware()
+                releaseSession(RecorderIssue(RecorderIssueKind.IO_FAILURE, recoverable = source.length() > 0L))
                 if (source.length() <= 0L) source.delete()
                 throw IllegalStateException("audioFinalizeFailed", error)
             }
             runCatching { RecordingForegroundService.stop(appContext) }
-            releaseHardware()
+            releaseSession()
 
             val duration = (recordedMillis / 1_000.0).coerceAtLeast(0.0)
             val levels = synchronized(waveform) { reduceWaveform(waveform.toList(), MAX_STORED_SAMPLES) }
@@ -167,11 +221,33 @@ internal class AndroidRecorder(
         }
     }
 
-    override suspend fun recoverPending(): Capture = control.withLock {
+    override suspend fun cancelActive(sessionId: String) = control.withLock {
         withContext(Dispatchers.IO) {
-            check(currentPhase == PHASE_IDLE) { "recordingActive" }
-            val source = repository.pendingFiles().minByOrNull { it.lastModified() }
-                ?: error("No pending audio")
+            check(session.activeSessionId == sessionId && session.phase != RecorderPhase.IDLE) {
+                "recorderSessionMismatch"
+            }
+            val source = pendingFile ?: error("recordingSourceMissing")
+            check(source.nameWithoutExtension == sessionId) { "recorderSessionMismatch" }
+
+            stopSampler()
+            runCatching {
+                recorder?.let { active ->
+                    if (session.phase != RecorderPhase.FINALIZING) active.stop()
+                }
+            }
+            runCatching { RecordingForegroundService.stop(appContext) }
+            releaseSession()
+            recordedMillis = 0L
+            synchronized(waveform) { waveform.clear() }
+            check(!source.exists() || source.delete()) { "recordingCancelFailed" }
+        }
+    }
+
+    override suspend fun recoverPending(pendingId: String): Capture = control.withLock {
+        withContext(Dispatchers.IO) {
+            check(session.phase == RecorderPhase.IDLE) { "recordingActive" }
+            val source = repository.pendingFiles().singleOrNull { it.nameWithoutExtension == pendingId }
+                ?: error("Pending recording not found")
             val duration = mediaDurationSeconds(source)
             check(duration > 0.0) { "pendingAudioUnreadable" }
             val capture = repository.acceptPending(source, duration, emptyList())
@@ -180,16 +256,45 @@ internal class AndroidRecorder(
         }
     }
 
+    override suspend fun discardPending(pendingId: String) = control.withLock {
+        withContext(Dispatchers.IO) {
+            check(session.activeSessionId != pendingId) { "recordingActive" }
+            val source = repository.pendingFiles().singleOrNull { it.nameWithoutExtension == pendingId }
+                ?: return@withContext
+            check(source.delete()) { "pendingDiscardFailed" }
+        }
+    }
+
     override fun close() {
         sampler?.cancel()
         sampler = null
         runCatching {
             recorder?.let { active ->
-                if (currentPhase == PHASE_RECORDING || currentPhase == PHASE_PAUSED) active.stop()
+                if (session.phase != RecorderPhase.IDLE && session.phase != RecorderPhase.FINALIZING) active.stop()
             }
         }
         runCatching { RecordingForegroundService.stop(appContext) }
-        releaseHardware()
+        releaseSession()
+    }
+
+    private fun handleRecorderError(source: MediaRecorder) {
+        scope.launch {
+            control.withLock {
+                if (recorder !== source || session.phase == RecorderPhase.IDLE) return@withLock
+                if (session.phase == RecorderPhase.RECORDING) {
+                    recordedMillis += mark?.elapsedNow()?.inWholeMilliseconds ?: 0L
+                }
+                mark = null
+                latestLevel = 0f
+                val sessionId = activeSessionId ?: return@withLock
+                session = RecorderSessionState(
+                    phase = RecorderPhase.INTERRUPTED,
+                    activeSessionId = sessionId,
+                    issue = RecorderIssue(RecorderIssueKind.IO_FAILURE, recoverable = false),
+                )
+                runCatching { RecordingForegroundService.paused(appContext) }
+            }
+        }
     }
 
     private fun startSampler(active: MediaRecorder) {
@@ -197,7 +302,7 @@ internal class AndroidRecorder(
         sampler = scope.launch(Dispatchers.Default) {
             while (isActive) {
                 delay(SAMPLE_INTERVAL_MS)
-                if (currentPhase != PHASE_RECORDING || recorder !== active) {
+                if (session.phase != RecorderPhase.RECORDING || recorder !== active) {
                     latestLevel = 0f
                     continue
                 }
@@ -215,14 +320,15 @@ internal class AndroidRecorder(
         active.cancelAndJoin()
     }
 
-    private fun releaseHardware() {
+    private fun releaseSession(issue: RecorderIssue? = null) {
         runCatching { recorder?.reset() }
         recorder?.release()
         recorder = null
         pendingFile = null
+        activeSessionId = null
         mark = null
         latestLevel = 0f
-        currentPhase = PHASE_IDLE
+        session = RecorderSessionState(phase = RecorderPhase.IDLE, issue = issue)
     }
 
     @Suppress("DEPRECATION")
@@ -249,10 +355,6 @@ internal class AndroidRecorder(
         const val MAX_AMPLITUDE = 32_767
         const val SAMPLE_INTERVAL_MS = 65L
         const val MAX_STORED_SAMPLES = 512
-        const val PHASE_IDLE = "idle"
-        const val PHASE_RECORDING = "recording"
-        const val PHASE_PAUSED = "paused"
-        const val PHASE_FINALIZING = "finalizing"
     }
 }
 
