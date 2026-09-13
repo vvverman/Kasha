@@ -6,6 +6,7 @@ import brain.studio.DeviceCapabilityGateway
 import brain.studio.DeviceCapabilitySnapshot
 import brain.studio.DevicePermissionKind
 import brain.studio.DevicePermissionState
+import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.suspendCancellableCoroutine
 import platform.AVFAudio.AVAudioSession
 import platform.AVFAudio.AVAudioSessionRecordPermissionDenied
@@ -18,6 +19,18 @@ import kotlin.coroutines.resume
 
 /** Живой снимок системных iOS permissions. Значения не кэшируются. */
 internal class IosDeviceCapabilities : DeviceCapabilityGateway {
+    private var settingsContinuation: CancellableContinuation<Boolean>? = null
+
+    init {
+        val center = NSNotificationCenter.defaultCenter
+        center.addObserverForName(APP_DID_BECOME_ACTIVE, null, null) {
+            finishSettingsTransition(true)
+        }
+        center.addObserverForName(SETTINGS_OPEN_FAILED, null, null) {
+            finishSettingsTransition(false)
+        }
+    }
+
     override suspend fun snapshot(): DeviceCapabilitySnapshot = DeviceCapabilitySnapshot(
         permissions = mapOf(
             DevicePermissionKind.MICROPHONE to microphoneState(),
@@ -27,9 +40,22 @@ internal class IosDeviceCapabilities : DeviceCapabilityGateway {
         canOpenSettings = true,
     )
 
+    /** Возвращается только после фактического возврата Kasha из Settings либо ошибки открытия. */
     override suspend fun openSettings(): Boolean {
-        NSNotificationCenter.defaultCenter.postNotificationName(OPEN_SYSTEM_SETTINGS, null)
-        return true
+        if (settingsContinuation != null) return false
+        return suspendCancellableCoroutine { continuation ->
+            settingsContinuation = continuation
+            continuation.invokeOnCancellation {
+                if (settingsContinuation === continuation) settingsContinuation = null
+            }
+            NSNotificationCenter.defaultCenter.postNotificationName(OPEN_SYSTEM_SETTINGS, null)
+        }
+    }
+
+    private fun finishSettingsTransition(success: Boolean) {
+        val continuation = settingsContinuation ?: return
+        settingsContinuation = null
+        if (continuation.isActive) continuation.resume(success)
     }
 
     private fun microphoneState(): DevicePermissionState = when (AVAudioSession.sharedInstance().recordPermission) {
@@ -53,6 +79,8 @@ internal class IosDeviceCapabilities : DeviceCapabilityGateway {
 
     internal companion object {
         const val OPEN_SYSTEM_SETTINGS = "KashaOpenSystemSettings"
+        const val SETTINGS_OPEN_FAILED = "KashaSystemSettingsOpenFailed"
+        const val APP_DID_BECOME_ACTIVE = "KashaApplicationDidBecomeActive"
 
         fun mapSpeechStatus(value: Long): DevicePermissionState = when (value) {
             0L -> DevicePermissionState.NOT_DETERMINED
