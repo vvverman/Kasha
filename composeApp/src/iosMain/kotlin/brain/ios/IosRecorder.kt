@@ -60,6 +60,7 @@ internal class IosRecorder(
     }
 
     override suspend fun start() {
+        check(!systemInterruptionActive) { "recordingUnavailableDuringInterruption" }
         check(state.phase == RecorderPhase.IDLE) { "recordingAlreadyStarted" }
         check(pendingRecordings().isEmpty()) { "pendingRecordingExists" }
         if (!requestMicrophonePermission()) {
@@ -166,6 +167,12 @@ internal class IosRecorder(
         systemInterruptionActive = false
         waveform.clear()
         IosPaths.remove(source)
+        if (IosPaths.exists(source)) {
+            state = RecorderSessionState(
+                issue = RecorderIssue(RecorderIssueKind.IO_FAILURE, recoverable = true),
+            )
+            error("recordingDeleteFailed")
+        }
         state = RecorderSessionState()
     }
 
@@ -182,6 +189,7 @@ internal class IosRecorder(
     override suspend fun discardPending(pendingId: String) {
         val source = exactPendingPath(pendingId) ?: return
         IosPaths.remove(source)
+        check(!IosPaths.exists(source)) { "recordingDeleteFailed" }
     }
 
     private fun handleSystemEvent(event: IosAudioSystemEvent) {
@@ -189,6 +197,7 @@ internal class IosRecorder(
             is IosAudioSystemEvent.InterruptionBegan -> {
                 systemInterruptionActive = true
                 if (state.phase == RecorderPhase.RECORDING) {
+                    recorder?.pause()
                     state = RecorderSessionState(
                         phase = RecorderPhase.INTERRUPTED,
                         activeSessionId = requireActiveSessionId(),
@@ -211,16 +220,30 @@ internal class IosRecorder(
             }
 
             is IosAudioSystemEvent.ApplicationDidBecomeActive -> {
-                if (
-                    !systemInterruptionActive &&
-                    state.issue?.kind == RecorderIssueKind.INPUT_UNAVAILABLE &&
-                    event.inputAvailable
-                ) {
-                    state = state.copy(
-                        issue = RecorderIssue(RecorderIssueKind.INPUT_UNAVAILABLE, recoverable = true),
-                    )
-                }
+                if (!systemInterruptionActive) reconcileAfterForeground(event)
             }
+        }
+    }
+
+    private fun reconcileAfterForeground(event: IosAudioSystemEvent.ApplicationDidBecomeActive) {
+        if (state.phase == RecorderPhase.RECORDING && recorder?.recording != true) {
+            state = RecorderSessionState(
+                phase = RecorderPhase.INTERRUPTED,
+                activeSessionId = requireActiveSessionId(),
+                issue = RecorderIssue(
+                    RecorderIssueKind.SESSION_LOST,
+                    recoverable = recorder != null && event.inputAvailable,
+                ),
+            )
+            return
+        }
+        if (
+            state.issue?.kind == RecorderIssueKind.INPUT_UNAVAILABLE &&
+            event.inputAvailable
+        ) {
+            state = state.copy(
+                issue = RecorderIssue(RecorderIssueKind.INPUT_UNAVAILABLE, recoverable = true),
+            )
         }
     }
 
@@ -236,6 +259,7 @@ internal class IosRecorder(
         val noInput = event.reason == "noSuitableRouteForCategory" || !event.inputAvailable
 
         if (externalInputLost || noInput) {
+            if (activePhase) recorder?.pause()
             val issue = RecorderIssue(
                 RecorderIssueKind.INPUT_UNAVAILABLE,
                 recoverable = event.inputAvailable,
