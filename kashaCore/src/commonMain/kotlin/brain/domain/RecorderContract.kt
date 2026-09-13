@@ -62,7 +62,9 @@ data class RecorderSessionState(
 ) {
     init {
         require(activeSessionId == null || activeSessionId.isNotBlank()) { "Recorder session id must not be blank" }
-        if (phase != RecorderPhase.IDLE) {
+        if (phase == RecorderPhase.IDLE) {
+            require(activeSessionId == null) { "Idle recorder phase must not have a session id" }
+        } else {
             require(!activeSessionId.isNullOrBlank()) { "Active recorder phase requires a session id" }
         }
     }
