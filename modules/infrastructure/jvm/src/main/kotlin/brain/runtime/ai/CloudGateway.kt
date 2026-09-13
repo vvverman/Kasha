@@ -13,7 +13,7 @@ import java.nio.file.StandardCopyOption
 
 class JvmCloudAiGateway(
     private val root: Path,
-    private val secrets: SecureSecretStore = platformSecretStore(),
+    private val secrets: SecureSecretStore = UnsupportedSecretStore,
     private val external: ExternalAiClient = ExternalAiClient(),
 ) : CloudAiGateway {
     override val available: Boolean get() = secrets.available
