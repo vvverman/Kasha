@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -138,32 +139,11 @@ internal fun HomeScreen(s: StudioState) {
             Action(
                 s.tr("tidy"),
                 { scope.launch { s.tidy() } },
-                glyph = Glyph.MAGIC,
                 enabled = s.text.isNotBlank() && !s.busy,
                 modifier = Modifier.fillMaxWidth(),
             )
             Spacer(Modifier.height(12.dp))
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Action(
-                    KashaCopy.text(s.language, "sendToNotes") ?: s.tr("send"),
-                    { scope.launch { s.sendToNotes() } },
-                    primary = true,
-                    glyph = Glyph.SEND,
-                    modifier = Modifier.weight(1f),
-                    enabled = s.text.isNotBlank() && !s.busy && s.current?.audioFinalized == true,
-                )
-                Action(
-                    KashaCopy.text(s.language, "sendToTasks") ?: "В задачи",
-                    { scope.launch { s.sendToTasks() } },
-                    glyph = Glyph.TASKS,
-                    enabled = s.text.isNotBlank() && !s.busy && s.current?.audioFinalized == true,
-                    modifier = Modifier.weight(1f),
-                )
-            }
+            ResultDestinationActions(s)
             Spacer(Modifier.height(8.dp))
             QuietAction(
                 s.tr("cancelNote"),
@@ -240,6 +220,63 @@ internal fun HomeScreen(s: StudioState) {
                     s.tr("demoButton"),
                     { scope.launch { s.demo() } },
                     Modifier.align(Alignment.CenterHorizontally),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ResultDestinationActions(s: StudioState) {
+    val scope = rememberCoroutineScope()
+    val fontScale = LocalDensity.current.fontScale
+    val enabled = s.text.isNotBlank() && !s.busy && s.current?.audioFinalized == true
+    val notesLabel = KashaCopy.text(s.language, "sendToNotes") ?: s.tr("send")
+    val tasksLabel = KashaCopy.text(s.language, "sendToTasks") ?: "В задачи"
+
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val canUseRow = maxWidth >= 300.dp && fontScale <= 1.3f
+        if (canUseRow) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Action(
+                    notesLabel,
+                    { scope.launch { s.sendToNotes() } },
+                    primary = true,
+                    glyph = Glyph.SEND,
+                    modifier = Modifier.weight(1f).widthIn(min = 144.dp),
+                    enabled = enabled,
+                )
+                Action(
+                    tasksLabel,
+                    { scope.launch { s.sendToTasks() } },
+                    glyph = Glyph.TASKS,
+                    modifier = Modifier.weight(1f).widthIn(min = 144.dp),
+                    enabled = enabled,
+                )
+            }
+        } else {
+            Column(
+                Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Action(
+                    notesLabel,
+                    { scope.launch { s.sendToNotes() } },
+                    primary = true,
+                    glyph = Glyph.SEND,
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = enabled,
+                )
+                Action(
+                    tasksLabel,
+                    { scope.launch { s.sendToTasks() } },
+                    glyph = Glyph.TASKS,
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = enabled,
                 )
             }
         }
