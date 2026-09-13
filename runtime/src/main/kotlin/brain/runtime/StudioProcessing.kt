@@ -212,6 +212,7 @@ class StudioDiskRepository(
     override suspend fun distributeTask(id: String, request: TaskDistributionRequest) = withContext(Dispatchers.IO) { store.distributeTask(id, request) }
     override suspend fun updateNote(id: String, update: NoteUpdate) = withContext(Dispatchers.IO) { store.updateNote(id, update) }
     override suspend fun pinNote(id: String, pinned: Boolean) = withContext(Dispatchers.IO) { store.pinNote(id, pinned) }
+    override suspend fun orderNotePins(projectId: String, ids: List<String>) { withContext(Dispatchers.IO) { store.orderNotePins(projectId, ids) } }
     override suspend fun orderNotes(projectId: String, ids: List<String>) { withContext(Dispatchers.IO) { store.orderNotes(projectId, ids) } }
     override suspend fun updateTask(id: String, update: TaskUpdate) = withContext(Dispatchers.IO) { store.updateTask(id, update) }
     override suspend fun rescheduleTask(id: String, update: TaskScheduleUpdate) = withContext(Dispatchers.IO) { store.rescheduleTask(id, update) }
