@@ -21,6 +21,7 @@ internal class AndroidRepository(
 
     private val root = File(context.filesDir, "kasha").apply { mkdirs() }
     private val audioDir = File(root, "audio").apply { mkdirs() }
+    private val pendingDir = File(root, "pending").apply { mkdirs() }
     private val dataFile = File(root, "state.json")
     private val prefsFile = File(root, "preferences.json")
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
@@ -52,65 +53,48 @@ internal class AndroidRepository(
     )
 
     override suspend fun preferences(): Preferences = prefs
-
-    override suspend fun savePreferences(value: Preferences) {
-        prefs = value.validated()
-        persistPreferences()
-    }
+    override suspend fun savePreferences(value: Preferences) { prefs = value.validated(); persistPreferences() }
 
     override suspend fun createProject(draft: ProjectDraft): Project {
-        val value = id(); data = data.addProject(value, now(), draft); persistData()
-        return data.projects.first { it.id == value }
+        val value = id(); data = data.addProject(value, now(), draft); persistData(); return data.projects.first { it.id == value }
     }
-
     override suspend fun updateProject(id: String, update: ProjectUpdate): Project {
         data = data.updateProject(id, update, now()); persistData(); return data.projects.first { it.id == id }
     }
-
     override suspend fun pinProject(id: String, pinned: Boolean): Project {
         data = data.pinProject(id, pinned); persistData(); return data.projects.first { it.id == id }
     }
-
     override suspend fun orderPins(ids: List<String>) { data = data.orderPins(ids); persistData() }
     override suspend fun orderProjects(ids: List<String>) { data = data.orderProjects(ids); persistData() }
 
     override suspend fun updateCaptureDraft(id: String, update: CaptureDraftUpdate): Capture {
         data = data.updateDraft(id, update); persistData(); return capture(id)
     }
-
     override suspend fun distribute(id: String, request: DistributionRequest): Note {
         val result = data.distribute(id, request, this.id(), now()); data = result.first; persistData(); return result.second
     }
-
     override suspend fun distributeTask(id: String, request: TaskDistributionRequest): Task {
         val result = data.distributeTask(id, request, this.id(), now()); data = result.first; persistData(); return result.second
     }
-
     override suspend fun updateNote(id: String, update: NoteUpdate): Note {
         data = data.updateNote(id, update, now()); persistData(); return data.notes.first { it.id == id }
     }
-
     override suspend fun pinNote(id: String, pinned: Boolean): Note {
         data = data.pinNote(id, pinned); persistData(); return data.notes.first { it.id == id }
     }
-
     override suspend fun orderNotes(projectId: String, ids: List<String>) { data = data.orderNotes(projectId, ids); persistData() }
 
     override suspend fun updateTask(id: String, update: TaskUpdate): Task {
         data = data.updateTask(id, update, now()); persistData(); return data.tasks.first { it.id == id }
     }
-
     override suspend fun rescheduleTask(id: String, update: TaskScheduleUpdate): Task {
         data = data.rescheduleTask(id, update, now()); persistData(); return data.tasks.first { it.id == id }
     }
-
     override suspend fun completeTask(id: String): Task {
         data = data.completeTask(id, now()); persistData(); return data.tasks.first { it.id == id }
     }
-
     override suspend fun deleteTask(id: String) { data = data.deleteTask(id); persistData() }
     override suspend fun orderTasks(ids: List<String>) { data = data.orderTasks(ids); persistData() }
-
     override suspend fun claimTaskReminders(now: Long, zoneId: String): List<Task> {
         val result = data.claimDueReminders(now, zoneId); data = result.first
         if (result.second.isNotEmpty()) persistData()
@@ -146,24 +130,25 @@ internal class AndroidRepository(
             )
         }
     }
-
     override suspend fun rank(id: String): Capture {
         val current = capture(id); val scores = intelligence.rank(current.textToSave, data.projects, language())
-        return updateCapture(id) {
-            it.copy(title = NoteText.title(it.textToSave), relevance = scores, rankingApplied = true, simulated = false)
-        }
+        return updateCapture(id) { it.copy(title = NoteText.title(it.textToSave), relevance = scores, rankingApplied = true, simulated = false) }
     }
-
     override suspend fun discard(id: String) {
         val current = capture(id)
         current.audioFileName?.let { File(it).delete() }
         current.compactAudioFileName?.let { File(it).delete() }
         data = data.copy(captures = data.captures.filterNot { it.id == id }); persistData()
     }
-
     override suspend fun createDemo(): Capture = error("Demo mode is disabled in Android shell")
 
-    fun newAudioFile(): File = File(audioDir, "${id()}.pcm")
+    fun newPendingAudioFile(): File = File(pendingDir, "${id()}.pcm")
+    fun pendingAudioFile(): File? = pendingDir.listFiles()?.filter(File::isFile)?.sortedBy(File::lastModified)?.firstOrNull()
+    fun finalizePending(file: File): File {
+        val target = File(audioDir, file.name)
+        check(file.renameTo(target) || runCatching { file.copyTo(target, overwrite = true); file.delete(); true }.getOrDefault(false))
+        return target
+    }
 
     fun createAudioCapture(file: File, durationSeconds: Double, waveform: List<Float>): Capture {
         val capture = Capture(
@@ -173,28 +158,21 @@ internal class AndroidRepository(
         )
         data = data.addCapture(capture); persistData(); return capture
     }
-
     fun audioFile(captureId: String): File? = data.captures.firstOrNull { it.id == captureId }
         ?.audioFileName?.let(::File)?.takeIf(File::isFile)
 
     private fun capture(id: String): Capture = data.captures.firstOrNull { it.id == id } ?: error("Запись не найдена")
-
     private fun updateCapture(id: String, transform: (Capture) -> Capture): Capture {
         data = data.updateCapture(id, transform); persistData(); return capture(id)
     }
-
     private fun fail(id: String, status: CaptureStatus, message: String): Capture =
         updateCapture(id) { it.copy(status = status, message = message, audioFinalized = true) }
 
     private fun persistData() = atomicWrite(dataFile, json.encodeToString(data))
     private fun persistPreferences() = atomicWrite(prefsFile, json.encodeToString(prefs))
-
     private fun atomicWrite(file: File, text: String) {
         val temp = File(file.parentFile, file.name + ".tmp")
         temp.writeText(text)
-        if (!temp.renameTo(file)) {
-            file.writeText(text)
-            temp.delete()
-        }
+        if (!temp.renameTo(file)) { file.writeText(text); temp.delete() }
     }
 }
