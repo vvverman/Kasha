@@ -121,6 +121,35 @@ class AiStudioRepository(
     override val aiPackages: AiPackageGateway,
     override val cloudAi: CloudAiGateway,
 ) : StudioRepository by delegate, AiPlatformServices {
+    override val aiExecution: AiExecutionCapabilityGateway = object : AiExecutionCapabilityGateway {
+        override suspend fun roles(selection: AiSelection): List<AiRoleCapability> {
+            val packageStates = runCatching { aiPackages.states() }.getOrDefault(emptyList()).associateBy { it.engineId }
+            val connections = runCatching { cloudAi.connections() }.getOrDefault(emptyList())
+            return AiRole.entries.map { role ->
+                val selectedId = selection.engineId(role)
+                val descriptor = AiCatalog.selectedDescriptor(selectedId)
+                when {
+                    descriptor == null -> AiRoleCapability(role, selectedId, false, "unknownEngine")
+                    !descriptor.supports(role) -> AiRoleCapability(role, selectedId, false, "unsupportedRole")
+                    descriptor.locality == AiLocality.LOCAL -> {
+                        val installed = aiPackages.available && packageStates[selectedId]?.installed == true
+                        AiRoleCapability(role, selectedId, installed, if (installed) null else "modelNotInstalled")
+                    }
+                    descriptor.locality == AiLocality.CLOUD -> {
+                        val providerId = AiCatalog.cloudProviderId(selectedId)
+                        val connection = connections.firstOrNull {
+                            providerId != null && it.providerId == providerId && it.enabled &&
+                                AiPrivacy.hasCurrentConsent(it) && it.modelFor(role) != null
+                        }
+                        val executable = cloudAi.available && connection != null
+                        AiRoleCapability(role, selectedId, executable, if (executable) null else "cloudUnavailable")
+                    }
+                    else -> AiRoleCapability(role, selectedId, false, "nativeUnavailable")
+                }
+            }
+        }
+    }
+
     override suspend fun savePreferences(value: Preferences) {
         AiCatalog.validateSelection(value.ai)
         delegate.savePreferences(value)
