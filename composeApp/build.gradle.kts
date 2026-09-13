@@ -1,3 +1,4 @@
+import org.gradle.api.tasks.Exec
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 
 plugins {
@@ -12,6 +13,16 @@ compose.resources {
     publicResClass = true
     packageOfResClass = "brain.studio.resources"
     generateResClass = always
+}
+
+val generateKashaIcons by tasks.registering(Exec::class) {
+    group = "build setup"
+    description = "Generate Compose runtime geometry from the canonical Kasha Icons registry"
+    workingDir(rootProject.projectDir)
+    commandLine("python3", "scripts/generate-kasha-icons.py")
+    inputs.file(rootProject.file("docs/design/icons/registry.json"))
+    inputs.file(rootProject.file("scripts/generate-kasha-icons.py"))
+    outputs.dir(layout.buildDirectory.dir("generated/kashaIcons"))
 }
 
 kotlin {
@@ -41,6 +52,7 @@ kotlin {
     }
 
     sourceSets {
+        commonMain.kotlin.srcDir(layout.buildDirectory.dir("generated/kashaIcons"))
         commonMain.dependencies {
             implementation(project(":kashaCore"))
             implementation(project(":aiCatalog"))
@@ -63,5 +75,11 @@ kotlin {
             implementation(libs.ktor.serialization.kotlinx.json)
             implementation(libs.ktor.client.js)
         }
+    }
+}
+
+tasks.configureEach {
+    if (name.startsWith("compileKotlin") || name.contains("KotlinMetadata")) {
+        dependsOn(generateKashaIcons)
     }
 }
