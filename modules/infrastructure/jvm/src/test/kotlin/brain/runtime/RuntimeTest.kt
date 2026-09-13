@@ -62,9 +62,9 @@ class RuntimeTest {
     }
     @Test fun subprocessTimeoutAndCancellationWork() = runBlocking<Unit> {
         val runner = JvmCommandRunner()
-        assertEquals("hello", runner.run(listOf("/bin/echo", "hello"), 3).trim())
-        assertFails { runner.run(listOf("/bin/sleep", "10"), 0) }
-        val task = async { runner.run(listOf("/bin/sleep", "10"), 20) }
+        assertEquals("hello", runner.run(echoCommand("hello"), 3).trim())
+        assertFails { runner.run(longRunningCommand(), 0) }
+        val task = async { runner.run(longRunningCommand(), 20) }
         delay(100); task.cancel(); assertFailsWith<CancellationException> { task.await() }
     }
     @Test fun pcmCompactionKeepsOriginalBytes() = runBlocking {
@@ -78,6 +78,20 @@ class RuntimeTest {
             assertContentEquals(before, Files.readAllBytes(original)); assertTrue(PcmAudio.info(root.resolve("compact.wav")).duration < 3)
         } finally { root.toFile().deleteRecursively() }
     }
+
+    private fun echoCommand(text: String): List<String> = if (isWindows()) {
+        listOf(System.getenv("ComSpec") ?: "cmd.exe", "/d", "/c", "echo", text)
+    } else {
+        listOf("/bin/echo", text)
+    }
+
+    private fun longRunningCommand(): List<String> = if (isWindows()) {
+        listOf(System.getenv("ComSpec") ?: "cmd.exe", "/d", "/c", "ping", "-n", "11", "127.0.0.1")
+    } else {
+        listOf("/bin/sleep", "10")
+    }
+
+    private fun isWindows() = System.getProperty("os.name").startsWith("Windows", ignoreCase = true)
 
     private fun writePcmFixture(path: Path) {
         val rate = 16000
