@@ -119,15 +119,17 @@ with sync_playwright() as pw:
         assert recovered['id']
         assert page.evaluate('kashaPlatform.pending()') is False
 
-        audio_url = BASE + '/api/captures/' + recovered['id'] + '/audio'
-        assert page.evaluate('(url) => kashaPlatform.play(url, 0, 1)', audio_url) == 'ok'
+        # Paused playback остаётся занятым транспортом и блокирует recorder.
+        first_audio_url = BASE + '/api/captures/' + recovered['id'] + '/audio'
+        assert page.evaluate('(url) => kashaPlatform.play(url, 0, 1)', first_audio_url) == 'ok'
         assert page.evaluate('kashaPlatform.pauseAudio()') == 'ok'
         assert page.evaluate('kashaPlatform.audioState().phase') == 'paused'
         blocked_paused_playback = page.evaluate('kashaPlatform.start()')
         assert blocked_paused_playback.startswith('ERROR:'), blocked_paused_playback
         page.evaluate('kashaPlatform.stopAudio()')
 
-        # Pause/resume + отказ localhost transport: pending остаётся до подтверждённого receipt.
+        # Pause/resume + отказ транспорта: pending остаётся до подтверждённого receipt.
+        # Прямой вызов adapter здесь намеренно обходит UI-инвариант current, чтобы проверить сам browser journal.
         assert page.evaluate('kashaPlatform.start()') == 'ok'
         page.wait_for_timeout(1200)
         assert page.evaluate('kashaPlatform.pause()') == 'ok'
@@ -143,6 +145,9 @@ with sync_playwright() as pw:
 
         page.reload(wait_until='networkidle')
         assert page.evaluate('kashaPlatform.pending()') is True
+        # Runtime singleCurrent корректно не принимает второй inbox, поэтому освобождаем первый
+        # и только после этого подтверждаем, что ровно тот же browser pending восстанавливается.
+        api('captures/' + recovered['id'], method='DELETE')
         receipt_text = page.evaluate('(base) => kashaPlatform.recover(base)', BASE)
         assert not receipt_text.startswith('ERROR:'), receipt_text
         receipt = json.loads(receipt_text)
@@ -150,13 +155,21 @@ with sync_playwright() as pw:
         assert page.evaluate('kashaPlatform.pending()') is False
 
         # Активный recorder блокирует playback симметрично.
-        audio_url = BASE + '/api/captures/' + receipt['id'] + '/audio'
+        second_audio_url = BASE + '/api/captures/' + receipt['id'] + '/audio'
         assert page.evaluate('kashaPlatform.start()') == 'ok'
         page.wait_for_timeout(700)
-        blocked_play = page.evaluate('(url) => kashaPlatform.play(url, 0, 1)', audio_url)
+        blocked_play = page.evaluate('(url) => kashaPlatform.play(url, 0, 1)', second_audio_url)
         assert blocked_play.startswith('ERROR:'), blocked_play
-        final_receipt = page.evaluate('(base) => kashaPlatform.stop(base)', BASE)
-        assert not final_receipt.startswith('ERROR:'), final_receipt
+
+        # Runtime отклоняет новую публикацию, пока есть current; browser обязан сохранить pending.
+        runtime_rejected = page.evaluate('(base) => kashaPlatform.stop(base)', BASE)
+        assert runtime_rejected.startswith('ERROR:'), runtime_rejected
+        assert page.evaluate('kashaPlatform.pending()') is True
+        api('captures/' + receipt['id'], method='DELETE')
+        final_receipt_text = page.evaluate('(base) => kashaPlatform.recover(base)', BASE)
+        assert not final_receipt_text.startswith('ERROR:'), final_receipt_text
+        final_receipt = json.loads(final_receipt_text)
+        assert final_receipt['id']
         assert page.evaluate('kashaPlatform.pending()') is False
 
         assert not errors, errors
