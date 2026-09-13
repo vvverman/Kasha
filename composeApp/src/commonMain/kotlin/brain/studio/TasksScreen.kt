@@ -61,11 +61,7 @@ internal fun TasksScreen(s: StudioState) {
 
         val tasks = s.tasks()
         if (tasks.isEmpty()) {
-            Text(
-                taskText(s, "noTasks"),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Text(taskText(s, "noTasks"), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         } else {
             KashaReorderableList(
                 items = tasks,
@@ -81,6 +77,15 @@ internal fun TasksScreen(s: StudioState) {
                     onClick = { s.openTask(item.id) },
                     modifier = Modifier.graphicsLayer { alpha = if (dragging) .72f else 1f },
                 ) {
+                    if (!item.completed) {
+                        IconAction(
+                            taskText(s, "completeTask"),
+                            Glyph.COMPLETE,
+                            { if (!s.busy) scope.launch { s.completeTask(item.id) } },
+                            modifier = Modifier.size(48.dp),
+                        )
+                        Spacer(Modifier.width(10.dp))
+                    }
                     Column(Modifier.weight(1f)) {
                         Text(taskTitle(item), style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         if (item.dueAt > 0) {
@@ -118,16 +123,9 @@ private fun TaskDetailScreen(s: StudioState, task: Task) {
             )
             Spacer(Modifier.height(14.dp))
             if (task.dueAt > 0) {
-                Text(
-                    "${taskText(s, "dueLabel")}: ${TaskSchedule.formatDate(task.dueAt)} · ${TaskSchedule.formatTime(task.dueAt)}",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
+                Text("${taskText(s, "dueLabel")}: ${TaskSchedule.formatDate(task.dueAt)} · ${TaskSchedule.formatTime(task.dueAt)}", style = MaterialTheme.typography.bodyMedium)
                 Spacer(Modifier.height(4.dp))
-                Text(
-                    "${taskText(s, "repeatReminder")}: ${repeatText(s, task.reminderRepeat)}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                Text("${taskText(s, "repeatReminder")}: ${repeatText(s, task.reminderRepeat)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             if (task.completed) {
                 Spacer(Modifier.height(12.dp))
@@ -154,20 +152,10 @@ private fun TaskDetailScreen(s: StudioState, task: Task) {
                 modifier = Modifier.fillMaxWidth(),
             )
             Spacer(Modifier.height(10.dp))
-            Action(
-                taskText(s, "changeTime"),
-                { s.editTaskSchedule(task.id) },
-                glyph = Glyph.CLOCK,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            Action(taskText(s, "changeTime"), { s.editTaskSchedule(task.id) }, glyph = Glyph.CLOCK, modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(10.dp))
         }
-        Action(
-            taskText(s, "deleteTask"),
-            { s.confirmDelete = true },
-            glyph = Glyph.DELETE,
-            modifier = Modifier.fillMaxWidth(),
-        )
+        Action(taskText(s, "deleteTask"), { s.confirmDelete = true }, glyph = Glyph.DELETE, modifier = Modifier.fillMaxWidth())
     }
 }
 
@@ -176,9 +164,7 @@ internal fun TaskScheduleScreen(s: StudioState) {
     val scope = rememberCoroutineScope()
     val target = s.taskScheduleTarget
     val existing = target?.takeUnless { it == "new" }?.let { id -> s.snapshot.tasks.firstOrNull { it.id == id } }
-    val initialDue = remember(target) {
-        existing?.dueAt?.takeIf { it > Clock.System.now().toEpochMilliseconds() } ?: TaskSchedule.defaultDue()
-    }
+    val initialDue = remember(target) { existing?.dueAt?.takeIf { it > Clock.System.now().toEpochMilliseconds() } ?: TaskSchedule.defaultDue() }
     var date by remember(target) { mutableStateOf(TaskSchedule.formatDate(initialDue)) }
     var time by remember(target) { mutableStateOf(TaskSchedule.formatTime(initialDue)) }
     var repeat by remember(target) { mutableStateOf(existing?.reminderRepeat ?: ReminderRepeat.HOURLY) }
