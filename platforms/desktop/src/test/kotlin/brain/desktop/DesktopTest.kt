@@ -52,6 +52,29 @@ class DesktopTest {
         assertEquals(listOf("ffmpeg"), DesktopPlatform.executableCandidates("ffmpeg", DesktopOs.LINUX))
     }
 
+    @Test fun windowsBundleResolverUsesExeCandidate() {
+        val dir = Files.createTempDirectory("kasha-win-bundle")
+        try {
+            val bin = Files.createDirectories(dir.resolve("bin"))
+            val exe = bin.resolve("ffmpeg.exe")
+            Files.write(exe, byteArrayOf(1))
+            assertEquals(exe.toAbsolutePath().toString(), bundledExecutable(dir, "ffmpeg", DesktopOs.WINDOWS))
+        } finally { dir.toFile().deleteRecursively() }
+    }
+
+    @Test fun singleInstanceLockRejectsSecondProcessAndReleasesOnClose() {
+        val dir = Files.createTempDirectory("kasha-instance-lock")
+        try {
+            val first = DesktopInstanceLock.acquire(dir)
+            try {
+                assertFails { DesktopInstanceLock.acquire(dir) }
+            } finally {
+                first.close()
+            }
+            DesktopInstanceLock.acquire(dir).use { }
+        } finally { dir.toFile().deleteRecursively() }
+    }
+
     @Test fun journalIsPlayableAndRecoversAfterHeaderDamage() {
         val dir = Files.createTempDirectory("brain-journal")
         try {
