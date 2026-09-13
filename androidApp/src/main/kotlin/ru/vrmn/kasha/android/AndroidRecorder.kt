@@ -69,6 +69,7 @@ internal class AndroidRecorder(
             val file = repository.newPendingFile()
             val created = createMediaRecorder()
             try {
+                RecordingForegroundService.start(appContext)
                 val prefs = repository.preferences()
                 created.apply {
                     setAudioSource(MediaRecorder.AudioSource.MIC)
@@ -88,6 +89,7 @@ internal class AndroidRecorder(
                 synchronized(waveform) { waveform.clear() }
                 currentPhase = PHASE_RECORDING
             } catch (error: Throwable) {
+                runCatching { RecordingForegroundService.stop(appContext) }
                 runCatching { created.reset() }
                 created.release()
                 file.delete()
@@ -105,6 +107,7 @@ internal class AndroidRecorder(
                 recordedMillis += mark?.elapsedNow()?.inWholeMilliseconds ?: 0L
                 mark = null
                 currentPhase = PHASE_PAUSED
+                runCatching { RecordingForegroundService.paused(appContext) }
             } catch (error: Throwable) {
                 throw IllegalStateException("audioPauseFailed", error)
             }
@@ -119,6 +122,7 @@ internal class AndroidRecorder(
                 active.resume()
                 mark = TimeSource.Monotonic.markNow()
                 currentPhase = PHASE_RECORDING
+                runCatching { RecordingForegroundService.recording(appContext) }
             } catch (error: Throwable) {
                 throw IllegalStateException("audioResumeFailed", error)
             }
@@ -140,10 +144,12 @@ internal class AndroidRecorder(
             try {
                 active.stop()
             } catch (error: Throwable) {
+                runCatching { RecordingForegroundService.stop(appContext) }
                 releaseHardware()
                 if (source.length() <= 0L) source.delete()
                 throw IllegalStateException("audioFinalizeFailed", error)
             }
+            runCatching { RecordingForegroundService.stop(appContext) }
             releaseHardware()
 
             val duration = (recordedMillis / 1_000.0).coerceAtLeast(0.0)
@@ -175,6 +181,7 @@ internal class AndroidRecorder(
                 if (currentPhase == PHASE_RECORDING || currentPhase == PHASE_PAUSED) active.stop()
             }
         }
+        runCatching { RecordingForegroundService.stop(appContext) }
         releaseHardware()
     }
 
