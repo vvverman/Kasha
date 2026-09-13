@@ -58,7 +58,7 @@ for fragment in required_ai_fragments:
 
 if 'val apiKey: String? = null' not in requests:
     errors.append('API key may only cross Core as an explicit transient request payload')
-if 'privacyConsentVersion = AiPrivacy.CONSENT_VERSION' not in settings:
+if not re.search(r'privacyConsentVersion\s*=\s*[^\n]*AiPrivacy\.CONSENT_VERSION', settings):
     errors.append('Cloud connection UI must stamp current privacy consent version')
 if not re.search(r'val\s+canSave\s*=\s*cloud\.available\s*&&\s*consent', settings):
     errors.append('Cloud connection actions must be gated by platform availability and explicit consent')
