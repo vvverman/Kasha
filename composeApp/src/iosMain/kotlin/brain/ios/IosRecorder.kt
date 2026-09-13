@@ -2,7 +2,13 @@
 
 package brain.ios
 
-import brain.domain.RecorderGateway
+import brain.domain.PendingRecording
+import brain.domain.RecorderIssue
+import brain.domain.RecorderIssueKind
+import brain.domain.RecorderPermission
+import brain.domain.RecorderPhase
+import brain.domain.RecorderSessionGateway
+import brain.domain.RecorderSessionState
 import brain.model.Capture
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -17,23 +23,40 @@ import kotlin.math.pow
 internal class IosRecorder(
     private val repository: IosRepository,
     private val scope: CoroutineScope,
-) : RecorderGateway {
+) : RecorderSessionGateway {
     private var recorder: AVAudioRecorder? = null
     private var currentPath: String? = null
-    private var currentPhase = "idle"
+    private var state = RecorderSessionState()
+    private var systemInterruptionActive = false
+    private var waitingForExternalInput = false
     private val waveform = mutableListOf<Float>()
 
-    override suspend fun hasConsent(): Boolean =
-        AVAudioSession.sharedInstance().recordPermission == AVAudioSessionRecordPermissionGranted
+    init {
+        IosAudioSessionBridge.observeSystemEvents(
+            IosAudioSystemObserver.RECORDER,
+            ::handleSystemEvent,
+        )
+    }
 
-    override suspend fun hasPending(): Boolean =
-        currentPhase == "idle" && pendingPath() != null
+    override suspend fun permission(): RecorderPermission = when (AVAudioSession.sharedInstance().recordPermission) {
+        AVAudioSessionRecordPermissionGranted -> RecorderPermission.GRANTED
+        AVAudioSessionRecordPermissionDenied -> RecorderPermission.DENIED
+        AVAudioSessionRecordPermissionUndetermined -> RecorderPermission.NOT_DETERMINED
+        else -> RecorderPermission.UNAVAILABLE
+    }
 
-    override fun phase(): String = currentPhase
+    override fun sessionState(): RecorderSessionState = state
+
+    // Текущий файл физически лежит в pending-каталоге, но становится recoverable
+    // pending только после потери активной process-сессии.
+    override suspend fun pendingRecordings(): List<PendingRecording> = pendingFileNames()
+        .filter { it != state.activeSessionId }
+        .sorted()
+        .map { PendingRecording(id = it) }
 
     override fun level(): Float {
         val active = recorder ?: return 0f
-        if (currentPhase != "recording") return 0f
+        if (state.phase != RecorderPhase.RECORDING) return 0f
         active.updateMeters()
         val db = active.averagePowerForChannel(0u)
         val normalized = 10.0.pow((db / 20.0).toDouble()).toFloat().coerceIn(0f, 1f)
@@ -43,12 +66,19 @@ internal class IosRecorder(
     }
 
     override suspend fun start() {
-        check(currentPhase == "idle") { "recordingAlreadyStarted" }
-        check(pendingPath() == null) { "pendingRecordingExists" }
-        check(requestMicrophonePermission()) { "microphonePermissionDenied" }
-        IosAudioSessionBridge.activateRecording()
+        check(!systemInterruptionActive) { "recordingUnavailableDuringInterruption" }
+        check(state.phase == RecorderPhase.IDLE) { "recordingAlreadyStarted" }
+        check(pendingRecordings().isEmpty()) { "pendingRecordingExists" }
+        if (!requestMicrophonePermission()) {
+            state = RecorderSessionState(
+                issue = RecorderIssue(RecorderIssueKind.PERMISSION_DENIED, recoverable = true),
+            )
+            error("microphonePermissionDenied")
+        }
 
-        val path = IosPaths.child(IosPaths.pending, "${NSUUID().UUIDString.lowercase()}.m4a")
+        IosAudioSessionBridge.activateRecording()
+        val sessionId = "${NSUUID().UUIDString.lowercase()}.m4a"
+        val path = IosPaths.child(IosPaths.pending, sessionId)
         val settings = mapOf<Any?, Any>(
             AVFormatIDKey to kAudioFormatMPEG4AAC,
             AVSampleRateKey to 44_100.0,
@@ -60,58 +90,143 @@ internal class IosRecorder(
             created.stop()
             IosAudioSessionBridge.deactivate()
             IosPaths.remove(path)
+            state = RecorderSessionState(
+                issue = RecorderIssue(RecorderIssueKind.IO_FAILURE, recoverable = false),
+            )
             error("audioFailed")
         }
 
         recorder = created
         currentPath = path
+        systemInterruptionActive = false
+        waitingForExternalInput = false
         waveform.clear()
-        currentPhase = "recording"
+        state = RecorderSessionState(RecorderPhase.RECORDING, sessionId)
     }
 
     override suspend fun pause() {
-        check(currentPhase == "recording")
+        check(state.phase == RecorderPhase.RECORDING)
+        val sessionId = requireActiveSessionId()
         recorder?.pause()
-        currentPhase = "paused"
+        state = RecorderSessionState(RecorderPhase.PAUSED, sessionId)
     }
 
     override suspend fun resume() {
-        check(currentPhase == "paused")
+        check(!systemInterruptionActive) { "recordingCannotResumeDuringInterruption" }
+        val sessionId = requireActiveSessionId()
+        val resumable = when (state.phase) {
+            RecorderPhase.PAUSED -> state.issue?.recoverable != false
+            RecorderPhase.INTERRUPTED -> state.issue?.recoverable == true
+            else -> false
+        }
+        check(resumable) { "recordingCannotResume" }
+
         IosAudioSessionBridge.activateRecording()
-        check(recorder?.record() == true) { "audioFailed" }
-        currentPhase = "recording"
+        if (recorder?.record() != true) {
+            state = RecorderSessionState(
+                phase = RecorderPhase.INTERRUPTED,
+                activeSessionId = sessionId,
+                issue = RecorderIssue(RecorderIssueKind.SESSION_LOST, recoverable = false),
+            )
+            error("audioFailed")
+        }
+        waitingForExternalInput = false
+        state = RecorderSessionState(RecorderPhase.RECORDING, sessionId)
     }
 
     override suspend fun stopAndUpload(): Capture {
         val active = recorder ?: error("recordingNotStarted")
         val source = currentPath ?: error("recordingNotStarted")
+        val sessionId = requireActiveSessionId()
         val duration = active.currentTime
+        state = RecorderSessionState(RecorderPhase.FINALIZING, sessionId)
         active.stop()
         IosAudioSessionBridge.deactivate()
         recorder = null
         currentPath = null
-        currentPhase = "idle"
+        systemInterruptionActive = false
+        waitingForExternalInput = false
 
-        val finalPath = IosPaths.child(IosPaths.audio, source.substringAfterLast('/'))
-        IosPaths.move(source, finalPath)
-        val capture = repository.createAudioCapture(finalPath, duration, waveform.toList())
-        waveform.clear()
-        scope.launch { repository.reprocess(capture.id) }
-        return capture
+        return try {
+            val finalPath = IosPaths.child(IosPaths.audio, source.substringAfterLast('/'))
+            IosPaths.move(source, finalPath)
+            val capture = repository.createAudioCapture(finalPath, duration, waveform.toList())
+            waveform.clear()
+            state = RecorderSessionState()
+            scope.launch { repository.reprocess(capture.id) }
+            capture
+        } catch (error: Throwable) {
+            state = RecorderSessionState(
+                issue = RecorderIssue(
+                    RecorderIssueKind.IO_FAILURE,
+                    recoverable = IosPaths.exists(source),
+                ),
+            )
+            throw error
+        }
     }
 
-    override suspend fun recoverPending(): Capture {
-        check(currentPhase == "idle")
-        val source = pendingPath() ?: error("No pending audio")
-        val finalPath = IosPaths.child(IosPaths.audio, source.substringAfterLast('/'))
+    override suspend fun cancelActive(sessionId: String) {
+        check(state.activeSessionId == sessionId) { "recordingSessionMismatch" }
+        val source = currentPath ?: error("recordingNotStarted")
+        recorder?.stop()
+        IosAudioSessionBridge.deactivate()
+        recorder = null
+        currentPath = null
+        systemInterruptionActive = false
+        waitingForExternalInput = false
+        waveform.clear()
+        IosPaths.remove(source)
+        if (IosPaths.exists(source)) {
+            state = RecorderSessionState(
+                issue = RecorderIssue(RecorderIssueKind.IO_FAILURE, recoverable = true),
+            )
+            error("recordingDeleteFailed")
+        }
+        state = RecorderSessionState()
+    }
+
+    override suspend fun recoverPending(pendingId: String): Capture {
+        check(state.phase == RecorderPhase.IDLE)
+        val source = exactPendingPath(pendingId) ?: error("No pending audio")
+        val finalPath = IosPaths.child(IosPaths.audio, pendingId)
         IosPaths.move(source, finalPath)
         val capture = repository.createAudioCapture(finalPath, 0.0, emptyList())
         scope.launch { repository.reprocess(capture.id) }
         return capture
     }
 
-    private fun pendingPath(): String? = IosPaths.list(IosPaths.pending)
-        .firstOrNull { it.endsWith(".m4a", ignoreCase = true) }
+    override suspend fun discardPending(pendingId: String) {
+        val source = exactPendingPath(pendingId) ?: return
+        IosPaths.remove(source)
+        check(!IosPaths.exists(source)) { "recordingDeleteFailed" }
+    }
+
+    private fun handleSystemEvent(event: IosAudioSystemEvent) {
+        val decision = IosRecorderLifecycle.reduce(
+            current = IosRecorderLifecycleContext(
+                state = state,
+                systemInterruptionActive = systemInterruptionActive,
+                waitingForExternalInput = waitingForExternalInput,
+            ),
+            event = event,
+            recorderActuallyRecording = recorder?.recording == true,
+            recorderPresent = recorder != null,
+        )
+        if (decision.pauseRecorder) recorder?.pause()
+        state = decision.context.state
+        systemInterruptionActive = decision.context.systemInterruptionActive
+        waitingForExternalInput = decision.context.waitingForExternalInput
+    }
+
+    private fun requireActiveSessionId(): String =
+        state.activeSessionId ?: error("recordingNotStarted")
+
+    private fun pendingFileNames(): List<String> = IosPaths.list(IosPaths.pending)
+        .filter { it.endsWith(".m4a", ignoreCase = true) }
+
+    private fun exactPendingPath(id: String): String? = pendingFileNames()
+        .firstOrNull { it == id }
         ?.let { IosPaths.child(IosPaths.pending, it) }
 
     private suspend fun requestMicrophonePermission(): Boolean {

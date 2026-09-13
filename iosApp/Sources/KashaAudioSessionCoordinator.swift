@@ -129,9 +129,14 @@ final class KashaAudioSessionCoordinator {
         case .ended:
             let optionsValue = unsignedValue(userInfo[AVAudioSessionInterruptionOptionKey]) ?? 0
             let options = AVAudioSession.InterruptionOptions(rawValue: optionsValue)
+            let route = AVAudioSession.sharedInstance().currentRoute
             postBridge(
                 name: KashaAudioBridgeEvent.interruptionEnded,
-                userInfo: ["canResume": options.contains(.shouldResume)]
+                userInfo: [
+                    "canResume": options.contains(.shouldResume),
+                    "inputAvailable": !route.inputs.isEmpty,
+                    "currentHasExternalInput": route.inputs.contains(where: isExternalInput),
+                ]
             )
 
         @unknown default:
