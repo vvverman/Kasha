@@ -5,9 +5,6 @@ package brain.ios
 import brain.domain.AudioGateway
 import brain.studio.AudioTelemetry
 import platform.AVFAudio.AVAudioPlayer
-import platform.AVFAudio.AVAudioSession
-import platform.AVFAudio.AVAudioSessionCategoryPlayback
-import platform.AVFAudio.AVAudioSessionSetActiveOptionNotifyOthersOnDeactivation
 import platform.Foundation.NSURL
 
 internal class IosAudio(
@@ -19,21 +16,14 @@ internal class IosAudio(
     override suspend fun playCapture(captureId: String, compact: Boolean, fromSeconds: Double, rate: Double) {
         val path = repository.audioPath(captureId) ?: error("Аудиофайл записи не найден")
         stop()
-
-        val session = AVAudioSession.sharedInstance()
-        check(session.setCategory(AVAudioSessionCategoryPlayback, error = null)) { "audioSessionUnavailable" }
-        check(session.setActive(true, withOptions = 0uL, error = null)) { "audioSessionUnavailable" }
+        IosAudioSessionBridge.activatePlayback()
 
         val created = AVAudioPlayer(NSURL.fileURLWithPath(path), error = null)
         created.enableRate = true
         created.rate = rate.toFloat().coerceIn(1f, 2f)
         created.currentTime = fromSeconds.coerceAtLeast(0.0).coerceAtMost(created.duration)
         if (!created.prepareToPlay() || !created.play()) {
-            session.setActive(
-                false,
-                withOptions = AVAudioSessionSetActiveOptionNotifyOthersOnDeactivation,
-                error = null,
-            )
+            IosAudioSessionBridge.deactivate()
             error("audioFailed")
         }
         player = created
@@ -48,9 +38,7 @@ internal class IosAudio(
 
     override suspend fun resume() {
         val active = player ?: return
-        check(AVAudioSession.sharedInstance().setActive(true, withOptions = 0uL, error = null)) {
-            "audioSessionUnavailable"
-        }
+        IosAudioSessionBridge.activatePlayback()
         check(active.play()) { "audioFailed" }
         paused = false
     }
@@ -78,10 +66,6 @@ internal class IosAudio(
         player?.stop()
         player = null
         paused = false
-        AVAudioSession.sharedInstance().setActive(
-            false,
-            withOptions = AVAudioSessionSetActiveOptionNotifyOthersOnDeactivation,
-            error = null,
-        )
+        IosAudioSessionBridge.deactivate()
     }
 }
