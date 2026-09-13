@@ -352,13 +352,14 @@ internal class AndroidRecorder(
                                 )
                             }
                             RecorderIssueKind.INTERRUPTION -> {
-                                if (newDeviceId == null && currentIssue.recoverable) {
-                                    session = RecorderSessionState(
-                                        phase = RecorderPhase.INTERRUPTED,
-                                        activeSessionId = sessionId,
-                                        issue = RecorderIssue(RecorderIssueKind.INTERRUPTION, recoverable = false),
-                                    )
-                                }
+                                session = RecorderSessionState(
+                                    phase = RecorderPhase.INTERRUPTED,
+                                    activeSessionId = sessionId,
+                                    issue = RecorderIssue(
+                                        RecorderIssueKind.INTERRUPTION,
+                                        recoverable = newDeviceId != null && !isRecorderSilenced(source),
+                                    ),
+                                )
                             }
                             else -> Unit
                         }
@@ -438,10 +439,18 @@ internal class AndroidRecorder(
                 val paused = runCatching { source.pause() }.isSuccess
                 mark = null
                 latestLevel = 0f
+                if (!paused) {
+                    sampler?.cancel()
+                    sampler = null
+                    runCatching { source.stop() }
+                    runCatching { RecordingForegroundService.stop(appContext) }
+                    releaseSession(RecorderIssue(RecorderIssueKind.SESSION_LOST, recoverable = false))
+                    return
+                }
                 session = RecorderSessionState(
                     phase = RecorderPhase.INTERRUPTED,
                     activeSessionId = sessionId,
-                    issue = RecorderIssue(kind, recoverable = recoverable && paused),
+                    issue = RecorderIssue(kind, recoverable = recoverable),
                 )
                 runCatching { RecordingForegroundService.paused(appContext) }
             }
