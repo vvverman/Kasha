@@ -3,9 +3,14 @@ package ru.vrmn.kasha.android
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.media.AudioManager
+import android.media.AudioRecordingConfiguration
+import android.media.AudioRouting
 import android.media.MediaMetadataRetriever
 import android.media.MediaRecorder
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.Process
 import brain.domain.PendingRecording
 import brain.domain.RecorderIssue
@@ -44,13 +49,17 @@ internal class AndroidRecorder(
 ) : RecorderSessionGateway, AutoCloseable {
     private val appContext = context.applicationContext
     private val control = Mutex()
+    private val routeHandler = Handler(Looper.getMainLooper())
 
     @Volatile private var recorder: MediaRecorder? = null
     @Volatile private var latestLevel = 0f
     @Volatile private var session = RecorderSessionState()
+    @Volatile private var routedDeviceId: Int? = null
     private var sampler: Job? = null
     private var pendingFile: File? = null
     private var activeSessionId: String? = null
+    private var routingListener: AudioRouting.OnRoutingChangedListener? = null
+    private var recordingCallback: AudioManager.AudioRecordingCallback? = null
     private var recordedMillis = 0L
     private var mark: TimeMark? = null
     private val waveform = mutableListOf<Float>()
@@ -71,6 +80,9 @@ internal class AndroidRecorder(
                 Process.myUserHandle(),
             )
         }.getOrDefault(0)
+        if (flags and PackageManager.FLAG_PERMISSION_POLICY_FIXED != 0) {
+            return RecorderPermission.RESTRICTED
+        }
         val userDecided = flags and (
             PackageManager.FLAG_PERMISSION_USER_SET or PackageManager.FLAG_PERMISSION_USER_FIXED
         ) != 0
@@ -104,6 +116,7 @@ internal class AndroidRecorder(
             val file = repository.newPendingFile()
             val sessionId = file.nameWithoutExtension
             val created = createMediaRecorder()
+            recorder = created
             activeSessionId = sessionId
             pendingFile = file
             try {
@@ -119,9 +132,10 @@ internal class AndroidRecorder(
                     setOutputFile(file.absolutePath)
                     setOnErrorListener { source, _, _ -> handleRecorderError(source) }
                     prepare()
-                    start()
                 }
-                recorder = created
+                registerSystemMonitoring(created)
+                created.start()
+                routedDeviceId = created.routedDevice?.id
                 recordedMillis = 0L
                 mark = TimeSource.Monotonic.markNow()
                 latestLevel = 0f
@@ -132,8 +146,6 @@ internal class AndroidRecorder(
                 runCatching { RecordingForegroundService.stop(appContext) }
                 sampler?.cancel()
                 sampler = null
-                runCatching { created.reset() }
-                created.release()
                 file.delete()
                 releaseSession(RecorderIssue(RecorderIssueKind.IO_FAILURE, recoverable = false))
                 throw IllegalStateException("audioStartFailed", error)
@@ -170,6 +182,22 @@ internal class AndroidRecorder(
             val sessionId = activeSessionId ?: error("recordingSessionMissing")
             try {
                 active.resume()
+                val newDeviceId = active.routedDevice?.id
+                val previousDeviceId = routedDeviceId
+                if (previousDeviceId != null && newDeviceId != null && previousDeviceId != newDeviceId) {
+                    runCatching { active.pause() }
+                    latestLevel = 0f
+                    mark = null
+                    routedDeviceId = newDeviceId
+                    session = RecorderSessionState(
+                        phase = RecorderPhase.INTERRUPTED,
+                        activeSessionId = sessionId,
+                        issue = RecorderIssue(RecorderIssueKind.INPUT_UNAVAILABLE, recoverable = true),
+                    )
+                    runCatching { RecordingForegroundService.paused(appContext) }
+                    return@withContext
+                }
+                routedDeviceId = newDeviceId ?: previousDeviceId
                 mark = TimeSource.Monotonic.markNow()
                 latestLevel = 0f
                 session = RecorderSessionState(RecorderPhase.RECORDING, sessionId)
@@ -277,23 +305,105 @@ internal class AndroidRecorder(
         releaseSession()
     }
 
+    private fun registerSystemMonitoring(active: MediaRecorder) {
+        val listener = AudioRouting.OnRoutingChangedListener { routing ->
+            val deviceId = routing.routedDevice?.id
+            handleRouteChanged(active, deviceId)
+        }
+        routingListener = listener
+        active.addOnRoutingChangedListener(listener, routeHandler)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val callback = object : AudioManager.AudioRecordingCallback() {
+                override fun onRecordingConfigChanged(configs: List<AudioRecordingConfiguration>) {
+                    val config = runCatching { active.activeRecordingConfiguration }.getOrNull()
+                    handleRecordingConfiguration(active, config)
+                }
+            }
+            recordingCallback = callback
+            active.registerAudioRecordingCallback(appContext.mainExecutor, callback)
+        }
+    }
+
+    private fun handleRouteChanged(source: MediaRecorder, newDeviceId: Int?) {
+        scope.launch {
+            control.withLock {
+                if (recorder !== source || session.phase == RecorderPhase.IDLE) return@withLock
+                val previous = routedDeviceId
+                if (previous == null) {
+                    routedDeviceId = newDeviceId
+                    return@withLock
+                }
+                if (newDeviceId == previous) return@withLock
+                routedDeviceId = newDeviceId
+                if (session.phase == RecorderPhase.RECORDING) {
+                    interruptActive(
+                        source = source,
+                        kind = RecorderIssueKind.INPUT_UNAVAILABLE,
+                        recoverable = newDeviceId != null,
+                    )
+                } else if (session.phase == RecorderPhase.INTERRUPTED && session.issue?.kind == RecorderIssueKind.INPUT_UNAVAILABLE) {
+                    val sessionId = activeSessionId ?: return@withLock
+                    session = RecorderSessionState(
+                        phase = RecorderPhase.INTERRUPTED,
+                        activeSessionId = sessionId,
+                        issue = RecorderIssue(RecorderIssueKind.INPUT_UNAVAILABLE, recoverable = newDeviceId != null),
+                    )
+                }
+            }
+        }
+    }
+
+    private fun handleRecordingConfiguration(source: MediaRecorder, config: AudioRecordingConfiguration?) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
+        val deviceId = config?.audioDevice?.id
+        if (deviceId != null) handleRouteChanged(source, deviceId)
+        if (config?.isClientSilenced != true) return
+
+        scope.launch {
+            control.withLock {
+                if (recorder !== source || session.phase != RecorderPhase.RECORDING) return@withLock
+                interruptActive(
+                    source = source,
+                    kind = RecorderIssueKind.INTERRUPTION,
+                    recoverable = true,
+                )
+            }
+        }
+    }
+
     private fun handleRecorderError(source: MediaRecorder) {
         scope.launch {
             control.withLock {
                 if (recorder !== source || session.phase == RecorderPhase.IDLE) return@withLock
-                if (session.phase == RecorderPhase.RECORDING) {
-                    recordedMillis += mark?.elapsedNow()?.inWholeMilliseconds ?: 0L
-                }
-                mark = null
-                latestLevel = 0f
-                val sessionId = activeSessionId ?: return@withLock
-                session = RecorderSessionState(
-                    phase = RecorderPhase.INTERRUPTED,
-                    activeSessionId = sessionId,
-                    issue = RecorderIssue(RecorderIssueKind.IO_FAILURE, recoverable = false),
+                interruptActive(
+                    source = source,
+                    kind = RecorderIssueKind.IO_FAILURE,
+                    recoverable = false,
                 )
-                runCatching { RecordingForegroundService.paused(appContext) }
             }
+        }
+    }
+
+    private fun interruptActive(source: MediaRecorder, kind: RecorderIssueKind, recoverable: Boolean) {
+        val sessionId = activeSessionId ?: return
+        if (session.phase == RecorderPhase.RECORDING) {
+            recordedMillis += mark?.elapsedNow()?.inWholeMilliseconds ?: 0L
+            val paused = runCatching { source.pause() }.isSuccess
+            mark = null
+            latestLevel = 0f
+            session = RecorderSessionState(
+                phase = RecorderPhase.INTERRUPTED,
+                activeSessionId = sessionId,
+                issue = RecorderIssue(kind, recoverable = recoverable && paused),
+            )
+            runCatching { RecordingForegroundService.paused(appContext) }
+        } else if (session.phase == RecorderPhase.INTERRUPTED) {
+            session = RecorderSessionState(
+                phase = RecorderPhase.INTERRUPTED,
+                activeSessionId = sessionId,
+                issue = RecorderIssue(kind, recoverable = recoverable && session.issue?.recoverable != false),
+            )
         }
     }
 
@@ -321,11 +431,19 @@ internal class AndroidRecorder(
     }
 
     private fun releaseSession(issue: RecorderIssue? = null) {
-        runCatching { recorder?.reset() }
-        recorder?.release()
+        val active = recorder
+        routingListener?.let { listener -> runCatching { active?.removeOnRoutingChangedListener(listener) } }
+        routingListener = null
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            recordingCallback?.let { callback -> runCatching { active?.unregisterAudioRecordingCallback(callback) } }
+        }
+        recordingCallback = null
+        runCatching { active?.reset() }
+        active?.release()
         recorder = null
         pendingFile = null
         activeSessionId = null
+        routedDeviceId = null
         mark = null
         latestLevel = 0f
         session = RecorderSessionState(phase = RecorderPhase.IDLE, issue = issue)
