@@ -27,6 +27,7 @@ internal class IosRecorder(
     private var recorder: AVAudioRecorder? = null
     private var currentPath: String? = null
     private var state = RecorderSessionState()
+    private var systemInterruptionActive = false
     private val waveform = mutableListOf<Float>()
 
     init {
@@ -89,6 +90,7 @@ internal class IosRecorder(
 
         recorder = created
         currentPath = path
+        systemInterruptionActive = false
         waveform.clear()
         state = RecorderSessionState(RecorderPhase.RECORDING, sessionId)
     }
@@ -101,6 +103,7 @@ internal class IosRecorder(
     }
 
     override suspend fun resume() {
+        check(!systemInterruptionActive) { "recordingCannotResumeDuringInterruption" }
         val sessionId = requireActiveSessionId()
         val resumable = when (state.phase) {
             RecorderPhase.PAUSED -> state.issue?.recoverable != false
@@ -131,6 +134,7 @@ internal class IosRecorder(
         IosAudioSessionBridge.deactivate()
         recorder = null
         currentPath = null
+        systemInterruptionActive = false
 
         return try {
             val finalPath = IosPaths.child(IosPaths.audio, source.substringAfterLast('/'))
@@ -158,6 +162,7 @@ internal class IosRecorder(
         IosAudioSessionBridge.deactivate()
         recorder = null
         currentPath = null
+        systemInterruptionActive = false
         waveform.clear()
         IosPaths.remove(source)
         state = RecorderSessionState()
@@ -181,6 +186,7 @@ internal class IosRecorder(
     private fun handleSystemEvent(event: IosAudioSystemEvent) {
         when (event) {
             is IosAudioSystemEvent.InterruptionBegan -> {
+                systemInterruptionActive = true
                 if (state.phase == RecorderPhase.RECORDING) {
                     state = RecorderSessionState(
                         phase = RecorderPhase.INTERRUPTED,
@@ -191,6 +197,7 @@ internal class IosRecorder(
             }
 
             is IosAudioSystemEvent.InterruptionEnded -> {
+                systemInterruptionActive = false
                 if (state.phase == RecorderPhase.INTERRUPTED && state.issue?.kind == RecorderIssueKind.INTERRUPTION) {
                     state = state.copy(
                         issue = RecorderIssue(RecorderIssueKind.INTERRUPTION, recoverable = event.canResume),
@@ -198,10 +205,13 @@ internal class IosRecorder(
                 }
             }
 
-            is IosAudioSystemEvent.RouteChanged -> handleRouteChanged(event)
+            is IosAudioSystemEvent.RouteChanged -> {
+                if (!systemInterruptionActive) handleRouteChanged(event)
+            }
 
             is IosAudioSystemEvent.ApplicationDidBecomeActive -> {
                 if (
+                    !systemInterruptionActive &&
                     state.issue?.kind == RecorderIssueKind.INPUT_UNAVAILABLE &&
                     event.inputAvailable
                 ) {
