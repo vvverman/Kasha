@@ -259,7 +259,7 @@ internal fun AiSettingsSection(s: StudioState) {
             }
 
             val canSave = cloud.available && consent && configuredModels.isNotEmpty() && (!provider.endpointRequired || endpoint.isNotBlank())
-            val testConnection = {
+            val testConnection: () -> Unit = {
                 scope.launch {
                     actionError = null
                     val connection = CloudAiConnection(
@@ -274,7 +274,7 @@ internal fun AiSettingsSection(s: StudioState) {
                         .getOrDefault(false)
                 }
             }
-            val saveConnection = {
+            val saveConnection: () -> Unit = {
                 scope.launch {
                     actionError = null
                     val connection = CloudAiConnection(
