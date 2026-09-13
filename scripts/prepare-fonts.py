@@ -1,54 +1,54 @@
-"""Сборка ресурсов Kasha: закреплённый OFL-шрифт Commissioner и проверка всех языков интерфейса."""
+"""Подготавливает канонический Geologica Variable для общего Kasha UI и проверяет покрытие языков."""
 import hashlib
 import io
 from pathlib import Path
-from urllib.request import urlopen
+
 from fontTools.ttLib import TTFont
-from fontTools.varLib.instancer import instantiateVariableFont
 
 ROOT = Path(__file__).resolve().parents[1]
-GOOGLE_FONTS_COMMIT = '8e44913e4ff26fc997e6856c1ec40ff4791c98c5'
-BASE = f'https://raw.githubusercontent.com/google/fonts/{GOOGLE_FONTS_COMMIT}/ofl/commissioner/'
-resources = ROOT / 'modules/ui/src/commonMain/composeResources'
-font_dir = resources / 'font'
-license_dir = resources / 'files/licenses'
+SOURCE_DIR = ROOT / "docs/design/assets/fonts"
+SOURCE_FONT = SOURCE_DIR / "Geologica-Variable.ttf"
+SOURCE_LICENSE = SOURCE_DIR / "OFL.txt"
+resources = ROOT / "modules/ui/src/commonMain/composeResources"
+font_dir = resources / "font"
+license_dir = resources / "files/licenses"
 font_dir.mkdir(parents=True, exist_ok=True)
 license_dir.mkdir(parents=True, exist_ok=True)
 
-required = set('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzАБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюяІіЇїЄєҐґЎўӘәҒғҚқҢңӨөҰұҮүҺһÑñÁáÉéÍíÓóÚúÜüÇçÀàÂâÊêËëÎîÏïÔôÙùÛûŸÿŒœÄäÖöß')
+TARGET_FONT = font_dir / "geologica_variable.ttf"
+TARGET_LICENSE = license_dir / "Geologica-OFL.txt"
+EXPECTED_FONT_SHA256 = "9124d9e88ac6c11d761f35241713a51d68e2c4ebedce0edaca834717a00959ec"
+EXPECTED_LICENSE_SHA256 = "778186245840aea0e60bec6a46e7fb1442e0cd78e41afeadffcd3e8824b379e0"
 
-def blob_sha(data: bytes) -> str:
-    return hashlib.sha1(b'blob ' + str(len(data)).encode() + b'\0' + data).hexdigest()
+required = set(
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+    "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ"
+    "абвгдеёжзийклмнопрстуфхцчшщъыьэюя"
+    "ІіЇїЄєҐґЎўӘәҒғҚқҢңӨөҰұҮүҺһ"
+    "ÑñÁáÉéÍíÓóÚúÜüÇçÀàÂâÊêËëÎîÏïÔôÙùÛûŸÿŒœÄäÖöß"
+)
 
-def load(url: str, expected: str) -> bytes:
-    with urlopen(url, timeout=60) as response:
-        data = response.read()
-    assert blob_sha(data) == expected, f'Unexpected font blob for {url}'
-    return data
+
+def sha256(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
 
 def verify_bytes(data: bytes, name: str) -> None:
     font = TTFont(io.BytesIO(data))
     missing = sorted(ord(char) for char in required if ord(char) not in font.getBestCmap())
-    assert not missing, f'{name} lacks required glyphs: {missing}'
+    assert not missing, f"{name} lacks required glyphs: {missing}"
+    axes = {axis.axisTag for axis in font["fvar"].axes}
+    expected_axes = {"wght", "CRSV", "SHRP", "slnt"}
+    assert expected_axes.issubset(axes), f"{name} lacks variable axes: {sorted(expected_axes - axes)}"
 
-def save_instance(variable_data: bytes, target: str, weight: int, flair: int = 0) -> None:
-    source = TTFont(io.BytesIO(variable_data))
-    instance = instantiateVariableFont(source, {'wght': weight, 'FLAR': flair, 'VOLM': 0, 'slnt': 0}, inplace=True)
-    path = font_dir / target
-    instance.save(path)
-    verify_bytes(path.read_bytes(), target)
 
-variable = load(
-    BASE + 'Commissioner%5BFLAR%2CVOLM%2Cslnt%2Cwght%5D.ttf',
-    '2ac22fba70bcf5d36052dfa604b43333b826996f',
-)
-verify_bytes(variable, 'Commissioner variable')
+font_data = SOURCE_FONT.read_bytes()
+license_data = SOURCE_LICENSE.read_bytes()
+assert sha256(font_data) == EXPECTED_FONT_SHA256, "Unexpected Geologica binary"
+assert sha256(license_data) == EXPECTED_LICENSE_SHA256, "Unexpected Geologica OFL license"
+verify_bytes(font_data, "Geologica Variable")
 
-save_instance(variable, 'commissioner_regular.ttf', 400)
-save_instance(variable, 'commissioner_medium.ttf', 500)
-save_instance(variable, 'commissioner_semibold.ttf', 600)
-save_instance(variable, 'commissioner_display_semibold.ttf', 600, flair=10)
+TARGET_FONT.write_bytes(font_data)
+TARGET_LICENSE.write_bytes(license_data)
 
-license_data = load(BASE + 'OFL.txt', 'eaa7c1c436f0303948dd0d6ec51cfce14bf376e8')
-(license_dir / 'Commissioner-OFL.txt').write_bytes(license_data)
-print('Commissioner: 400/500/600 + display 600 FLAR=10; all 8 Kasha alphabets verified')
+print("Geologica Variable: local pinned asset, wght/CRSV/SHRP/slnt axes and all Kasha alphabets verified")
