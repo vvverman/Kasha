@@ -1,0 +1,3643 @@
+{
+  "schemaVersion": 1,
+  "name": "Kasha Icons",
+  "revision": "canonical-2026-09",
+  "status": "Геометрия следующей редакции существующего Kasha Icons для передачи в разработку; production runtime не изменён.",
+  "grid": 24,
+  "strokeWidth": 1.8,
+  "linecap": "round",
+  "linejoin": "round",
+  "defaultFill": "none",
+  "geometryUnits": "logical units in viewBox; stroke scales with glyph",
+  "logoSource": "../../../composeApp/src/commonMain/composeResources/drawable/kasha_logo.svg",
+  "categories": [
+    {
+      "id": "navigation",
+      "label": "Навигация"
+    },
+    {
+      "id": "recording",
+      "label": "Запись"
+    },
+    {
+      "id": "playback",
+      "label": "Воспроизведение"
+    },
+    {
+      "id": "content",
+      "label": "Контент"
+    },
+    {
+      "id": "organization",
+      "label": "Организация"
+    },
+    {
+      "id": "task",
+      "label": "Задачи"
+    },
+    {
+      "id": "system",
+      "label": "Система"
+    },
+    {
+      "id": "ai",
+      "label": "Обработка"
+    }
+  ],
+  "currentGlyphs": [
+    "RECORD",
+    "PLAY",
+    "PAUSE",
+    "STOP",
+    "SEND",
+    "HOME",
+    "FOLDER",
+    "TASKS",
+    "SETTINGS",
+    "BACK",
+    "NEXT",
+    "PLUS",
+    "DELETE",
+    "MAGIC",
+    "MORE",
+    "PIN",
+    "EDIT",
+    "UP",
+    "DOWN",
+    "CHECK",
+    "ARCHIVE",
+    "CLOCK"
+  ],
+  "semanticNotes": {
+    "seek": "Seek — интерактивная временная шкала с семантикой Adjustable; отдельного декоративного glyph нет.",
+    "logo": "Официальный знак показывается отдельно; не превращается в Glyph.K.",
+    "motion": "Однократная функциональная реакция на hover/focus/activation. Системный или ручной Reduce Motion выключает transform и draw.",
+    "source": "Единственный источник геометрии: registry.json. SVG/HTML — воспроизводимые экспорты."
+  },
+  "icons": [
+    {
+      "id": "home",
+      "label": "Главная",
+      "category": "navigation",
+      "aliases": [
+        "HOME"
+      ],
+      "usage": "Перейти на Главную. Состояние выбранной вкладки задаётся контролом.",
+      "geometry": [
+        {
+          "type": "path",
+          "part": "roof",
+          "d": "M3.8 10.8 11 4.9Q12 4.1 13 4.9L20.2 10.8"
+        },
+        {
+          "type": "path",
+          "part": "body",
+          "d": "M6 9.2V18.2Q6 19.6 7.4 19.6H9.5V15.8Q9.5 14.8 10.5 14.8H13.5Q14.5 14.8 14.5 15.8V19.6H16.6Q18 19.6 18 18.2V9.2"
+        }
+      ],
+      "motion": [
+        {
+          "part": "roof",
+          "durationMs": 260,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0,
+              "y": -0.6,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        },
+        {
+          "part": "body",
+          "durationMs": 260,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0,
+              "y": -0.25,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        }
+      ],
+      "staticMeaning": true
+    },
+    {
+      "id": "projects",
+      "label": "Проекты",
+      "category": "navigation",
+      "aliases": [
+        "FOLDER",
+        "PROJECT",
+        "PROJECTS"
+      ],
+      "usage": "Раздел проектов; открыть проект.",
+      "geometry": [
+        {
+          "type": "path",
+          "part": "body",
+          "d": "M3.5 8.3V6.6Q3.5 5 5.1 5H9L11.3 7.3H18.9Q20.5 7.3 20.5 8.9V17.6Q20.5 19.2 18.9 19.2H5.1Q3.5 19.2 3.5 17.6Z"
+        },
+        {
+          "type": "path",
+          "part": "lip",
+          "d": "M3.7 10H20.2"
+        }
+      ],
+      "motion": [
+        {
+          "part": "lip",
+          "durationMs": 260,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0,
+              "y": -0.65,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        },
+        {
+          "part": "body",
+          "durationMs": 260,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0,
+              "y": 0,
+              "rotate": -1.2,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        }
+      ],
+      "staticMeaning": true
+    },
+    {
+      "id": "tasks",
+      "label": "Задачи",
+      "category": "navigation",
+      "aliases": [
+        "TASKS",
+        "TASK"
+      ],
+      "usage": "Раздел задач или команда «В задачи». Не completion control.",
+      "geometry": [
+        {
+          "type": "rect",
+          "part": "body",
+          "x": 4,
+          "y": 3.8,
+          "width": 16,
+          "height": 16.4,
+          "rx": 3
+        },
+        {
+          "type": "path",
+          "part": "checks",
+          "d": "M7.1 8.8 8.5 10.1 10.6 7.7"
+        },
+        {
+          "type": "path",
+          "part": "checks",
+          "d": "M7.1 14.5 8.5 15.8 10.6 13.4"
+        },
+        {
+          "type": "line",
+          "part": "rows",
+          "x1": 13.2,
+          "y1": 8.9,
+          "x2": 16.9,
+          "y2": 8.9
+        },
+        {
+          "type": "line",
+          "part": "rows",
+          "x1": 13.2,
+          "y1": 14.6,
+          "x2": 16.9,
+          "y2": 14.6
+        }
+      ],
+      "motion": [
+        {
+          "part": "checks",
+          "durationMs": 260,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0.3,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": true
+        },
+        {
+          "part": "rows",
+          "durationMs": 260,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0.45,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        }
+      ],
+      "staticMeaning": true
+    },
+    {
+      "id": "settings",
+      "label": "Настройки",
+      "category": "navigation",
+      "aliases": [
+        "SETTINGS"
+      ],
+      "usage": "Настройки; небольшой ответный поворот, без бесконечного вращения.",
+      "geometry": [
+        {
+          "type": "path",
+          "part": "gear",
+          "d": "M10 3H14L14.7 5.2 16.1 6 18.4 5.5 20.4 9 18.8 10.7V12.3L20.4 14 18.4 17.5 16.1 17 14.7 17.8 14 20H10L9.3 17.8 7.9 17 5.6 17.5 3.6 14 5.2 12.3V10.7L3.6 9 5.6 5.5 7.9 6 9.3 5.2Z"
+        },
+        {
+          "type": "circle",
+          "part": "hub",
+          "cx": 12,
+          "cy": 11.5,
+          "r": 3.1
+        }
+      ],
+      "motion": [
+        {
+          "part": "gear",
+          "durationMs": 300,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0,
+              "y": 0,
+              "rotate": 8,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        }
+      ],
+      "staticMeaning": true
+    },
+    {
+      "id": "mic",
+      "label": "Микрофон",
+      "category": "recording",
+      "aliases": [
+        "MIC"
+      ],
+      "usage": "Начать запись. Анимация каталога — реакция на ввод, не визуализация звука.",
+      "geometry": [
+        {
+          "type": "rect",
+          "part": "capsule",
+          "x": 9,
+          "y": 3,
+          "width": 6,
+          "height": 11,
+          "rx": 3
+        },
+        {
+          "type": "path",
+          "part": "cradle",
+          "d": "M6.5 10.7V11.8A5.5 5.5 0 0 0 17.5 11.8V10.7"
+        },
+        {
+          "type": "line",
+          "part": "stand",
+          "x1": 12,
+          "y1": 17.3,
+          "x2": 12,
+          "y2": 21
+        },
+        {
+          "type": "line",
+          "part": "stand",
+          "x1": 9,
+          "y1": 21,
+          "x2": 15,
+          "y2": 21
+        }
+      ],
+      "motion": [
+        {
+          "part": "capsule",
+          "durationMs": 260,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0,
+              "y": -0.6,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        },
+        {
+          "part": "cradle",
+          "durationMs": 260,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1.03,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        }
+      ],
+      "staticMeaning": true
+    },
+    {
+      "id": "record",
+      "label": "Запись",
+      "category": "recording",
+      "aliases": [
+        "RECORD"
+      ],
+      "usage": "Малая record-метка и транспортная команда. Состояние записи определяется state.",
+      "geometry": [
+        {
+          "type": "circle",
+          "part": "dot",
+          "cx": 12,
+          "cy": 12,
+          "r": 5.2,
+          "fill": "currentColor",
+          "stroke": "none"
+        }
+      ],
+      "motion": [
+        {
+          "part": "dot",
+          "durationMs": 240,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1.04,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        }
+      ],
+      "staticMeaning": true
+    },
+    {
+      "id": "pause",
+      "label": "Пауза",
+      "category": "recording",
+      "aliases": [
+        "PAUSE"
+      ],
+      "usage": "Приостановить запись или воспроизведение.",
+      "geometry": [
+        {
+          "type": "rect",
+          "part": "left",
+          "x": 7,
+          "y": 6,
+          "width": 3.5,
+          "height": 12,
+          "rx": 1.25,
+          "fill": "currentColor",
+          "stroke": "none"
+        },
+        {
+          "type": "rect",
+          "part": "right",
+          "x": 13.5,
+          "y": 6,
+          "width": 3.5,
+          "height": 12,
+          "rx": 1.25,
+          "fill": "currentColor",
+          "stroke": "none"
+        }
+      ],
+      "motion": [
+        {
+          "part": "left",
+          "durationMs": 260,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0.35,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        },
+        {
+          "part": "right",
+          "durationMs": 260,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": -0.35,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        }
+      ],
+      "staticMeaning": true
+    },
+    {
+      "id": "play",
+      "label": "Воспроизвести",
+      "category": "playback",
+      "aliases": [
+        "PLAY",
+        "RESUME"
+      ],
+      "usage": "Воспроизвести аудио / продолжить запись. Подпись зависит от действия.",
+      "geometry": [
+        {
+          "type": "path",
+          "part": "triangle",
+          "d": "M8.2 6.6Q8.2 5.6 9.1 6.1L18.2 11.2Q19.3 12 18.2 12.8L9.1 17.9Q8.2 18.4 8.2 17.4Z",
+          "fill": "currentColor",
+          "stroke": "none"
+        }
+      ],
+      "motion": [
+        {
+          "part": "triangle",
+          "durationMs": 240,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0.8,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        }
+      ],
+      "staticMeaning": true
+    },
+    {
+      "id": "stop",
+      "label": "Остановить",
+      "category": "playback",
+      "aliases": [
+        "STOP"
+      ],
+      "usage": "Остановить воспроизведение или закончить транспортную операцию.",
+      "geometry": [
+        {
+          "type": "rect",
+          "part": "square",
+          "x": 7,
+          "y": 7,
+          "width": 10,
+          "height": 10,
+          "rx": 2.2,
+          "fill": "currentColor",
+          "stroke": "none"
+        }
+      ],
+      "motion": [
+        {
+          "part": "square",
+          "durationMs": 220,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 0.96,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        }
+      ],
+      "staticMeaning": true
+    },
+    {
+      "id": "close",
+      "label": "Закрыть",
+      "category": "system",
+      "aliases": [
+        "CLOSE",
+        "CANCEL"
+      ],
+      "usage": "Закрыть слой / отменить; при удалении активной записи требуется подтверждение.",
+      "geometry": [
+        {
+          "type": "path",
+          "part": "cross",
+          "d": "M6.5 6.5 17.5 17.5M17.5 6.5 6.5 17.5"
+        }
+      ],
+      "motion": [
+        {
+          "part": "cross",
+          "durationMs": 220,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 0.96,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        }
+      ],
+      "staticMeaning": true
+    },
+    {
+      "id": "send",
+      "label": "Отправить",
+      "category": "content",
+      "aliases": [
+        "SEND"
+      ],
+      "usage": "Подтверждение передачи результата; для «В заметки» используется NOTE.",
+      "geometry": [
+        {
+          "type": "path",
+          "part": "body",
+          "d": "M3.8 10.5 20 4.1 13.5 20.2 10.6 13.4Z"
+        },
+        {
+          "type": "path",
+          "part": "axis",
+          "d": "M10.6 13.4 20 4.1"
+        }
+      ],
+      "motion": [
+        {
+          "part": "body",
+          "durationMs": 280,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0.65,
+              "y": -0.65,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        }
+      ],
+      "staticMeaning": true
+    },
+    {
+      "id": "note",
+      "label": "Заметка",
+      "category": "content",
+      "aliases": [
+        "NOTE"
+      ],
+      "usage": "Открыть заметку / сохранить в заметки.",
+      "geometry": [
+        {
+          "type": "path",
+          "part": "body",
+          "d": "M6.4 3.2H14.2L19 8V19.2Q19 20.8 17.4 20.8H6.4Q4.8 20.8 4.8 19.2V4.8Q4.8 3.2 6.4 3.2Z"
+        },
+        {
+          "type": "path",
+          "part": "fold",
+          "d": "M14 3.4V7.2Q14 8.2 15 8.2H18.8"
+        },
+        {
+          "type": "path",
+          "part": "text",
+          "d": "M8 12H15.5M8 16H13"
+        }
+      ],
+      "motion": [
+        {
+          "part": "fold",
+          "durationMs": 260,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0,
+              "y": -0.25,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        },
+        {
+          "part": "text",
+          "durationMs": 260,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0.5,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        }
+      ],
+      "staticMeaning": true
+    },
+    {
+      "id": "edit",
+      "label": "Редактировать",
+      "category": "content",
+      "aliases": [
+        "EDIT"
+      ],
+      "usage": "Редактировать текст или проект.",
+      "geometry": [
+        {
+          "type": "path",
+          "part": "pencil",
+          "d": "M5.1 15.8 15.6 5.3Q16.6 4.3 17.6 5.3L18.7 6.4Q19.7 7.4 18.7 8.4L8.2 18.9 4.5 19.5Z"
+        },
+        {
+          "type": "line",
+          "part": "pencil",
+          "x1": 14.4,
+          "y1": 6.5,
+          "x2": 17.5,
+          "y2": 9.6
+        }
+      ],
+      "motion": [
+        {
+          "part": "pencil",
+          "durationMs": 260,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0.55,
+              "y": -0.55,
+              "rotate": -2,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        }
+      ],
+      "staticMeaning": true
+    },
+    {
+      "id": "delete",
+      "label": "Удалить",
+      "category": "content",
+      "aliases": [
+        "DELETE"
+      ],
+      "usage": "Удалить сущность; анимация не означает, что удаление уже подтверждено.",
+      "geometry": [
+        {
+          "type": "path",
+          "part": "body",
+          "d": "M6.6 8.2 7.5 19.2Q7.6 20.2 8.7 20.2H15.3Q16.4 20.2 16.5 19.2L17.4 8.2"
+        },
+        {
+          "type": "path",
+          "part": "lid",
+          "d": "M5 7H19M9 7V4.7Q9 3.8 10 3.8H14Q15 3.8 15 4.7V7"
+        },
+        {
+          "type": "path",
+          "part": "body",
+          "d": "M10 10.8V16.8M14 10.8V16.8"
+        }
+      ],
+      "motion": [
+        {
+          "part": "lid",
+          "durationMs": 280,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0,
+              "y": -0.7,
+              "rotate": -3,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        }
+      ],
+      "staticMeaning": true
+    },
+    {
+      "id": "archive",
+      "label": "Архив",
+      "category": "content",
+      "aliases": [
+        "ARCHIVE"
+      ],
+      "usage": "Показать завершённые задачи / архив.",
+      "geometry": [
+        {
+          "type": "rect",
+          "part": "body",
+          "x": 5,
+          "y": 8,
+          "width": 14,
+          "height": 12,
+          "rx": 2
+        },
+        {
+          "type": "rect",
+          "part": "lid",
+          "x": 4,
+          "y": 4.5,
+          "width": 16,
+          "height": 4,
+          "rx": 1.4
+        },
+        {
+          "type": "line",
+          "part": "slot",
+          "x1": 9,
+          "y1": 12.5,
+          "x2": 15,
+          "y2": 12.5
+        }
+      ],
+      "motion": [
+        {
+          "part": "lid",
+          "durationMs": 260,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0,
+              "y": -0.5,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        },
+        {
+          "part": "slot",
+          "durationMs": 260,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0,
+              "y": 0.5,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        }
+      ],
+      "staticMeaning": true
+    },
+    {
+      "id": "pin",
+      "label": "Закрепить",
+      "category": "organization",
+      "aliases": [
+        "PIN"
+      ],
+      "usage": "Закрепить проект или заметку.",
+      "geometry": [
+        {
+          "type": "path",
+          "part": "head",
+          "d": "M8 4.5H16L14.7 9.7 17.2 12.8H6.8L9.3 9.7Z"
+        },
+        {
+          "type": "line",
+          "part": "stem",
+          "x1": 12,
+          "y1": 12.8,
+          "x2": 12,
+          "y2": 20.5
+        }
+      ],
+      "motion": [
+        {
+          "part": "head",
+          "durationMs": 260,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0,
+              "y": 0.75,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        },
+        {
+          "part": "stem",
+          "durationMs": 260,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0,
+              "y": 0.4,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        }
+      ],
+      "staticMeaning": true
+    },
+    {
+      "id": "unpin",
+      "label": "Открепить",
+      "category": "organization",
+      "aliases": [
+        "UNPIN"
+      ],
+      "usage": "Снять закрепление. Диагональ не перекрывает значимые пересечения.",
+      "geometry": [
+        {
+          "type": "path",
+          "part": "head",
+          "d": "M10.4 4.5H16L14.7 9.7 17.2 12.8H15.8M7.6 6.1 9.3 9.7 6.8 12.8H10.7"
+        },
+        {
+          "type": "line",
+          "part": "stem",
+          "x1": 12,
+          "y1": 15.5,
+          "x2": 12,
+          "y2": 20.5
+        },
+        {
+          "type": "line",
+          "part": "slash",
+          "x1": 4.5,
+          "y1": 3.9,
+          "x2": 19.5,
+          "y2": 18.9
+        }
+      ],
+      "motion": [
+        {
+          "part": "head",
+          "durationMs": 260,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0,
+              "y": -0.6,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        },
+        {
+          "part": "slash",
+          "durationMs": 260,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1.025,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        }
+      ],
+      "staticMeaning": true
+    },
+    {
+      "id": "sort",
+      "label": "Сортировка",
+      "category": "organization",
+      "aliases": [
+        "SORT"
+      ],
+      "usage": "Открыть выбор режима сортировки. Линии со стрелкой отличают сортировку от фильтра; текущий режим задаёт подпись.",
+      "geometry": [
+        {
+          "type": "line",
+          "part": "top",
+          "x1": 4,
+          "y1": 6,
+          "x2": 13,
+          "y2": 6
+        },
+        {
+          "type": "line",
+          "part": "middle",
+          "x1": 4,
+          "y1": 12,
+          "x2": 10.5,
+          "y2": 12
+        },
+        {
+          "type": "line",
+          "part": "bottom",
+          "x1": 4,
+          "y1": 18,
+          "x2": 8,
+          "y2": 18
+        },
+        {
+          "type": "path",
+          "part": "direction",
+          "d": "M18.5 5V19M16 16.5 18.5 19 21 16.5"
+        }
+      ],
+      "motion": [
+        {
+          "part": "top",
+          "durationMs": 260,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0.4,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        },
+        {
+          "part": "middle",
+          "durationMs": 260,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": -0.5,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        },
+        {
+          "part": "bottom",
+          "durationMs": 260,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0.65,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        }
+      ],
+      "staticMeaning": true
+    },
+    {
+      "id": "drag",
+      "label": "Переместить",
+      "category": "organization",
+      "aliases": [
+        "DRAG"
+      ],
+      "usage": "Временная ручка reorder, только в режиме ручной сортировки.",
+      "geometry": [
+        {
+          "type": "circle",
+          "part": "left",
+          "cx": 9,
+          "cy": 7,
+          "r": 1,
+          "fill": "currentColor",
+          "stroke": "none"
+        },
+        {
+          "type": "circle",
+          "part": "left",
+          "cx": 9,
+          "cy": 12,
+          "r": 1,
+          "fill": "currentColor",
+          "stroke": "none"
+        },
+        {
+          "type": "circle",
+          "part": "left",
+          "cx": 9,
+          "cy": 17,
+          "r": 1,
+          "fill": "currentColor",
+          "stroke": "none"
+        },
+        {
+          "type": "circle",
+          "part": "right",
+          "cx": 15,
+          "cy": 7,
+          "r": 1,
+          "fill": "currentColor",
+          "stroke": "none"
+        },
+        {
+          "type": "circle",
+          "part": "right",
+          "cx": 15,
+          "cy": 12,
+          "r": 1,
+          "fill": "currentColor",
+          "stroke": "none"
+        },
+        {
+          "type": "circle",
+          "part": "right",
+          "cx": 15,
+          "cy": 17,
+          "r": 1,
+          "fill": "currentColor",
+          "stroke": "none"
+        }
+      ],
+      "motion": [
+        {
+          "part": "left",
+          "durationMs": 260,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0,
+              "y": -0.5,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        },
+        {
+          "part": "right",
+          "durationMs": 260,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0,
+              "y": 0.5,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        }
+      ],
+      "staticMeaning": true
+    },
+    {
+      "id": "search",
+      "label": "Поиск",
+      "category": "organization",
+      "aliases": [
+        "SEARCH"
+      ],
+      "usage": "Резерв glyph. Показывать в продукте только при реализованном поисковом сценарии.",
+      "geometry": [
+        {
+          "type": "circle",
+          "part": "lens",
+          "cx": 10.5,
+          "cy": 10.5,
+          "r": 6
+        },
+        {
+          "type": "line",
+          "part": "handle",
+          "x1": 15,
+          "y1": 15,
+          "x2": 20.2,
+          "y2": 20.2
+        }
+      ],
+      "motion": [
+        {
+          "part": "lens",
+          "durationMs": 260,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1.035,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        },
+        {
+          "part": "handle",
+          "durationMs": 260,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0.35,
+              "y": 0.35,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        }
+      ],
+      "staticMeaning": true
+    },
+    {
+      "id": "calendar",
+      "label": "Срок",
+      "category": "task",
+      "aliases": [
+        "CALENDAR"
+      ],
+      "usage": "Выбрать срок задачи.",
+      "geometry": [
+        {
+          "type": "rect",
+          "part": "body",
+          "x": 4,
+          "y": 5,
+          "width": 16,
+          "height": 15.5,
+          "rx": 2.4
+        },
+        {
+          "type": "line",
+          "part": "body",
+          "x1": 4.4,
+          "y1": 10,
+          "x2": 19.6,
+          "y2": 10
+        },
+        {
+          "type": "path",
+          "part": "tabs",
+          "d": "M8 3V7M16 3V7"
+        },
+        {
+          "type": "circle",
+          "part": "body",
+          "cx": 8,
+          "cy": 14.3,
+          "r": 0.85,
+          "fill": "currentColor",
+          "stroke": "none"
+        },
+        {
+          "type": "line",
+          "part": "date",
+          "x1": 12,
+          "y1": 14.3,
+          "x2": 16,
+          "y2": 14.3
+        }
+      ],
+      "motion": [
+        {
+          "part": "tabs",
+          "durationMs": 260,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0,
+              "y": -0.5,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        },
+        {
+          "part": "date",
+          "durationMs": 260,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0.4,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        }
+      ],
+      "staticMeaning": true
+    },
+    {
+      "id": "reminder",
+      "label": "Напоминание",
+      "category": "task",
+      "aliases": [
+        "REMINDER"
+      ],
+      "usage": "Настроить напоминание; наличие разрешения ОС показывается отдельно.",
+      "geometry": [
+        {
+          "type": "path",
+          "part": "bell",
+          "d": "M5 17.5 6.7 15.3V10.3Q6.7 5.3 12 5.3T17.3 10.3V15.3L19 17.5Z"
+        },
+        {
+          "type": "path",
+          "part": "clapper",
+          "d": "M10 20Q12 22 14 20"
+        },
+        {
+          "type": "line",
+          "part": "crown",
+          "x1": 12,
+          "y1": 3,
+          "x2": 12,
+          "y2": 5
+        }
+      ],
+      "motion": [
+        {
+          "part": "bell",
+          "durationMs": 300,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0,
+              "y": 0,
+              "rotate": 5,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        },
+        {
+          "part": "clapper",
+          "durationMs": 300,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": -0.6,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        }
+      ],
+      "staticMeaning": true
+    },
+    {
+      "id": "repeat",
+      "label": "Повтор напоминания",
+      "category": "task",
+      "aliases": [
+        "REPEAT"
+      ],
+      "usage": "Повтор уведомления той же задачи; не создание повторяющейся задачи.",
+      "geometry": [
+        {
+          "type": "path",
+          "part": "top",
+          "d": "M4.5 10V8Q4.5 5.5 7 5.5H19M16 2.8 19 5.5 16 8.2"
+        },
+        {
+          "type": "path",
+          "part": "bottom",
+          "d": "M19.5 14V16Q19.5 18.5 17 18.5H5M8 15.8 5 18.5 8 21.2"
+        }
+      ],
+      "motion": [
+        {
+          "part": "top",
+          "durationMs": 260,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0.6,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        },
+        {
+          "part": "bottom",
+          "durationMs": 260,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": -0.6,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        }
+      ],
+      "staticMeaning": true
+    },
+    {
+      "id": "complete",
+      "label": "Выполнить задачу",
+      "category": "task",
+      "aliases": [
+        "COMPLETE"
+      ],
+      "usage": "Завершить задачу. Контрол хранит checked-state; этот glyph не хранит бизнес-состояние.",
+      "geometry": [
+        {
+          "type": "rect",
+          "part": "outline",
+          "x": 4,
+          "y": 4,
+          "width": 16,
+          "height": 16,
+          "rx": 5
+        },
+        {
+          "type": "path",
+          "part": "check",
+          "d": "M8 12.1 10.7 14.8 16.2 9.2"
+        }
+      ],
+      "motion": [
+        {
+          "part": "check",
+          "durationMs": 300,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": true
+        },
+        {
+          "part": "outline",
+          "durationMs": 300,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 0.97,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        }
+      ],
+      "staticMeaning": true,
+      "variants": {
+        "unchecked": [
+          {
+            "type": "rect",
+            "part": "outline",
+            "x": 4,
+            "y": 4,
+            "width": 16,
+            "height": 16,
+            "rx": 5
+          }
+        ],
+        "filled": [
+          {
+            "type": "path",
+            "part": "body",
+            "d": "M9 4H15Q20 4 20 9V15Q20 20 15 20H9Q4 20 4 15V9Q4 4 9 4Z M7.35 11.55 10.7 14.9 16.85 8.75 18.1 10 10.7 17.4 6.1 12.8Z",
+            "fill": "currentColor",
+            "stroke": "none",
+            "fill-rule": "evenodd"
+          }
+        ]
+      }
+    },
+    {
+      "id": "clock",
+      "label": "Время",
+      "category": "task",
+      "aliases": [
+        "CLOCK"
+      ],
+      "usage": "Время / длительность. Не заменяет Calendar, Reminder или Repeat.",
+      "geometry": [
+        {
+          "type": "circle",
+          "part": "body",
+          "cx": 12,
+          "cy": 12,
+          "r": 8
+        },
+        {
+          "type": "path",
+          "part": "hands",
+          "d": "M12 7.3V12L15.8 14.1"
+        }
+      ],
+      "motion": [
+        {
+          "part": "hands",
+          "durationMs": 280,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0,
+              "y": 0,
+              "rotate": 6,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        }
+      ],
+      "staticMeaning": true
+    },
+    {
+      "id": "add",
+      "label": "Добавить",
+      "category": "system",
+      "aliases": [
+        "PLUS",
+        "ADD"
+      ],
+      "usage": "Добавить проект; без декоративного поворота в крест закрытия.",
+      "geometry": [
+        {
+          "type": "path",
+          "part": "cross",
+          "d": "M12 5V19M5 12H19"
+        }
+      ],
+      "motion": [
+        {
+          "part": "cross",
+          "durationMs": 220,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1.04,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        }
+      ],
+      "staticMeaning": true
+    },
+    {
+      "id": "back",
+      "label": "Назад",
+      "category": "system",
+      "aliases": [
+        "BACK"
+      ],
+      "usage": "Назад. Направление учитывает семантику навигации.",
+      "geometry": [
+        {
+          "type": "path",
+          "part": "chevron",
+          "d": "M14.8 5.5 8.3 12 14.8 18.5"
+        }
+      ],
+      "motion": [
+        {
+          "part": "chevron",
+          "durationMs": 240,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": -0.75,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        }
+      ],
+      "staticMeaning": true
+    },
+    {
+      "id": "next",
+      "label": "Далее",
+      "category": "system",
+      "aliases": [
+        "NEXT",
+        "CHEVRON"
+      ],
+      "usage": "Открыть / следующий шаг; не озвучивать как «шеврон».",
+      "geometry": [
+        {
+          "type": "path",
+          "part": "chevron",
+          "d": "M9.2 5.5 15.7 12 9.2 18.5"
+        }
+      ],
+      "motion": [
+        {
+          "part": "chevron",
+          "durationMs": 240,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0.75,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        }
+      ],
+      "staticMeaning": true
+    },
+    {
+      "id": "up",
+      "label": "Выше",
+      "category": "system",
+      "aliases": [
+        "UP"
+      ],
+      "usage": "Переместить выше / свернуть в соответствующем контексте.",
+      "geometry": [
+        {
+          "type": "path",
+          "part": "chevron",
+          "d": "M5.5 14.8 12 8.3 18.5 14.8"
+        }
+      ],
+      "motion": [
+        {
+          "part": "chevron",
+          "durationMs": 240,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0,
+              "y": -0.75,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        }
+      ],
+      "staticMeaning": true
+    },
+    {
+      "id": "down",
+      "label": "Ниже",
+      "category": "system",
+      "aliases": [
+        "DOWN"
+      ],
+      "usage": "Переместить ниже / раскрыть в соответствующем контексте.",
+      "geometry": [
+        {
+          "type": "path",
+          "part": "chevron",
+          "d": "M5.5 9.2 12 15.7 18.5 9.2"
+        }
+      ],
+      "motion": [
+        {
+          "part": "chevron",
+          "durationMs": 240,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0,
+              "y": 0.75,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        }
+      ],
+      "staticMeaning": true
+    },
+    {
+      "id": "more",
+      "label": "Меню действий",
+      "category": "system",
+      "aliases": [
+        "MORE"
+      ],
+      "usage": "Открыть меню действий.",
+      "geometry": [
+        {
+          "type": "circle",
+          "part": "dots",
+          "cx": 6,
+          "cy": 12,
+          "r": 1.25,
+          "fill": "currentColor",
+          "stroke": "none"
+        },
+        {
+          "type": "circle",
+          "part": "dots",
+          "cx": 12,
+          "cy": 12,
+          "r": 1.25,
+          "fill": "currentColor",
+          "stroke": "none"
+        },
+        {
+          "type": "circle",
+          "part": "dots",
+          "cx": 18,
+          "cy": 12,
+          "r": 1.25,
+          "fill": "currentColor",
+          "stroke": "none"
+        }
+      ],
+      "motion": [
+        {
+          "part": "dots",
+          "durationMs": 240,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1.04,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        }
+      ],
+      "staticMeaning": true
+    },
+    {
+      "id": "check",
+      "label": "Подтверждено",
+      "category": "system",
+      "aliases": [
+        "CHECK"
+      ],
+      "usage": "Маркер выбора / подтверждения. Не самостоятельный checkbox без accessible control.",
+      "geometry": [
+        {
+          "type": "path",
+          "part": "check",
+          "d": "M5.7 12.3 10.2 16.8 18.5 7.5"
+        }
+      ],
+      "motion": [
+        {
+          "part": "check",
+          "durationMs": 260,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": true
+        }
+      ],
+      "staticMeaning": true
+    },
+    {
+      "id": "language",
+      "label": "Язык",
+      "category": "system",
+      "aliases": [
+        "LANGUAGE"
+      ],
+      "usage": "Язык интерфейса.",
+      "geometry": [
+        {
+          "type": "circle",
+          "part": "body",
+          "cx": 12,
+          "cy": 12,
+          "r": 8
+        },
+        {
+          "type": "path",
+          "part": "meridian",
+          "d": "M12 4Q5.8 12 12 20M12 4Q18.2 12 12 20"
+        },
+        {
+          "type": "line",
+          "part": "equator",
+          "x1": 4.4,
+          "y1": 12,
+          "x2": 19.6,
+          "y2": 12
+        }
+      ],
+      "motion": [
+        {
+          "part": "meridian",
+          "durationMs": 300,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 0.96,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        }
+      ],
+      "staticMeaning": true
+    },
+    {
+      "id": "theme",
+      "label": "Тема",
+      "category": "system",
+      "aliases": [
+        "THEME"
+      ],
+      "usage": "Тема оформления; статичная половина различима без цвета.",
+      "geometry": [
+        {
+          "type": "circle",
+          "part": "body",
+          "cx": 12,
+          "cy": 12,
+          "r": 8
+        },
+        {
+          "type": "path",
+          "part": "half",
+          "d": "M12 4A8 8 0 0 1 12 20Z",
+          "fill": "currentColor",
+          "stroke": "none"
+        }
+      ],
+      "motion": [
+        {
+          "part": "half",
+          "durationMs": 300,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0,
+              "y": 0,
+              "rotate": 6,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        }
+      ],
+      "staticMeaning": true
+    },
+    {
+      "id": "local",
+      "label": "На устройстве",
+      "category": "system",
+      "aliases": [
+        "LOCAL"
+      ],
+      "usage": "Локальное исполнение на устройстве; не гарантия доступности выбранной модели.",
+      "geometry": [
+        {
+          "type": "rect",
+          "part": "body",
+          "x": 5.5,
+          "y": 3,
+          "width": 13,
+          "height": 18,
+          "rx": 2.5
+        },
+        {
+          "type": "circle",
+          "part": "dot",
+          "cx": 12,
+          "cy": 17.8,
+          "r": 0.8,
+          "fill": "currentColor",
+          "stroke": "none"
+        }
+      ],
+      "motion": [
+        {
+          "part": "dot",
+          "durationMs": 260,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1.04,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        }
+      ],
+      "staticMeaning": true
+    },
+    {
+      "id": "external",
+      "label": "Внешний провайдер",
+      "category": "system",
+      "aliases": [
+        "EXTERNAL",
+        "CLOUD"
+      ],
+      "usage": "Внешний AI. Provider и виды отправляемых данных раскрываются текстом.",
+      "geometry": [
+        {
+          "type": "path",
+          "part": "cloud",
+          "d": "M10.5 18.7H7.1A4.1 4.1 0 0 1 6.3 10.6A6 6 0 0 1 17.7 8.2A5.3 5.3 0 0 1 21 15"
+        },
+        {
+          "type": "path",
+          "part": "arrow",
+          "d": "M13.5 20 20.3 13.2M15.2 13.2H20.3V18.3"
+        }
+      ],
+      "motion": [
+        {
+          "part": "arrow",
+          "durationMs": 280,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0.5,
+              "y": -0.5,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        }
+      ],
+      "staticMeaning": true
+    },
+    {
+      "id": "privacy",
+      "label": "Приватность",
+      "category": "system",
+      "aliases": [
+        "PRIVACY"
+      ],
+      "usage": "Приватность и согласие. Щит не заменяет объяснение передачи данных.",
+      "geometry": [
+        {
+          "type": "path",
+          "part": "shield",
+          "d": "M12 3 19 5.8V11.2Q19 17.4 12 21Q5 17.4 5 11.2V5.8Z"
+        },
+        {
+          "type": "rect",
+          "part": "lock",
+          "x": 9,
+          "y": 10,
+          "width": 6,
+          "height": 5,
+          "rx": 1
+        },
+        {
+          "type": "path",
+          "part": "lock",
+          "d": "M10 10V8.6A2 2 0 0 1 14 8.6V10"
+        }
+      ],
+      "motion": [
+        {
+          "part": "lock",
+          "durationMs": 280,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0,
+              "y": -0.3,
+              "rotate": 0,
+              "scale": 0.97,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        }
+      ],
+      "staticMeaning": true
+    },
+    {
+      "id": "speech",
+      "label": "Распознавание речи",
+      "category": "ai",
+      "aliases": [
+        "SPEECH",
+        "SPEECH_TO_TEXT"
+      ],
+      "usage": "Статичный glyph роли STT. Hover motion не изображает аудиосигнал.",
+      "geometry": [
+        {
+          "type": "line",
+          "part": "short",
+          "x1": 7.5,
+          "y1": 9,
+          "x2": 7.5,
+          "y2": 15
+        },
+        {
+          "type": "line",
+          "part": "tall",
+          "x1": 12,
+          "y1": 5,
+          "x2": 12,
+          "y2": 19
+        },
+        {
+          "type": "line",
+          "part": "middle",
+          "x1": 16.5,
+          "y1": 7.5,
+          "x2": 16.5,
+          "y2": 16.5
+        }
+      ],
+      "motion": [
+        {
+          "part": "short",
+          "durationMs": 260,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0,
+              "y": -0.6,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        },
+        {
+          "part": "tall",
+          "durationMs": 260,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0,
+              "y": 0.4,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        },
+        {
+          "part": "middle",
+          "durationMs": 260,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0,
+              "y": -0.3,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        }
+      ],
+      "staticMeaning": true,
+      "audioReactive": false
+    },
+    {
+      "id": "text-processing",
+      "label": "Привести в порядок",
+      "category": "ai",
+      "aliases": [
+        "TEXT_PROCESSING",
+        "MAGIC"
+      ],
+      "usage": "Обработка текста. Legacy MAGIC остаётся только миграционным alias; палочка и звёзды удалены.",
+      "geometry": [
+        {
+          "type": "path",
+          "part": "lines",
+          "d": "M4.5 6H18M4.5 11H14M4.5 16H11.5"
+        },
+        {
+          "type": "path",
+          "part": "check",
+          "d": "M15 17 17 19 21 14.5"
+        }
+      ],
+      "motion": [
+        {
+          "part": "lines",
+          "durationMs": 260,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0.55,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        },
+        {
+          "part": "check",
+          "durationMs": 300,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": true
+        }
+      ],
+      "staticMeaning": true
+    },
+    {
+      "id": "routing",
+      "label": "Выбор проекта",
+      "category": "ai",
+      "aliases": [
+        "ROUTING"
+      ],
+      "usage": "Ранжирование проектов для заметки; не автоматическое сохранение без выбранного назначения.",
+      "geometry": [
+        {
+          "type": "path",
+          "part": "branch",
+          "d": "M4 12H9Q11 12 11 10V7Q11 6 12 6H19M9 12Q11 12 11 14V17Q11 18 12 18H19"
+        },
+        {
+          "type": "path",
+          "part": "top",
+          "d": "M16.5 3.5 19 6 16.5 8.5"
+        },
+        {
+          "type": "path",
+          "part": "bottom",
+          "d": "M16.5 15.5 19 18 16.5 20.5"
+        }
+      ],
+      "motion": [
+        {
+          "part": "top",
+          "durationMs": 260,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0.7,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        },
+        {
+          "part": "bottom",
+          "durationMs": 260,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0.7,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        }
+      ],
+      "staticMeaning": true
+    },
+    {
+      "id": "visibility",
+      "label": "Показать ключ",
+      "category": "system",
+      "aliases": [
+        "VISIBILITY",
+        "SHOW",
+        "EYE"
+      ],
+      "usage": "Показать введённый API-ключ. Меняет видимость поля; значение не отправляется и не копируется.",
+      "geometry": [
+        {
+          "type": "path",
+          "part": "eye",
+          "d": "M3 12Q6.2 6.4 12 6.4T21 12Q17.8 17.6 12 17.6T3 12Z"
+        },
+        {
+          "type": "circle",
+          "part": "eye",
+          "cx": 12,
+          "cy": 12,
+          "r": 2.7
+        }
+      ],
+      "motion": [
+        {
+          "part": "eye",
+          "durationMs": 260,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "scaleY": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "scaleY": 0.15,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "scaleY": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        }
+      ],
+      "staticMeaning": true
+    },
+    {
+      "id": "visibility-off",
+      "label": "Скрыть ключ",
+      "category": "system",
+      "aliases": [
+        "VISIBILITY_OFF",
+        "HIDE",
+        "EYE_OFF"
+      ],
+      "usage": "Скрыть API-ключ точками. Перечёркнутый глаз не заменяет privacy-щит и не означает удаление ключа.",
+      "geometry": [
+        {
+          "type": "path",
+          "part": "eye",
+          "d": "M8 7Q10 6.4 12 6.4Q17.8 6.4 21 12Q19.9 13.9 18.4 15.3M15.8 17Q14 17.6 12 17.6Q6.2 17.6 3 12Q4.3 9.8 6 8.3"
+        },
+        {
+          "type": "path",
+          "part": "slash",
+          "d": "M4.4 4.4 19.6 19.6"
+        }
+      ],
+      "motion": [
+        {
+          "part": "eye",
+          "durationMs": 260,
+          "easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+          "origin": [
+            12,
+            12
+          ],
+          "frames": [
+            {
+              "offset": 0,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "scaleY": 1,
+              "opacity": 1
+            },
+            {
+              "offset": 0.42,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "scaleY": 0.15,
+              "opacity": 1
+            },
+            {
+              "offset": 1,
+              "x": 0,
+              "y": 0,
+              "rotate": 0,
+              "scale": 1,
+              "scaleY": 1,
+              "opacity": 1
+            }
+          ],
+          "draw": false
+        }
+      ],
+      "staticMeaning": true
+    }
+  ]
+}

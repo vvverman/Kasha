@@ -1,0 +1,1874 @@
+{
+  "format": "kasha-design-tokens-v1",
+  "version": "1.0.0",
+  "status": "target-specification",
+  "locale": "ru",
+  "verifiedAt": "2026-09-13",
+  "contract": {
+    "colors": "Разрешены вычисленные sRGB #RRGGBB и rgba(r,g,b,a); каналы rgba заданы в sRGB, alpha в диапазоне0..1. Не перемножать alpha неявно.",
+    "measurements": "Суффиксы Dp, Sp, Ms, Em задают единицы; scale безразмерный. Все геометрические размеры логические.",
+    "dependencies": "Не нужны runtime-импорты, удалённые шрифты, выражения интерполяции или внешний механизм разрешения ссылок.",
+    "scope": "Передача дизайна в разработку; этот файл не меняет production-код. Исходная палитра хранится в palette; компоненты читают themes."
+  },
+  "source": {
+    "repositoryMainCommit": "ca3793e4e603dcf340cdaca565f089bd57c5d77a",
+    "activeIosBranch": "platform/ios-production",
+    "activeIosCommit": "d22d1dfb3cd9baa801afa4249e48988107998a36"
+  },
+  "palette": {
+    "dark": {
+      "canvas0": "#191715",
+      "canvas1": "#1D1A18",
+      "surfaceLow": "#211E1B",
+      "surface": "#27231F",
+      "surfaceHigh": "#302A25",
+      "surfaceHighest": "#39312B",
+      "textPrimary": "#F5F0E8",
+      "textSecondary": "#C3B9AE",
+      "textTertiary": "#91877D",
+      "disabled": "rgba(245,240,232,0.30)",
+      "accent": "#E8C79F",
+      "accentLight": "#F2D9BB",
+      "accentDark": "#C6A078",
+      "accentTranslucent": "rgba(232,199,159,0.12)"
+    },
+    "light": {
+      "canvas": "#F7F5EE",
+      "surface": "#FEFCF6",
+      "surfaceSecondary": "#EEEAE0",
+      "textPrimary": "#211E1B",
+      "textSecondary": "#6C645D",
+      "textTertiary": "#938A81",
+      "accent": "#886445"
+    },
+    "semanticRaw": {
+      "success": "#8EA184",
+      "warning": "#BA9665",
+      "error": "#BD746C",
+      "hairlineDark": "rgba(255,245,235,0.08)",
+      "hairlineLight": "rgba(30,25,20,0.08)"
+    }
+  },
+  "themes": {
+    "dark": {
+      "colors": {
+        "canvas": {
+          "base": "#191715",
+          "subtle": "#1D1A18"
+        },
+        "surface": {
+          "low": "#211E1B",
+          "base": "#27231F",
+          "high": "#302A25",
+          "highest": "#39312B"
+        },
+        "text": {
+          "primary": "#F5F0E8",
+          "secondary": "#C3B9AE",
+          "tertiary": "#ACA095",
+          "decorativeMuted": "#91877D",
+          "disabled": "rgba(245,240,232,0.30)",
+          "placeholder": "#ACA095"
+        },
+        "icon": {
+          "primary": "#F5F0E8",
+          "secondary": "#C3B9AE",
+          "inactive": "#91877D",
+          "disabled": "rgba(245,240,232,0.30)"
+        },
+        "accent": {
+          "fill": "#E8C79F",
+          "hoverFill": "#EFCEAA",
+          "pressedFill": "#DFC09A",
+          "content": "#E8C79F",
+          "onFill": "#211E1B",
+          "light": "#F2D9BB",
+          "dark": "#C6A078",
+          "container": "rgba(232,199,159,0.12)"
+        },
+        "border": {
+          "hairline": "rgba(255,245,235,0.08)",
+          "control": "#91877D"
+        },
+        "focus": {
+          "ring": "#E8C79F"
+        },
+        "selection": {
+          "container": "#39312B",
+          "textBackground": "#5C4937",
+          "textForeground": "#F5F0E8",
+          "cursor": "#E8C79F"
+        },
+        "status": {
+          "success": {
+            "content": "#8EA184",
+            "container": "#283027"
+          },
+          "warning": {
+            "content": "#BA9665",
+            "container": "#342B20"
+          },
+          "error": {
+            "content": "#D08E86",
+            "container": "#342321"
+          }
+        },
+        "action": {
+          "secondaryFill": "#302A25",
+          "secondaryHoverFill": "#39312B",
+          "secondaryPressedFill": "#39312B",
+          "secondaryContent": "#F5F0E8",
+          "quietContent": "#C3B9AE",
+          "disabledFill": "#302A25",
+          "disabledContent": "rgba(245,240,232,0.30)",
+          "destructiveFill": "#D08E86",
+          "onDestructiveFill": "#211E1B"
+        },
+        "navigation": {
+          "fill": "#302A25",
+          "activeContent": "#F5F0E8",
+          "inactiveContent": "#C3B9AE",
+          "activeSpot": "rgba(232,199,159,0.08)"
+        },
+        "field": {
+          "fill": "#27231F",
+          "content": "#F5F0E8",
+          "placeholder": "#ACA095",
+          "outline": "#91877D"
+        },
+        "waveform": {
+          "content": "#E8C79F",
+          "center": "#F5E0C7",
+          "edgeDecorative": "rgba(232,199,159,0.25)",
+          "played": "#E8C79F",
+          "unplayed": "#91877D",
+          "playhead": "#F5F0E8"
+        },
+        "orb": {
+          "ink": "#211E1B",
+          "center": "#F2D9BB",
+          "body": "#E8C79F",
+          "innerMinimum": "#C6A078",
+          "highlight": "#F5E0C7",
+          "bloom": "rgba(232,199,159,0.14)",
+          "recordingCore": "#302A25",
+          "recordingWaveform": "#E8C79F"
+        },
+        "background": {
+          "illumination": "rgba(118,91,67,0.15)",
+          "shadowField": "rgba(0,0,0,0.16)",
+          "grainLight": "#F5F0E8",
+          "grainDark": "#191715",
+          "brandShape": "#E8C79F"
+        },
+        "overlay": {
+          "scrim": "rgba(10,8,7,0.56)",
+          "hover": "rgba(245,240,232,0.04)",
+          "pressed": "rgba(245,240,232,0.07)"
+        },
+        "shadow": {
+          "floating": "rgba(0,0,0,0.20)",
+          "lift": "rgba(0,0,0,0.24)"
+        }
+      }
+    },
+    "light": {
+      "colors": {
+        "canvas": {
+          "base": "#F7F5EE",
+          "subtle": "#F2EFE6"
+        },
+        "surface": {
+          "low": "#F2EFE6",
+          "base": "#FEFCF6",
+          "high": "#FEFCF6",
+          "highest": "#EEEAE0"
+        },
+        "text": {
+          "primary": "#211E1B",
+          "secondary": "#6C645D",
+          "tertiary": "#70665D",
+          "decorativeMuted": "#938A81",
+          "disabled": "rgba(33,30,27,0.30)",
+          "placeholder": "#70665D"
+        },
+        "icon": {
+          "primary": "#211E1B",
+          "secondary": "#6C645D",
+          "inactive": "#81776D",
+          "disabled": "rgba(33,30,27,0.30)"
+        },
+        "accent": {
+          "fill": "#886445",
+          "hoverFill": "#805C3E",
+          "pressedFill": "#785538",
+          "content": "#7A583B",
+          "onFill": "#FEFCF6",
+          "light": "#A67F5B",
+          "dark": "#745236",
+          "container": "rgba(136,100,69,0.10)"
+        },
+        "border": {
+          "hairline": "rgba(30,25,20,0.08)",
+          "control": "#81776D"
+        },
+        "focus": {
+          "ring": "#7A583B"
+        },
+        "selection": {
+          "container": "#EEEAE0",
+          "textBackground": "#E3D1B9",
+          "textForeground": "#211E1B",
+          "cursor": "#7A583B"
+        },
+        "status": {
+          "success": {
+            "content": "#4E6547",
+            "container": "#E7EEE2"
+          },
+          "warning": {
+            "content": "#745629",
+            "container": "#F5EBD8"
+          },
+          "error": {
+            "content": "#974C45",
+            "container": "#F6E6E1"
+          }
+        },
+        "action": {
+          "secondaryFill": "#FEFCF6",
+          "secondaryHoverFill": "#F2EFE6",
+          "secondaryPressedFill": "#EEEAE0",
+          "secondaryContent": "#211E1B",
+          "quietContent": "#6C645D",
+          "disabledFill": "#EEEAE0",
+          "disabledContent": "rgba(33,30,27,0.30)",
+          "destructiveFill": "#974C45",
+          "onDestructiveFill": "#FEFCF6"
+        },
+        "navigation": {
+          "fill": "#FEFCF6",
+          "activeContent": "#211E1B",
+          "inactiveContent": "#6C645D",
+          "activeSpot": "rgba(136,100,69,0.08)"
+        },
+        "field": {
+          "fill": "#FEFCF6",
+          "content": "#211E1B",
+          "placeholder": "#70665D",
+          "outline": "#81776D"
+        },
+        "waveform": {
+          "content": "#7A583B",
+          "center": "#7A583B",
+          "edgeDecorative": "rgba(136,100,69,0.25)",
+          "played": "#886445",
+          "unplayed": "#81776D",
+          "playhead": "#211E1B"
+        },
+        "orb": {
+          "ink": "#211E1B",
+          "center": "#F2D9BB",
+          "body": "#E8C79F",
+          "innerMinimum": "#C6A078",
+          "highlight": "#F5E0C7",
+          "bloom": "rgba(136,100,69,0.08)",
+          "recordingCore": "#302A25",
+          "recordingWaveform": "#E8C79F"
+        },
+        "background": {
+          "illumination": "rgba(232,199,159,0.14)",
+          "shadowField": "rgba(80,58,38,0.04)",
+          "grainLight": "#FEFCF6",
+          "grainDark": "#211E1B",
+          "brandShape": "#886445"
+        },
+        "overlay": {
+          "scrim": "rgba(33,26,21,0.32)",
+          "hover": "rgba(33,30,27,0.03)",
+          "pressed": "rgba(33,30,27,0.06)"
+        },
+        "shadow": {
+          "floating": "rgba(42,32,24,0.08)",
+          "lift": "rgba(42,32,24,0.12)"
+        }
+      }
+    }
+  },
+  "typography": {
+    "family": "Geologica",
+    "resourceTarget": "composeApp/src/commonMain/composeResources/font/geologica_variable.ttf",
+    "licenseTarget": "composeApp/src/commonMain/composeResources/files/licenses/Geologica-OFL.txt",
+    "sourceRepository": "https://github.com/googlefonts/geologica",
+    "sourceCommit": "685f38d7c9e86b0c8530204c97ddcaf6558dd17b",
+    "sourceFontPath": "fonts/variable/Geologica[CRSV,SHRP,slnt,wght].ttf",
+    "fontSha256": "9124d9e88ac6c11d761f35241713a51d68e2c4ebedce0edaca834717a00959ec",
+    "fontBytes": 348640,
+    "license": "SIL-OFL-1.1",
+    "licenseSha256": "778186245840aea0e60bec6a46e7fb1442e0cd78e41afeadffcd3e8824b379e0",
+    "axes": {
+      "wght": {
+        "min": 100,
+        "max": 900,
+        "fontDefault": 100
+      },
+      "CRSV": {
+        "min": 0,
+        "max": 1,
+        "fontDefault": 0
+      },
+      "SHRP": {
+        "min": 0,
+        "max": 100,
+        "fontDefault": 0
+      },
+      "slnt": {
+        "min": -12,
+        "max": 0,
+        "fontDefault": 0
+      }
+    },
+    "presets": {
+      "ui": {
+        "CRSV": 0,
+        "SHRP": 0,
+        "slnt": 0
+      },
+      "display": {
+        "CRSV": 1,
+        "SHRP": 0,
+        "slnt": 0
+      }
+    },
+    "styles": {
+      "hero": {
+        "fontSizeSp": 46,
+        "lineHeightSp": 48,
+        "weight": 600,
+        "preset": "display",
+        "letterSpacingEm": -0.02,
+        "features": [
+          "kern",
+          "liga",
+          "locl"
+        ]
+      },
+      "display": {
+        "fontSizeSp": 38,
+        "lineHeightSp": 42,
+        "weight": 550,
+        "preset": "display",
+        "letterSpacingEm": -0.015,
+        "features": [
+          "kern",
+          "liga",
+          "locl"
+        ]
+      },
+      "h1": {
+        "fontSizeSp": 30,
+        "lineHeightSp": 35,
+        "weight": 580,
+        "preset": "ui",
+        "letterSpacingEm": -0.01,
+        "features": [
+          "kern",
+          "liga",
+          "locl"
+        ]
+      },
+      "h2": {
+        "fontSizeSp": 25,
+        "lineHeightSp": 30,
+        "weight": 560,
+        "preset": "ui",
+        "letterSpacingEm": -0.005,
+        "features": [
+          "kern",
+          "liga",
+          "locl"
+        ]
+      },
+      "h3": {
+        "fontSizeSp": 21,
+        "lineHeightSp": 27,
+        "weight": 540,
+        "preset": "ui",
+        "letterSpacingEm": 0,
+        "features": [
+          "kern",
+          "liga",
+          "locl"
+        ]
+      },
+      "title": {
+        "fontSizeSp": 18,
+        "lineHeightSp": 24,
+        "weight": 520,
+        "preset": "ui",
+        "letterSpacingEm": 0,
+        "features": [
+          "kern",
+          "liga",
+          "locl"
+        ]
+      },
+      "bodyLarge": {
+        "fontSizeSp": 17,
+        "lineHeightSp": 25,
+        "weight": 400,
+        "preset": "ui",
+        "letterSpacingEm": 0,
+        "features": [
+          "kern",
+          "liga",
+          "locl"
+        ]
+      },
+      "body": {
+        "fontSizeSp": 16,
+        "lineHeightSp": 23,
+        "weight": 400,
+        "preset": "ui",
+        "letterSpacingEm": 0,
+        "features": [
+          "kern",
+          "liga",
+          "locl"
+        ]
+      },
+      "bodySmall": {
+        "fontSizeSp": 14,
+        "lineHeightSp": 20,
+        "weight": 400,
+        "preset": "ui",
+        "letterSpacingEm": 0,
+        "features": [
+          "kern",
+          "liga",
+          "locl"
+        ]
+      },
+      "label": {
+        "fontSizeSp": 13,
+        "lineHeightSp": 18,
+        "weight": 500,
+        "preset": "ui",
+        "letterSpacingEm": 0.005,
+        "features": [
+          "kern",
+          "liga",
+          "locl"
+        ]
+      },
+      "navigation": {
+        "fontSizeSp": 12,
+        "lineHeightSp": 16,
+        "weight": 500,
+        "preset": "ui",
+        "letterSpacingEm": 0,
+        "features": [
+          "kern",
+          "liga",
+          "locl"
+        ]
+      },
+      "micro": {
+        "fontSizeSp": 11,
+        "lineHeightSp": 15,
+        "weight": 500,
+        "preset": "ui",
+        "letterSpacingEm": 0.01,
+        "features": [
+          "kern",
+          "liga",
+          "locl"
+        ]
+      },
+      "button": {
+        "fontSizeSp": 16,
+        "lineHeightSp": 22,
+        "weight": 520,
+        "preset": "ui",
+        "letterSpacingEm": 0,
+        "features": [
+          "kern",
+          "liga",
+          "locl"
+        ]
+      },
+      "timer": {
+        "fontSizeSp": 46,
+        "lineHeightSp": 52,
+        "weight": 560,
+        "preset": "ui",
+        "letterSpacingEm": 0,
+        "features": [
+          "tnum"
+        ]
+      }
+    },
+    "minimumUiSp": 11,
+    "criticalTextScaleMaximum": 2,
+    "fontSynthesisAllowed": false,
+    "horizontalScale": 1,
+    "currentUiLocales": [
+      "ru",
+      "en",
+      "es",
+      "fr",
+      "de",
+      "uk",
+      "be",
+      "kk"
+    ],
+    "verification": {
+      "currentPrepareFontsAlphabetMissingGlyphs": 0,
+      "actualBinaryAxesVerified": true,
+      "actualBinaryTabularNumbersVerified": true,
+      "platformRenderingVerified": false
+    },
+    "handoffResource": "docs/design/assets/fonts/Geologica-Variable.ttf"
+  },
+  "spacingDp": {
+    "none": 0,
+    "hair": 2,
+    "xxs": 4,
+    "xs": 8,
+    "sm": 12,
+    "md": 16,
+    "lg": 20,
+    "xl": 24,
+    "xxl": 32,
+    "xxxl": 40,
+    "section": 48,
+    "hero": 64,
+    "heroLarge": 80
+  },
+  "radiusDp": {
+    "none": 0,
+    "tiny": 8,
+    "small": 12,
+    "field": 16,
+    "secondaryButton": 18,
+    "primaryButton": 20,
+    "surface": 20,
+    "floating": 24,
+    "navigation": 28,
+    "sheetTop": 28
+  },
+  "shape": {
+    "orb": "circle",
+    "iconButton": "circle",
+    "taskComplete": "custom-glyph",
+    "navigation": "single-rounded-rectangle"
+  },
+  "dimensions": {
+    "touchTargetMinimumDp": 44,
+    "touchTargetPreferredDp": 48,
+    "primaryButtonMinHeightDp": 56,
+    "secondaryButtonMinHeightDp": 56,
+    "quietButtonMinHeightDp": 48,
+    "buttonHorizontalPaddingDp": 20,
+    "iconTargetDp": 48,
+    "iconGlyphDp": 22,
+    "iconGrid": 24,
+    "iconStrokeDp": 1.8,
+    "fieldMinHeightDp": 56,
+    "rowMinHeightDp": 64,
+    "rowPaddingVerticalDp": 12,
+    "navigationBaseHeightDp": 72,
+    "navigationGapToPlayerDp": 8,
+    "pageMarginCompactDp": 20,
+    "pageMarginNarrowDp": 16,
+    "pageMarginMediumDp": 24,
+    "pageMarginExpandedDp": 32,
+    "readingColumnMaxDp": 640,
+    "sheetMaxWidthDp": 560,
+    "dialogMaxWidthDp": 440,
+    "orbIdleDp": 184,
+    "orbIdleMinDp": 168,
+    "orbIdleMaxDp": 190,
+    "waveformBarWidthDp": 2.5,
+    "waveformBarGapDp": 4,
+    "waveformMinHeightDp": 4,
+    "waveformMaxHeightDp": 96,
+    "waveformMiniMaxHeightDp": 24,
+    "focusRingWidthDp": 2,
+    "focusRingOffsetDp": 2,
+    "controlOutlineWidthDp": 1.5,
+    "orbRecordingDp": 196,
+    "captureRegionDp": 224,
+    "waveformRecordingMaxWidthDp": 320,
+    "contentColumnMaxDp": 720,
+    "navigationMaxWidthDp": 560,
+    "sidebarWidthDp": 224,
+    "shellMaxWidthDp": 1440,
+    "hairlinePhysicalPx": 1
+  },
+  "layout": {
+    "compactMaxExclusiveDp": 600,
+    "mediumMaxExclusiveDp": 1024,
+    "minimumViewportDp": 320,
+    "homeUsableAreaBrandFraction": 0.18,
+    "homeUsableAreaCaptureFraction": 0.48,
+    "homeUsableAreaActionsFraction": 0.24,
+    "homeUsableAreaFlexibleFraction": 0.1,
+    "maxNestedSurfaceLevels": 1,
+    "textMeasureMinCharacters": 45,
+    "textMeasureMaxCharacters": 75,
+    "homeCenterShiftDp": -20
+  },
+  "opacity": {
+    "disabledContent": 0.3,
+    "grainDark": 0.015,
+    "grainLight": 0.01,
+    "backgroundBrandIdle": 0.03,
+    "backgroundBrandRecording": 0.01,
+    "backgroundBrandOtherScreens": 0,
+    "navigationActiveSpot": 0.08
+  },
+  "backgroundGeometry": {
+    "illuminationCenterXFraction": 0.4,
+    "illuminationCenterYFraction": 0.25,
+    "illuminationRadiusWidthFactor": 1.0,
+    "shadowCenterXFraction": 0.95,
+    "shadowCenterYFraction": 0.9,
+    "shadowRadiusWidthFactor": 0.9,
+    "brandWidthFactor": 1.8,
+    "brandCenterXFraction": 0.88,
+    "brandCenterYFraction": 0.64,
+    "brandBlurDp": 28,
+    "grainAnimationEnabled": false,
+    "shadowRadiusHeightFactor": 0.75
+  },
+  "motion": {
+    "durationMs": {
+      "pressDown": 90,
+      "pressRelease": 210,
+      "navigation": 200,
+      "sheet": 280,
+      "taskComplete": 280,
+      "orbBreathing": 1800,
+      "processingPhase": 6000,
+      "opacityReduced": 120,
+      "themeChange": 180,
+      "taskCompleteHold": 300,
+      "taskCompleteExit": 160,
+      "sheetClose": 240,
+      "dialog": 180,
+      "popover": 140,
+      "orbStart": 220,
+      "opacityReducedSheet": 120
+    },
+    "scale": {
+      "press": 0.98,
+      "dragLift": 1.015,
+      "orbRecording": 1.065217391304348,
+      "orbBreathingMin": 1,
+      "orbBreathingMax": 1.025
+    },
+    "spring": {
+      "pressRelease": {
+        "dampingRatio": 0.82,
+        "stiffness": 500
+      },
+      "reorder": {
+        "dampingRatio": 0.86,
+        "stiffness": 450
+      }
+    },
+    "reducedMotion": {
+      "breathing": false,
+      "animatedGlow": false,
+      "parallax": false,
+      "positionTransitions": false,
+      "functionalWaveform": true,
+      "opacityTransitions": true
+    }
+  },
+  "elevation": {
+    "canvas": {
+      "shadowEnabled": false
+    },
+    "surface": {
+      "shadowEnabled": false
+    },
+    "floatingDark": {
+      "offsetXDp": 0,
+      "offsetYDp": 8,
+      "blurDp": 28,
+      "spreadDp": 0,
+      "color": "rgba(0,0,0,0.20)"
+    },
+    "floatingLight": {
+      "offsetXDp": 0,
+      "offsetYDp": 8,
+      "blurDp": 30,
+      "spreadDp": 0,
+      "color": "rgba(42,32,24,0.08)"
+    },
+    "dragDark": {
+      "offsetXDp": 0,
+      "offsetYDp": 12,
+      "blurDp": 32,
+      "spreadDp": 0,
+      "color": "rgba(0,0,0,0.24)"
+    },
+    "dragLight": {
+      "offsetXDp": 0,
+      "offsetYDp": 12,
+      "blurDp": 32,
+      "spreadDp": 0,
+      "color": "rgba(42,32,24,0.12)"
+    }
+  },
+  "branding": {
+    "regularResource": "composeApp/src/commonMain/composeResources/drawable/kasha_logo.svg",
+    "regularViewBox": [
+      0,
+      0,
+      604,
+      739
+    ],
+    "solidResource": "composeApp/src/commonMain/composeResources/drawable/kasha_logo_solid.svg",
+    "solidViewBox": [
+      0,
+      0,
+      672,
+      793
+    ],
+    "splashSolidWidthDp": 168,
+    "splashSolidWidthMinDp": 150,
+    "splashSolidWidthMaxDp": 190,
+    "homeRegularWidthDp": 28,
+    "clearSpaceWidthFraction": 0.25,
+    "allowDistortion": false,
+    "allowTextReplacement": false
+  },
+  "contrast": {
+    "method": "WCAG2.x: относительная яркость sRGB с порогом0.04045; контраст(Lmax+0.05)/(Lmin+0.05). Округление используется только для отображения; проверяется неокруглённое значение.",
+    "normalTextMinimum": 4.5,
+    "functionalGraphicsMinimum": 3,
+    "cases": [
+      {
+        "name": "dark.text.primary на canvas",
+        "foreground": "#F5F0E8",
+        "background": "#191715",
+        "ratio": 15.75843,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "dark.text.primary на low",
+        "foreground": "#F5F0E8",
+        "background": "#211E1B",
+        "ratio": 14.619915,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "dark.text.primary на base",
+        "foreground": "#F5F0E8",
+        "background": "#27231F",
+        "ratio": 13.748418,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "dark.text.primary на high",
+        "foreground": "#F5F0E8",
+        "background": "#302A25",
+        "ratio": 12.477806,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "dark.text.primary на highest",
+        "foreground": "#F5F0E8",
+        "background": "#39312B",
+        "ratio": 11.231642,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "dark.text.secondary на canvas",
+        "foreground": "#C3B9AE",
+        "background": "#191715",
+        "ratio": 9.25428,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "dark.text.secondary на low",
+        "foreground": "#C3B9AE",
+        "background": "#211E1B",
+        "ratio": 8.585677,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "dark.text.secondary на base",
+        "foreground": "#C3B9AE",
+        "background": "#27231F",
+        "ratio": 8.073882,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "dark.text.secondary на high",
+        "foreground": "#C3B9AE",
+        "background": "#302A25",
+        "ratio": 7.327704,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "dark.text.secondary на highest",
+        "foreground": "#C3B9AE",
+        "background": "#39312B",
+        "ratio": 6.595883,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "dark.text.tertiary на canvas",
+        "foreground": "#ACA095",
+        "background": "#191715",
+        "ratio": 6.994371,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "dark.text.tertiary на low",
+        "foreground": "#ACA095",
+        "background": "#211E1B",
+        "ratio": 6.489041,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "dark.text.tertiary на base",
+        "foreground": "#ACA095",
+        "background": "#27231F",
+        "ratio": 6.102228,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "dark.text.tertiary на high",
+        "foreground": "#ACA095",
+        "background": "#302A25",
+        "ratio": 5.538267,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "dark.text.tertiary на highest",
+        "foreground": "#ACA095",
+        "background": "#39312B",
+        "ratio": 4.985158,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "dark.text.placeholder на canvas",
+        "foreground": "#ACA095",
+        "background": "#191715",
+        "ratio": 6.994371,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "dark.text.placeholder на low",
+        "foreground": "#ACA095",
+        "background": "#211E1B",
+        "ratio": 6.489041,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "dark.text.placeholder на base",
+        "foreground": "#ACA095",
+        "background": "#27231F",
+        "ratio": 6.102228,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "dark.text.placeholder на high",
+        "foreground": "#ACA095",
+        "background": "#302A25",
+        "ratio": 5.538267,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "dark.text.placeholder на highest",
+        "foreground": "#ACA095",
+        "background": "#39312B",
+        "ratio": 4.985158,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "dark.status.success.content на canvas",
+        "foreground": "#8EA184",
+        "background": "#191715",
+        "ratio": 6.453693,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "dark.status.success.content на low",
+        "foreground": "#8EA184",
+        "background": "#211E1B",
+        "ratio": 5.987426,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "dark.status.success.content на base",
+        "foreground": "#8EA184",
+        "background": "#27231F",
+        "ratio": 5.630514,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "dark.status.success.content на high",
+        "foreground": "#8EA184",
+        "background": "#302A25",
+        "ratio": 5.110149,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "dark.status.success.content на highest",
+        "foreground": "#8EA184",
+        "background": "#39312B",
+        "ratio": 4.599796,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "dark.status.success на своём контейнере",
+        "foreground": "#8EA184",
+        "background": "#283027",
+        "ratio": 4.915573,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "dark.status.warning.content на canvas",
+        "foreground": "#BA9665",
+        "background": "#191715",
+        "ratio": 6.502201,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "dark.status.warning.content на low",
+        "foreground": "#BA9665",
+        "background": "#211E1B",
+        "ratio": 6.03243,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "dark.status.warning.content на base",
+        "foreground": "#BA9665",
+        "background": "#27231F",
+        "ratio": 5.672835,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "dark.status.warning.content на high",
+        "foreground": "#BA9665",
+        "background": "#302A25",
+        "ratio": 5.148558,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "dark.status.warning.content на highest",
+        "foreground": "#BA9665",
+        "background": "#39312B",
+        "ratio": 4.63437,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "dark.status.warning на своём контейнере",
+        "foreground": "#BA9665",
+        "background": "#342B20",
+        "ratio": 5.050365,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "dark.status.error.content на canvas",
+        "foreground": "#D08E86",
+        "background": "#191715",
+        "ratio": 6.721103,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "dark.status.error.content на low",
+        "foreground": "#D08E86",
+        "background": "#211E1B",
+        "ratio": 6.235517,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "dark.status.error.content на base",
+        "foreground": "#D08E86",
+        "background": "#27231F",
+        "ratio": 5.863816,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "dark.status.error.content на high",
+        "foreground": "#D08E86",
+        "background": "#302A25",
+        "ratio": 5.321889,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "dark.status.error.content на highest",
+        "foreground": "#D08E86",
+        "background": "#39312B",
+        "ratio": 4.79039,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "dark.status.error на своём контейнере",
+        "foreground": "#D08E86",
+        "background": "#342321",
+        "ratio": 5.606007,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "dark.accent.onFill на fill",
+        "foreground": "#211E1B",
+        "background": "#E8C79F",
+        "ratio": 10.346823,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "dark.accent.onFill на hoverFill",
+        "foreground": "#211E1B",
+        "background": "#EFCEAA",
+        "ratio": 11.119174,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "dark.accent.onFill на pressedFill",
+        "foreground": "#211E1B",
+        "background": "#DFC09A",
+        "ratio": 9.590939,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "dark.accent.content на canvas",
+        "foreground": "#E8C79F",
+        "background": "#191715",
+        "ratio": 11.152575,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "dark.border.control на canvas",
+        "foreground": "#91877D",
+        "background": "#191715",
+        "ratio": 5.07837,
+        "minimum": 3,
+        "passes": true
+      },
+      {
+        "name": "dark.focus.ring на canvas",
+        "foreground": "#E8C79F",
+        "background": "#191715",
+        "ratio": 11.152575,
+        "minimum": 3,
+        "passes": true
+      },
+      {
+        "name": "dark.waveform.unplayed на canvas",
+        "foreground": "#91877D",
+        "background": "#191715",
+        "ratio": 5.07837,
+        "minimum": 3,
+        "passes": true
+      },
+      {
+        "name": "dark.accent.content на low",
+        "foreground": "#E8C79F",
+        "background": "#211E1B",
+        "ratio": 10.346823,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "dark.border.control на low",
+        "foreground": "#91877D",
+        "background": "#211E1B",
+        "ratio": 4.711468,
+        "minimum": 3,
+        "passes": true
+      },
+      {
+        "name": "dark.focus.ring на low",
+        "foreground": "#E8C79F",
+        "background": "#211E1B",
+        "ratio": 10.346823,
+        "minimum": 3,
+        "passes": true
+      },
+      {
+        "name": "dark.waveform.unplayed на low",
+        "foreground": "#91877D",
+        "background": "#211E1B",
+        "ratio": 4.711468,
+        "minimum": 3,
+        "passes": true
+      },
+      {
+        "name": "dark.accent.content на base",
+        "foreground": "#E8C79F",
+        "background": "#27231F",
+        "ratio": 9.730046,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "dark.border.control на base",
+        "foreground": "#91877D",
+        "background": "#27231F",
+        "ratio": 4.430616,
+        "minimum": 3,
+        "passes": true
+      },
+      {
+        "name": "dark.focus.ring на base",
+        "foreground": "#E8C79F",
+        "background": "#27231F",
+        "ratio": 9.730046,
+        "minimum": 3,
+        "passes": true
+      },
+      {
+        "name": "dark.waveform.unplayed на base",
+        "foreground": "#91877D",
+        "background": "#27231F",
+        "ratio": 4.430616,
+        "minimum": 3,
+        "passes": true
+      },
+      {
+        "name": "dark.accent.content на high",
+        "foreground": "#E8C79F",
+        "background": "#302A25",
+        "ratio": 8.830807,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "dark.border.control на high",
+        "foreground": "#91877D",
+        "background": "#302A25",
+        "ratio": 4.021144,
+        "minimum": 3,
+        "passes": true
+      },
+      {
+        "name": "dark.focus.ring на high",
+        "foreground": "#E8C79F",
+        "background": "#302A25",
+        "ratio": 8.830807,
+        "minimum": 3,
+        "passes": true
+      },
+      {
+        "name": "dark.waveform.unplayed на high",
+        "foreground": "#91877D",
+        "background": "#302A25",
+        "ratio": 4.021144,
+        "minimum": 3,
+        "passes": true
+      },
+      {
+        "name": "dark.accent.content на highest",
+        "foreground": "#E8C79F",
+        "background": "#39312B",
+        "ratio": 7.948871,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "dark.border.control на highest",
+        "foreground": "#91877D",
+        "background": "#39312B",
+        "ratio": 3.619551,
+        "minimum": 3,
+        "passes": true
+      },
+      {
+        "name": "dark.focus.ring на highest",
+        "foreground": "#E8C79F",
+        "background": "#39312B",
+        "ratio": 7.948871,
+        "minimum": 3,
+        "passes": true
+      },
+      {
+        "name": "dark.waveform.unplayed на highest",
+        "foreground": "#91877D",
+        "background": "#39312B",
+        "ratio": 3.619551,
+        "minimum": 3,
+        "passes": true
+      },
+      {
+        "name": "dark.selection.text",
+        "foreground": "#F5F0E8",
+        "background": "#5C4937",
+        "ratio": 7.515191,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "dark.destructive.fill",
+        "foreground": "#211E1B",
+        "background": "#D08E86",
+        "ratio": 6.235517,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "dark.orb.ink на минимально светлом ядре",
+        "foreground": "#211E1B",
+        "background": "#C6A078",
+        "ratio": 6.871484,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "light.text.primary на canvas",
+        "foreground": "#211E1B",
+        "background": "#F7F5EE",
+        "ratio": 15.203261,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "light.text.primary на low",
+        "foreground": "#211E1B",
+        "background": "#F2EFE6",
+        "ratio": 14.424776,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "light.text.primary на base",
+        "foreground": "#211E1B",
+        "background": "#FEFCF6",
+        "ratio": 16.165736,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "light.text.primary на high",
+        "foreground": "#211E1B",
+        "background": "#FEFCF6",
+        "ratio": 16.165736,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "light.text.primary на highest",
+        "foreground": "#211E1B",
+        "background": "#EEEAE0",
+        "ratio": 13.805788,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "light.text.secondary на canvas",
+        "foreground": "#6C645D",
+        "background": "#F7F5EE",
+        "ratio": 5.319907,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "light.text.secondary на low",
+        "foreground": "#6C645D",
+        "background": "#F2EFE6",
+        "ratio": 5.0475,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "light.text.secondary на base",
+        "foreground": "#6C645D",
+        "background": "#FEFCF6",
+        "ratio": 5.656695,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "light.text.secondary на high",
+        "foreground": "#6C645D",
+        "background": "#FEFCF6",
+        "ratio": 5.656695,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "light.text.secondary на highest",
+        "foreground": "#6C645D",
+        "background": "#EEEAE0",
+        "ratio": 4.830905,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "light.text.tertiary на canvas",
+        "foreground": "#70665D",
+        "background": "#F7F5EE",
+        "ratio": 5.136783,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "light.text.tertiary на low",
+        "foreground": "#70665D",
+        "background": "#F2EFE6",
+        "ratio": 4.873754,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "light.text.tertiary на base",
+        "foreground": "#70665D",
+        "background": "#FEFCF6",
+        "ratio": 5.461978,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "light.text.tertiary на high",
+        "foreground": "#70665D",
+        "background": "#FEFCF6",
+        "ratio": 5.461978,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "light.text.tertiary на highest",
+        "foreground": "#70665D",
+        "background": "#EEEAE0",
+        "ratio": 4.664614,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "light.text.placeholder на canvas",
+        "foreground": "#70665D",
+        "background": "#F7F5EE",
+        "ratio": 5.136783,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "light.text.placeholder на low",
+        "foreground": "#70665D",
+        "background": "#F2EFE6",
+        "ratio": 4.873754,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "light.text.placeholder на base",
+        "foreground": "#70665D",
+        "background": "#FEFCF6",
+        "ratio": 5.461978,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "light.text.placeholder на high",
+        "foreground": "#70665D",
+        "background": "#FEFCF6",
+        "ratio": 5.461978,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "light.text.placeholder на highest",
+        "foreground": "#70665D",
+        "background": "#EEEAE0",
+        "ratio": 4.664614,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "light.status.success.content на canvas",
+        "foreground": "#4E6547",
+        "background": "#F7F5EE",
+        "ratio": 5.875476,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "light.status.success.content на low",
+        "foreground": "#4E6547",
+        "background": "#F2EFE6",
+        "ratio": 5.574622,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "light.status.success.content на base",
+        "foreground": "#4E6547",
+        "background": "#FEFCF6",
+        "ratio": 6.247436,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "light.status.success.content на high",
+        "foreground": "#4E6547",
+        "background": "#FEFCF6",
+        "ratio": 6.247436,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "light.status.success.content на highest",
+        "foreground": "#4E6547",
+        "background": "#EEEAE0",
+        "ratio": 5.335406,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "light.status.success на своём контейнере",
+        "foreground": "#4E6547",
+        "background": "#E7EEE2",
+        "ratio": 5.410146,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "light.status.warning.content на canvas",
+        "foreground": "#745629",
+        "background": "#F7F5EE",
+        "ratio": 6.19834,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "light.status.warning.content на low",
+        "foreground": "#745629",
+        "background": "#F2EFE6",
+        "ratio": 5.880953,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "light.status.warning.content на base",
+        "foreground": "#745629",
+        "background": "#FEFCF6",
+        "ratio": 6.590739,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "light.status.warning.content на high",
+        "foreground": "#745629",
+        "background": "#FEFCF6",
+        "ratio": 6.590739,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "light.status.warning.content на highest",
+        "foreground": "#745629",
+        "background": "#EEEAE0",
+        "ratio": 5.628593,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "light.status.warning на своём контейнере",
+        "foreground": "#745629",
+        "background": "#F5EBD8",
+        "ratio": 5.717616,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "light.status.error.content на canvas",
+        "foreground": "#974C45",
+        "background": "#F7F5EE",
+        "ratio": 5.603259,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "light.status.error.content на low",
+        "foreground": "#974C45",
+        "background": "#F2EFE6",
+        "ratio": 5.316343,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "light.status.error.content на base",
+        "foreground": "#974C45",
+        "background": "#FEFCF6",
+        "ratio": 5.957985,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "light.status.error.content на high",
+        "foreground": "#974C45",
+        "background": "#FEFCF6",
+        "ratio": 5.957985,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "light.status.error.content на highest",
+        "foreground": "#974C45",
+        "background": "#EEEAE0",
+        "ratio": 5.088211,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "light.status.error на своём контейнере",
+        "foreground": "#974C45",
+        "background": "#F6E6E1",
+        "ratio": 5.042694,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "light.accent.onFill на fill",
+        "foreground": "#FEFCF6",
+        "background": "#886445",
+        "ratio": 5.174646,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "light.accent.onFill на hoverFill",
+        "foreground": "#FEFCF6",
+        "background": "#805C3E",
+        "ratio": 5.817963,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "light.accent.onFill на pressedFill",
+        "foreground": "#FEFCF6",
+        "background": "#785538",
+        "ratio": 6.487583,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "light.accent.content на canvas",
+        "foreground": "#7A583B",
+        "background": "#F7F5EE",
+        "ratio": 5.857315,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "light.border.control на canvas",
+        "foreground": "#81776D",
+        "background": "#F7F5EE",
+        "ratio": 4.016374,
+        "minimum": 3,
+        "passes": true
+      },
+      {
+        "name": "light.focus.ring на canvas",
+        "foreground": "#7A583B",
+        "background": "#F7F5EE",
+        "ratio": 5.857315,
+        "minimum": 3,
+        "passes": true
+      },
+      {
+        "name": "light.waveform.unplayed на canvas",
+        "foreground": "#81776D",
+        "background": "#F7F5EE",
+        "ratio": 4.016374,
+        "minimum": 3,
+        "passes": true
+      },
+      {
+        "name": "light.accent.content на low",
+        "foreground": "#7A583B",
+        "background": "#F2EFE6",
+        "ratio": 5.55739,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "light.border.control на low",
+        "foreground": "#81776D",
+        "background": "#F2EFE6",
+        "ratio": 3.810715,
+        "minimum": 3,
+        "passes": true
+      },
+      {
+        "name": "light.focus.ring на low",
+        "foreground": "#7A583B",
+        "background": "#F2EFE6",
+        "ratio": 5.55739,
+        "minimum": 3,
+        "passes": true
+      },
+      {
+        "name": "light.waveform.unplayed на low",
+        "foreground": "#81776D",
+        "background": "#F2EFE6",
+        "ratio": 3.810715,
+        "minimum": 3,
+        "passes": true
+      },
+      {
+        "name": "light.accent.content на base",
+        "foreground": "#7A583B",
+        "background": "#FEFCF6",
+        "ratio": 6.228125,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "light.border.control на base",
+        "foreground": "#81776D",
+        "background": "#FEFCF6",
+        "ratio": 4.270639,
+        "minimum": 3,
+        "passes": true
+      },
+      {
+        "name": "light.focus.ring на base",
+        "foreground": "#7A583B",
+        "background": "#FEFCF6",
+        "ratio": 6.228125,
+        "minimum": 3,
+        "passes": true
+      },
+      {
+        "name": "light.waveform.unplayed на base",
+        "foreground": "#81776D",
+        "background": "#FEFCF6",
+        "ratio": 4.270639,
+        "minimum": 3,
+        "passes": true
+      },
+      {
+        "name": "light.accent.content на high",
+        "foreground": "#7A583B",
+        "background": "#FEFCF6",
+        "ratio": 6.228125,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "light.border.control на high",
+        "foreground": "#81776D",
+        "background": "#FEFCF6",
+        "ratio": 4.270639,
+        "minimum": 3,
+        "passes": true
+      },
+      {
+        "name": "light.focus.ring на high",
+        "foreground": "#7A583B",
+        "background": "#FEFCF6",
+        "ratio": 6.228125,
+        "minimum": 3,
+        "passes": true
+      },
+      {
+        "name": "light.waveform.unplayed на high",
+        "foreground": "#81776D",
+        "background": "#FEFCF6",
+        "ratio": 4.270639,
+        "minimum": 3,
+        "passes": true
+      },
+      {
+        "name": "light.accent.content на highest",
+        "foreground": "#7A583B",
+        "background": "#EEEAE0",
+        "ratio": 5.318914,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "light.border.control на highest",
+        "foreground": "#81776D",
+        "background": "#EEEAE0",
+        "ratio": 3.647191,
+        "minimum": 3,
+        "passes": true
+      },
+      {
+        "name": "light.focus.ring на highest",
+        "foreground": "#7A583B",
+        "background": "#EEEAE0",
+        "ratio": 5.318914,
+        "minimum": 3,
+        "passes": true
+      },
+      {
+        "name": "light.waveform.unplayed на highest",
+        "foreground": "#81776D",
+        "background": "#EEEAE0",
+        "ratio": 3.647191,
+        "minimum": 3,
+        "passes": true
+      },
+      {
+        "name": "light.selection.text",
+        "foreground": "#211E1B",
+        "background": "#E3D1B9",
+        "ratio": 11.125332,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "light.destructive.fill",
+        "foreground": "#FEFCF6",
+        "background": "#974C45",
+        "ratio": 5.957985,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "light.orb.ink на минимально светлом ядре",
+        "foreground": "#211E1B",
+        "background": "#C6A078",
+        "ratio": 6.871484,
+        "minimum": 4.5,
+        "passes": true
+      },
+      {
+        "name": "dark.orb.recordingWaveform на recordingCore",
+        "foreground": "#E8C79F",
+        "background": "#302A25",
+        "ratio": 8.830807,
+        "minimum": 3,
+        "passes": true
+      },
+      {
+        "name": "light.orb.recordingWaveform на recordingCore",
+        "foreground": "#E8C79F",
+        "background": "#302A25",
+        "ratio": 8.830807,
+        "minimum": 3,
+        "passes": true
+      }
+    ],
+    "rawPaletteFailures": [
+      {
+        "name": "dark исходный tertiary на surface",
+        "foreground": "#91877D",
+        "background": "#27231F",
+        "ratio": 4.430616,
+        "minimum": 4.5,
+        "passes": false
+      },
+      {
+        "name": "dark исходный tertiary на highest",
+        "foreground": "#91877D",
+        "background": "#39312B",
+        "ratio": 3.619551,
+        "minimum": 4.5,
+        "passes": false
+      },
+      {
+        "name": "dark исходный error на high",
+        "foreground": "#BD746C",
+        "background": "#302A25",
+        "ratio": 3.96236,
+        "minimum": 4.5,
+        "passes": false
+      },
+      {
+        "name": "light исходный tertiary на canvas",
+        "foreground": "#938A81",
+        "background": "#F7F5EE",
+        "ratio": 3.108415,
+        "minimum": 4.5,
+        "passes": false
+      },
+      {
+        "name": "light исходный success на canvas",
+        "foreground": "#8EA184",
+        "background": "#F7F5EE",
+        "ratio": 2.539198,
+        "minimum": 4.5,
+        "passes": false
+      },
+      {
+        "name": "light исходный warning на canvas",
+        "foreground": "#BA9665",
+        "background": "#F7F5EE",
+        "ratio": 2.520255,
+        "minimum": 4.5,
+        "passes": false
+      },
+      {
+        "name": "light исходный error на canvas",
+        "foreground": "#BD746C",
+        "background": "#F7F5EE",
+        "ratio": 3.274735,
+        "minimum": 4.5,
+        "passes": false
+      },
+      {
+        "name": "light исходный accent text на highest",
+        "foreground": "#886445",
+        "background": "#EEEAE0",
+        "ratio": 4.419227,
+        "minimum": 4.5,
+        "passes": false
+      }
+    ]
+  },
+  "backgroundAssets": {
+    "buckwheat": {
+      "path": "docs/design/assets/buckwheat-dark-macro.png",
+      "allowedState": "splash",
+      "allowedTheme": "dark",
+      "initialCanvasOverlayAlpha": 0.3,
+      "fit": "crop",
+      "alignment": "bottom-right",
+      "loadBlocksLaunch": false,
+      "fallback": "procedural-canvas"
+    }
+  }
+}

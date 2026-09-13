@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="ru" data-theme="dark">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<title>Kasha Icons — каталог геометрии и движения</title>
+<style>
+@font-face{font-family:Geologica;src:url('../assets/fonts/Geologica-Variable.ttf') format('truetype');font-weight:100 900;font-display:swap}
+/* Локальный шрифт поставляется вместе с документацией; без CDN. */
+:root{--canvas:#191715;--surface:#211e1b;--high:#302a25;--ink:#f5f0e8;--muted:#c3b9ae;--accent:#e8c79f;--on-accent:#211e1b;--line:#453c34;--spot:rgba(232,199,159,.08)}
+:root[data-theme=light]{--canvas:#f7f5ee;--surface:#fefcf6;--high:#eeeadf;--ink:#211e1b;--muted:#6c645d;--accent:#886445;--on-accent:#fefcf6;--line:#c9c1b6;--spot:rgba(136,100,69,.07)}
+*{box-sizing:border-box}body{margin:0;background:var(--canvas);color:var(--ink);font-family:Geologica,system-ui,sans-serif;font-size:15px;line-height:1.5}button,input,a,select{font:inherit}button,a,input{touch-action:manipulation}button{color:inherit}button{cursor:pointer}button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:4px}button:disabled{cursor:default;opacity:.5}button,a{-webkit-tap-highlight-color:transparent}a{color:var(--accent);text-decoration-thickness:1px;text-underline-offset:4px}.skip{position:fixed;top:-100px;left:16px;z-index:10;padding:12px;background:var(--surface)}.skip:focus{top:12px}.shell{max-width:1480px;margin:auto;padding:32px 44px 56px}.masthead{display:flex;align-items:center;gap:16px;min-height:58px}.brand{width:36px;height:44px;color:var(--ink);flex:none}.brand svg{width:100%;height:100%}.edition{color:var(--muted);font-size:13px;letter-spacing:.04em}.masthead .actions{margin-left:auto;display:flex;gap:10px}.control{border:1px solid var(--line);background:transparent;border-radius:14px;padding:10px 16px;min-height:46px}.control:hover{background:var(--spot)}.control[aria-pressed=true]{background:var(--high);border-color:var(--accent)}.hero{display:grid;grid-template-columns:minmax(0,1fr) minmax(320px,.75fr);gap:60px;padding:55px 0 40px;border-bottom:1px solid var(--line)}h1{font-size:46px;font-weight:570;line-height:1.08;letter-spacing:-1.8px;margin:0 0 20px;max-width:690px}.intro{max-width:570px;color:var(--muted);margin:0;font-size:16px;line-height:1.7}.eyebrow{font-size:12px;color:var(--accent);letter-spacing:.13em;text-transform:uppercase;margin-bottom:16px}.principles{display:flex;gap:30px;flex-wrap:wrap;margin-top:26px}.principles b{font-size:23px;font-weight:520;display:block}.principles span{font-size:12px;color:var(--muted)}.inspector{align-self:start;background:var(--surface);border:1px solid var(--line);border-radius:24px;padding:24px;min-height:285px}.inspector-top{display:flex;gap:18px;align-items:center}.large-icon{display:grid;place-items:center;flex:none;width:76px;height:76px;border-radius:22px;background:var(--high);color:var(--accent)}.large-icon svg{width:40px;height:40px;overflow:visible}.inspector h2{font-size:22px;line-height:1.3;font-weight:530;margin:0 0 5px}.mono{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;overflow-wrap:anywhere}.muted{color:var(--muted)}.inspector p{font-size:13px;line-height:1.7;min-height:44px;margin:18px 0;color:var(--muted)}.sizes{display:flex;align-items:end;gap:23px}.size{display:flex;flex-direction:column;align-items:center;gap:7px;color:var(--ink)}.size small{font-size:11px;color:var(--muted)}.inspector-bottom{display:flex;align-items:center;justify-content:space-between;gap:14px}.link-button{min-height:44px;display:inline-flex;align-items:center;font-size:13px}.toolbar{padding:26px 0 16px;display:flex;gap:20px;align-items:center;justify-content:space-between}.search{display:flex;flex-direction:column;gap:7px;min-width:240px;max-width:360px;width:100%}.search label{font-size:12px;color:var(--muted)}input{width:100%;border:1px solid var(--line);color:var(--ink);background:var(--surface);padding:12px 15px;border-radius:14px;min-height:48px}input::placeholder{color:var(--muted)}.toolbar-note{font-size:13px;color:var(--muted);max-width:550px}.categories{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 22px}.category{background:transparent;border:1px solid transparent;border-radius:12px;padding:10px 13px;min-height:44px;color:var(--muted);font-size:13px}.category:hover{background:var(--spot)}.category[aria-pressed=true]{color:var(--ink);background:var(--high);border-color:var(--line)}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:22px;overflow:hidden}.glyph-card{border:0;background:var(--canvas);padding:22px 12px 17px;display:flex;flex-direction:column;align-items:center;justify-content:start;min-height:164px;position:relative;text-align:center}.glyph-card:hover{background:var(--surface)}.glyph-card[aria-pressed=true]{background:var(--spot)}.glyph-card:focus-visible{outline-offset:-5px;border-radius:14px;z-index:1}.card-icon{display:grid;place-items:center;width:48px;height:48px;margin-bottom:14px;color:var(--ink)}.card-icon svg{width:28px;height:28px;overflow:visible}.glyph-card[aria-pressed=true] .card-icon{color:var(--accent)}.glyph-label{font-size:13px;font-weight:500;line-height:1.35;min-height:36px;display:flex;align-items:center}.glyph-id{font-size:11px;color:var(--muted);margin-top:7px;letter-spacing:.01em}.count-row{display:flex;justify-content:space-between;gap:16px;padding:20px 2px;color:var(--muted);font-size:12px}.empty{padding:70px 20px;text-align:center;grid-column:1/-1;background:var(--canvas);color:var(--muted)}.notes{margin-top:16px;padding-top:24px;border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(3,1fr);gap:36px}.notes h3{font-size:14px;font-weight:530;margin:0 0 9px}.notes p{font-size:12px;color:var(--muted);line-height:1.8;margin:0}.footer{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;margin-top:32px;font-size:11px;color:var(--muted)}svg g{transform-box:view-box;transform-origin:50% 50%}.variants{display:flex;gap:16px;align-items:center;margin:16px 0 0;font-size:11px;color:var(--muted)}.variants svg{width:24px;height:24px}.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}.motion-status{font-size:11px;color:var(--muted);text-align:right;margin-top:8px}.no-motion *{scroll-behavior:auto!important}.source-note{font-size:11px;color:var(--muted);margin-top:6px}
+[hidden]{display:none!important}.glyph-card[aria-pressed=true]{background:var(--surface)}body{font-variation-settings:'CRSV' 0,'SHRP' 0,'slnt' 0}
+@media(max-width:1000px){.shell{padding:24px}.hero{gap:30px;grid-template-columns:1fr 360px}h1{font-size:38px}.principles{gap:24px}.notes{gap:22px}}
+@media(max-width:720px){.shell{padding:20px 16px}.hero{grid-template-columns:1fr;padding-top:35px;gap:28px}h1{font-size:37px;letter-spacing:-1px}.masthead{flex-wrap:wrap}.masthead .actions{width:100%;margin:10px 0 0}.control{flex:1;font-size:13px}.toolbar{align-items:start;flex-direction:column;gap:12px}.search{max-width:none}.notes{grid-template-columns:1fr;gap:20px}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.glyph-card{min-height:157px}.count-row{flex-direction:column;gap:7px}.intro{font-size:15px}.inspector{padding:20px}.inspector h2{font-size:21px}.edition{font-size:12px}}
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+<a href="#catalog" class="skip">Перейти к иконкам</a>
+<main class="shell">
+<header class="masthead"><div class="brand">@@LOGO@@</div><div class="edition">СОБСТВЕННЫЙ ЯЗЫК ДЕЙСТВИЙ<br><span class="muted">Kasha Icons · редакция для разработки</span></div><div class="actions"><button class="control" id="motion" aria-pressed="false">Уменьшить движение</button><button class="control" id="theme" aria-pressed="false">Светлая тема</button></div></header>
+<div class="motion-status" id="motion-status">Движение по системной настройке</div>
+<section class="hero" aria-label="О наборе">
+<div><div class="eyebrow">Геометрия · семантика · движение</div><h1>Каждое действие<br>узнаётся сразу.</h1><p class="intro">Спокойная линия, мягкие окончания и короткая реакция на касание. Один набор для всех экранов Kasha — от первого слова до сохранённой мысли.</p><div class="principles"><div><b>@@COUNT@@</b><span>собственных glyphs</span></div><div><b>24 × 24</b><span>единая сетка</span></div><div><b>1,8</b><span>толщина линии</span></div><div><b>22</b><span>прежних соответствия</span></div></div></div>
+<aside class="inspector" aria-label="Выбранная иконка"><div class="inspector-top"><div class="large-icon" id="detail-icon" aria-hidden="true"></div><div><h2 id="detail-title">Микрофон</h2><div class="mono muted" id="detail-alias">MIC</div></div></div><p id="detail-usage"></p><div class="inspector-bottom"><div class="sizes" id="detail-sizes" aria-label="Проверка в размерах 20, 24 и 32"></div><button class="control" id="replay">Повторить</button></div><div class="variants" id="variants" hidden></div><div class="inspector-bottom" style="margin-top:17px"><span class="mono muted" id="detail-motion"></span><a id="download" class="link-button" href="svg/mic.svg" download>Скачать SVG</a></div></aside>
+</section>
+<section id="catalog" aria-label="Каталог иконок"><div class="toolbar"><div class="search"><label for="query">Найти по действию или имени glyph</label><input type="search" id="query" placeholder="Например: запись, PIN, текст" autocomplete="off"></div><p class="toolbar-note">Наведите указатель, перейдите клавишей Tab или нажмите на иконку. Это демонстрация реакции на ввод; звук и запись не имитируются.</p></div><nav class="categories" id="categories" aria-label="Категории иконок"></nav><div class="grid" id="grid"></div><div class="count-row"><span id="result-count" aria-live="polite" aria-atomic="true"></span><span>Enter / пробел — выбрать и повторить · SVG масштабируются вместе с линией</span></div></section>
+<section class="notes" aria-label="Правила передачи в разработку"><div><h3>Один источник</h3><p>Геометрия и движение описаны в registry.json. SVG и эта страница собираются одним скриптом. В существующий KashaIcons.kt переносится та же редакция, без второго набора.</p></div><div><h3>Настоящий знак</h3><p>В заголовке — официальный SVG Kasha с неизменёнными контурами. Он не заменяется буквой K, текстом или AI-звездой. Legacy MAGIC направлен на обработку текста.</p></div><div><h3>Смысл без анимации</h3><p>У каждого действия своя статичная геометрия. Reduce Motion отключает движение, сохраняя подписи, выбор и focus. Доступное имя команды задаёт её контрол в приложении.</p></div></section>
+<footer class="footer"><span>Инженерный каталог следующей редакции. Production runtime не изменён.</span><span>Реестр @@HASH@@ · <a href="README.md">Инструкция</a> · <a href="registry.json">JSON</a></span></footer>
+</main>
+<script type="application/json" id="registry">@@REGISTRY@@</script>
+<script>
+'use strict';
+const data=JSON.parse(document.getElementById('registry').textContent);
+const icons=new Map(data.icons.map(icon=>[icon.id,icon]));
+const $=id=>document.getElementById(id);
+const systemMotion=matchMedia('(prefers-reduced-motion: reduce)');
+let manualMotion=false,category='all',selected='mic';
+const running=new Set();
+const escapeHtml=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function reduced(){return manualMotion||systemMotion.matches;}
+function synchronizeMotion(){
+ document.body.classList.toggle('no-motion',reduced());
+ $('motion').setAttribute('aria-pressed',String(manualMotion));
+ $('motion-status').textContent=reduced()?'Движение уменьшено '+(systemMotion.matches?'по настройке системы':'вручную'):'Короткая реакция на hover, фокус и нажатие';
+ if(reduced()){running.forEach(a=>a.cancel());running.clear();}
+}
+function animate(svg,icon){
+ if(!svg||reduced())return;
+ svg.getAnimations({subtree:true}).forEach(a=>a.cancel());
+ for(const spec of icon.motion){
+  const group=svg.querySelector('[data-part="'+spec.part+'"]');if(!group)continue;
+  const frames=spec.frames.map(f=>({offset:f.offset,transform:`translate(${f.x}px, ${f.y}px) rotate(${f.rotate}deg) scale(${f.scale}, ${f.scale*(f.scaleY??1)})`,opacity:f.opacity}));
+  const a=group.animate(frames,{duration:spec.durationMs,easing:spec.easing});running.add(a);a.finished.catch(()=>{}).finally(()=>running.delete(a));
+  if(spec.draw){for(const shape of group.children){if(!shape.getTotalLength)continue;const length=shape.getTotalLength();const b=shape.animate([{strokeDasharray:`${length} ${length}`,strokeDashoffset:length},{strokeDasharray:`${length} ${length}`,strokeDashoffset:0}],{duration:spec.durationMs,easing:spec.easing});running.add(b);b.finished.catch(()=>{}).finally(()=>running.delete(b));}}
+ }
+}
+function selectIcon(id,play=true){
+ selected=id;const icon=icons.get(id);
+ $('detail-icon').innerHTML=icon.inlineSvg;
+ $('detail-title').textContent=icon.label;
+ $('detail-alias').textContent=icon.aliases.join(' / ');
+ $('detail-usage').textContent=icon.usage;
+ $('detail-motion').textContent=Math.max(...icon.motion.map(m=>m.durationMs))+' мс · однократно';
+ $('detail-sizes').innerHTML=[20,24,32].map(size=>`<div class="size"><span aria-hidden="true">${icon.inlineSvg.replace('width="24" height="24"',`width="${size}" height="${size}"`)}</span><small>${size}</small></div>`).join('');
+ $('download').href='svg/'+icon.id+'.svg';$('download').download=icon.id+'.svg';
+ const variants=Object.entries(icon.variantSvg||{});$('variants').hidden=!variants.length;
+ $('variants').innerHTML=variants.map(([name,svg])=>`<span aria-hidden="true">${svg}</span><span>${name==='filled'?'Выполнено':'Не выполнено'}</span>`).join('');
+ document.querySelectorAll('.glyph-card').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.id===id)));
+ if(play)animate($('detail-icon').querySelector('svg'),icon);
+}
+function render(){
+ const query=$('query').value.trim().toLocaleLowerCase();
+ const filtered=data.icons.filter(icon=>(category==='all'||icon.category===category)&&[icon.id,icon.label,...icon.aliases,icon.usage].join(' ').toLocaleLowerCase().includes(query));
+ $('grid').innerHTML=filtered.length?filtered.map(icon=>`<button class="glyph-card" data-id="${icon.id}" aria-label="${escapeHtml(icon.label)}. Показать геометрию и анимацию" aria-pressed="${selected===icon.id}"><span class="card-icon" aria-hidden="true">${icon.inlineSvg}</span><span class="glyph-label">${escapeHtml(icon.label)}</span><span class="glyph-id mono" aria-hidden="true">${icon.id}</span></button>`).join(''):'<div class="empty">Совпадений нет. Попробуйте другое действие или имя glyph.</div>';
+ $('result-count').textContent='Показано '+filtered.length+' из '+data.icons.length;
+ document.querySelectorAll('.glyph-card').forEach(button=>{
+  const icon=icons.get(button.dataset.id);
+  button.addEventListener('pointerenter',()=>animate(button.querySelector('svg'),icon));
+  button.addEventListener('focus',()=>animate(button.querySelector('svg'),icon));
+  button.addEventListener('click',()=>{selectIcon(icon.id);animate(button.querySelector('svg'),icon);});
+ });
+}
+$('categories').innerHTML=[{id:'all',label:'Все'},...data.categories].map(item=>`<button class="category" data-category="${item.id}" aria-pressed="${item.id==='all'}">${escapeHtml(item.label)}</button>`).join('');
+document.querySelectorAll('.category').forEach(button=>button.addEventListener('click',()=>{category=button.dataset.category;document.querySelectorAll('.category').forEach(b=>b.setAttribute('aria-pressed',String(b===button)));render();}));
+$('query').addEventListener('input',render);
+$('motion').addEventListener('click',()=>{manualMotion=!manualMotion;synchronizeMotion();});
+systemMotion.addEventListener('change',synchronizeMotion);
+$('theme').addEventListener('click',()=>{const light=document.documentElement.dataset.theme!=='light';document.documentElement.dataset.theme=light?'light':'dark';$('theme').setAttribute('aria-pressed',String(light));$('theme').textContent=light?'Тёмная тема':'Светлая тема';});
+$('replay').addEventListener('click',()=>animate($('detail-icon').querySelector('svg'),icons.get(selected)));
+synchronizeMotion();render();selectIcon(selected,false);
+</script>
+</body>
+</html>
