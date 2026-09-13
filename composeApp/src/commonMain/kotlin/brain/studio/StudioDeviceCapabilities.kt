@@ -1,5 +1,6 @@
 package brain.studio
 
+import brain.domain.RecorderGateway
 import brain.domain.RecorderPermission
 import brain.domain.RecorderSessionGateway
 
@@ -8,10 +9,10 @@ internal class StudioDeviceCapabilityGateway(
     private val reminders: ReminderGateway,
 ) : DeviceCapabilityGateway {
     override suspend fun snapshot(): DeviceCapabilitySnapshot {
-        val recorderPermission = (recorder as? RecorderSessionGateway)?.sessionState()?.permission
+        val recorderPermission = (recorder as? RecorderSessionGateway)?.permission()
         val microphone = when (recorderPermission) {
             RecorderPermission.GRANTED -> DevicePermissionState.GRANTED
-            RecorderPermission.DENIED -> DevicePermissionState.DENIED
+            RecorderPermission.DENIED, RecorderPermission.RESTRICTED -> DevicePermissionState.DENIED
             RecorderPermission.NOT_DETERMINED -> DevicePermissionState.NOT_DETERMINED
             RecorderPermission.UNAVAILABLE, null -> DevicePermissionState.UNAVAILABLE
         }
