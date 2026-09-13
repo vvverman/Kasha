@@ -40,7 +40,7 @@ class AndroidStudioRepositoryTest {
             first.updateCaptureDraft(taskCapture.id, CaptureDraftUpdate(text = "Сделать задачу"))
             val task = first.distributeTask(
                 taskCapture.id,
-                TaskDistributionRequest(dueAt = 123_456L, reminderRepeat = ReminderRepeat.DAILY),
+                TaskDistributionRequest(dueAt = Long.MAX_VALUE, reminderRepeat = ReminderRepeat.DAILY),
             )
 
             val second = AndroidStudioRepository(root, intelligence, "ru-RU")
