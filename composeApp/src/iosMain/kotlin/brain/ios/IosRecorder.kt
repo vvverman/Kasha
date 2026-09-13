@@ -44,6 +44,7 @@ internal class IosRecorder(
     override fun sessionState(): RecorderSessionState = state
 
     override suspend fun pendingRecordings(): List<PendingRecording> = pendingFileNames()
+        .filter { it != state.activeSessionId }
         .sorted()
         .map { PendingRecording(id = it) }
 
