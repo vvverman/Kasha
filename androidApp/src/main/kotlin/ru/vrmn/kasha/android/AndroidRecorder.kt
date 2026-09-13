@@ -109,6 +109,7 @@ internal class AndroidRecorder(
                 latestLevel = 0f
                 currentPhase = PHASE_PAUSED
                 runCatching { RecordingForegroundService.paused(appContext) }
+                Unit
             } catch (error: Throwable) {
                 throw IllegalStateException("audioPauseFailed", error)
             }
@@ -124,6 +125,7 @@ internal class AndroidRecorder(
                 mark = TimeSource.Monotonic.markNow()
                 currentPhase = PHASE_RECORDING
                 runCatching { RecordingForegroundService.recording(appContext) }
+                Unit
             } catch (error: Throwable) {
                 throw IllegalStateException("audioResumeFailed", error)
             }
