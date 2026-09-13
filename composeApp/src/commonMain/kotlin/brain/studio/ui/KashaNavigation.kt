@@ -1,6 +1,7 @@
 package brain.studio
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.hoverable
@@ -12,7 +13,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -29,28 +32,110 @@ fun KashaNavigationItem(
     selected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    horizontal: Boolean = false,
 ) {
-    val c = MaterialTheme.colorScheme
+    val c = KashaTheme.colors
     val interactions = remember { MutableInteractionSource() }
     val hovered by interactions.collectIsHoveredAsState()
     val pressed by interactions.collectIsPressedAsState()
     val focused by interactions.collectIsFocusedAsState()
-    val bg = when {
-        pressed -> c.surfaceVariant.copy(alpha = .72f)
-        selected -> c.surface.copy(alpha = .92f)
-        hovered -> c.surfaceVariant.copy(alpha = .38f)
+    val background = when {
+        pressed -> c.overlayPressed
+        selected -> c.navigationActiveSpot
+        hovered -> c.overlayHover
         else -> Color.Transparent
     }
-    val fg = if (selected) c.onSurface else c.onSurfaceVariant
-    Column(
-        modifier.clip(RoundedCornerShape(15.dp)).background(bg).hoverable(interactions).focusable(true, interactions)
-            .clickable(interactionSource = interactions, indication = null, role = Role.Tab, onClick = onClick)
-            .semantics(mergeDescendants = true) { this.selected = selected }
-            .padding(vertical = 7.dp, horizontal = 6.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        KashaIcon(glyph, Modifier.size(20.dp), fg, animated = hovered || pressed || focused)
-        Spacer(Modifier.height(5.dp))
-        Text(label, style = MaterialTheme.typography.labelSmall, color = fg, maxLines = 1)
+    val foreground =
+        if (selected) c.navigationActiveContent else c.navigationInactiveContent
+    val shape = RoundedCornerShape(15.dp)
+    val base = modifier
+        .clip(shape)
+        .background(background)
+        .border(
+            if (focused) KashaMetrics.focusRingWidth else 1.dp,
+            if (focused) c.focusRing else Color.Transparent,
+            shape,
+        )
+        .hoverable(interactions)
+        .focusable(true, interactions)
+        .clickable(
+            interactionSource = interactions,
+            indication = null,
+            role = Role.Tab,
+            onClick = onClick,
+        )
+        .semantics(mergeDescendants = true) { this.selected = selected }
+
+    if (horizontal) {
+        Row(
+            base
+                .fillMaxWidth()
+                .heightIn(min = 52.dp)
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            KashaIcon(
+                glyph,
+                Modifier.size(KashaMetrics.iconGlyph),
+                foreground,
+                animated = hovered || pressed || focused,
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(
+                label,
+                style = MaterialTheme.typography.bodyMedium,
+                color = foreground,
+            )
+        }
+    } else {
+        Column(
+            base
+                .heightIn(min = KashaMetrics.touchTargetPreferred)
+                .padding(vertical = 7.dp, horizontal = 6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            KashaIcon(
+                glyph,
+                Modifier.size(KashaMetrics.iconGlyph),
+                foreground,
+                animated = hovered || pressed || focused,
+            )
+            Spacer(Modifier.height(5.dp))
+            Text(
+                label,
+                style = MaterialTheme.typography.labelSmall,
+                color = foreground,
+                maxLines = 2,
+            )
+        }
     }
+}
+
+@Composable
+fun KashaBottomNavigation(
+    modifier: Modifier = Modifier,
+    content: @Composable RowScope.() -> Unit,
+) {
+    val c = KashaTheme.colors
+    Row(
+        modifier
+            .clip(RoundedCornerShape(KashaMetrics.radiusNavigation))
+            .background(c.navigation)
+            .padding(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        content = content,
+    )
+}
+
+@Composable
+fun KashaSidebarNavigation(
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Column(
+        modifier,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+        content = content,
+    )
 }
