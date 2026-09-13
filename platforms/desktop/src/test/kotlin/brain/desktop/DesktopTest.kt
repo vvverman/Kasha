@@ -9,6 +9,49 @@ import java.util.UUID
 import kotlin.test.*
 
 class DesktopTest {
+    @Test fun platformDetectionCoversDesktopFamilies() {
+        assertEquals(DesktopOs.MACOS, DesktopPlatform.detectOs("Mac OS X"))
+        assertEquals(DesktopOs.MACOS, DesktopPlatform.detectOs("Darwin"))
+        assertEquals(DesktopOs.WINDOWS, DesktopPlatform.detectOs("Windows 11"))
+        assertEquals(DesktopOs.LINUX, DesktopPlatform.detectOs("Linux"))
+        assertEquals(DesktopOs.OTHER, DesktopPlatform.detectOs("FreeBSD"))
+    }
+
+    @Test fun platformDataRootsFollowOsConventions() {
+        val home = Path.of("home-root").toAbsolutePath()
+        val roaming = Path.of("roaming-root").toAbsolutePath()
+        val local = Path.of("local-root").toAbsolutePath()
+        val xdg = Path.of("xdg-root").toAbsolutePath()
+        val override = Path.of("override-root").toAbsolutePath()
+
+        assertEquals(
+            home.resolve("Library").resolve("Application Support").resolve("Kasha"),
+            DesktopPlatform.dataRoot("Kasha", DesktopOs.MACOS, emptyMap(), home),
+        )
+        assertEquals(
+            roaming.resolve("Kasha"),
+            DesktopPlatform.dataRoot("Kasha", DesktopOs.WINDOWS, mapOf("APPDATA" to roaming.toString()), home),
+        )
+        assertEquals(
+            xdg.resolve("kasha"),
+            DesktopPlatform.dataRoot("Kasha", DesktopOs.LINUX, mapOf("XDG_DATA_HOME" to xdg.toString()), home),
+        )
+        assertEquals(
+            local.resolve("Kasha"),
+            DesktopPlatform.localDataRoot("Kasha", DesktopOs.WINDOWS, mapOf("LOCALAPPDATA" to local.toString()), home),
+        )
+        assertEquals(
+            override,
+            DesktopPlatform.dataRoot("Kasha", DesktopOs.LINUX, mapOf("KASHA_HOME" to override.toString()), home),
+        )
+    }
+
+    @Test fun windowsExecutablesPreferExeWithoutChangingOtherOs() {
+        assertEquals(listOf("ffmpeg.exe", "ffmpeg"), DesktopPlatform.executableCandidates("ffmpeg", DesktopOs.WINDOWS))
+        assertEquals(listOf("ffmpeg"), DesktopPlatform.executableCandidates("ffmpeg", DesktopOs.MACOS))
+        assertEquals(listOf("ffmpeg"), DesktopPlatform.executableCandidates("ffmpeg", DesktopOs.LINUX))
+    }
+
     @Test fun journalIsPlayableAndRecoversAfterHeaderDamage() {
         val dir = Files.createTempDirectory("brain-journal")
         try {
