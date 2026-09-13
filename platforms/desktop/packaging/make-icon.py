@@ -4,8 +4,8 @@ from PIL import Image, ImageDraw
 import subprocess
 
 root = Path(__file__).resolve().parent
-repo = root.parents[1]
-source = repo / "composeApp/src/commonMain/composeResources/drawable/kasha_logo_solid.svg"
+repo = root.parents[2]
+source = repo / "modules/ui/src/commonMain/composeResources/drawable/kasha_logo_solid.svg"
 folder = root / "Kasha.iconset"
 folder.mkdir(exist_ok=True)
 
