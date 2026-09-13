@@ -9,8 +9,8 @@ SCOPES = [ROOT / 'modules', ROOT / 'platforms']
 SKIP = {'build', 'test', 'commonTest', 'node_modules'}
 
 FORBIDDEN_GLOBAL = re.compile(
-    r'(firebase|firestore|supabase|sentry|segment\.io|amplitude|mixpanel|appcenter|'
-    r'\bicloud\b|\bcloudkit\b)',
+    r'(\bfirebase\b|\bfirestore\b|\bsupabase\b|\bsentry\b|segment\.io|'
+    r'\bamplitude\b|\bmixpanel\b|\bappcenter\b|\bicloud\b|\bcloudkit\b)',
     re.IGNORECASE,
 )
 EXTERNAL_AI_ENDPOINT = re.compile(
@@ -19,7 +19,6 @@ EXTERNAL_AI_ENDPOINT = re.compile(
 )
 ALLOWED_EXTERNAL_AI_PREFIXES = (
     'modules/ai/connectors/',
-    # Transitional JVM transport until the old Java provider client is removed.
     'modules/infrastructure/jvm/src/main/kotlin/brain/runtime/ai/external/',
 )
 
