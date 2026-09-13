@@ -1,7 +1,24 @@
 name: Автономный установщик macOS
 on:
   push:
-    branches: [macos-installer]
+    branches: [macos-installer, main]
+    paths:
+      - 'kashaCore/**'
+      - 'aiCatalog/**'
+      - 'composeApp/**'
+      - 'runtime/**'
+      - 'desktopApp/**'
+      - 'scripts/check-platform-shells.py'
+      - '.github/workflows/macos.yml'
+  pull_request:
+    paths:
+      - 'kashaCore/**'
+      - 'aiCatalog/**'
+      - 'composeApp/**'
+      - 'runtime/**'
+      - 'desktopApp/**'
+      - 'scripts/check-platform-shells.py'
+      - '.github/workflows/macos.yml'
   workflow_dispatch:
 permissions:
   contents: read
@@ -20,6 +37,7 @@ jobs:
           python3 scripts/check-local-only.py
           python3 scripts/check-ai-boundary.py
           python3 scripts/check-ui-boundary.py
+          python3 scripts/check-platform-shells.py
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -54,8 +72,10 @@ jobs:
       - uses: actions/cache/restore@v4
         id: native-cache
         with:
-          path: desktopApp/bundle/common
-          key: kasha-macos-arm64-bundle-${{ hashFiles('desktopApp/packaging/build-native.sh') }}
+          path: |
+            desktopApp/bundle/common
+            desktopApp/bundle/macos
+          key: kasha-macos-arm64-bundle-${{ hashFiles('desktopApp/packaging/prepare-models.sh', 'desktopApp/packaging/build-native.sh') }}
       - name: Статические движки и исходные модели внутри приложения
         if: steps.native-cache.outputs.cache-hit != 'true'
         run: |
@@ -64,7 +84,9 @@ jobs:
       - uses: actions/cache/save@v4
         if: steps.native-cache.outputs.cache-hit != 'true'
         with:
-          path: desktopApp/bundle/common
+          path: |
+            desktopApp/bundle/common
+            desktopApp/bundle/macos
           key: ${{ steps.native-cache.outputs.cache-primary-key }}
       - name: Тестовая русская речь
         run: |
@@ -73,7 +95,6 @@ jobs:
           cp test-output/real-models/russian-with-pauses.wav model-test/russian.wav
       - name: Самодостаточный .app с Java внутри
         run: |
-          cp desktopApp/packaging/Установка.txt desktopApp/bundle/common/Установка.txt
           gradle -Pkotlin.compiler.execution.strategy=in-process :desktopApp:createDistributable
           gradle --stop
       - name: Запуск без зависимостей и сети, проверка DMG
