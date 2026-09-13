@@ -48,6 +48,10 @@ internal fun ProjectsScreen(s: StudioState) {
             Heading(NoteText.title(note.body), { s.selectedNoteId = null; s.editingNoteId = null }, s.tr("back")) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     IconAction(s.tr(if (note.pinned) "unpin" else "pin"), Glyph.PIN, { scope.launch { s.pinNote(note) } }, filled = note.pinned, modifier = Modifier.size(34.dp))
+                    if (note.pinned) {
+                        IconAction(s.tr("up"), Glyph.UP, { scope.launch { s.moveNotePin(note, -1) } }, modifier = Modifier.size(34.dp))
+                        IconAction(s.tr("down"), Glyph.DOWN, { scope.launch { s.moveNotePin(note, 1) } }, modifier = Modifier.size(34.dp))
+                    }
                     IconAction(s.tr("edit"), Glyph.EDIT, { s.beginNoteEdit(note.id) }, modifier = Modifier.size(34.dp))
                 }
             }
