@@ -13,6 +13,13 @@ internal class IosAudio(
     private var player: AVAudioPlayer? = null
     private var paused = false
 
+    init {
+        IosAudioSessionBridge.observeSystemEvents(
+            IosAudioSystemObserver.PLAYBACK,
+            ::handleSystemEvent,
+        )
+    }
+
     override suspend fun playCapture(captureId: String, compact: Boolean, fromSeconds: Double, rate: Double) {
         val path = repository.audioPath(captureId) ?: error("Аудиофайл записи не найден")
         stop()
@@ -47,7 +54,6 @@ internal class IosAudio(
         val active = player ?: return AudioTelemetry()
         val phase = when {
             active.playing -> "playing"
-            paused -> "paused"
             active.currentTime >= active.duration - 0.05 -> "idle"
             else -> "paused"
         }
@@ -55,6 +61,7 @@ internal class IosAudio(
             stop()
             return AudioTelemetry()
         }
+        if (phase == "paused") paused = true
         return AudioTelemetry(
             phase = phase,
             position = active.currentTime,
@@ -67,5 +74,21 @@ internal class IosAudio(
         player = null
         paused = false
         IosAudioSessionBridge.deactivate()
+    }
+
+    private fun handleSystemEvent(event: IosAudioSystemEvent) {
+        val active = player ?: return
+        if (IosPlaybackLifecycle.shouldPause(event)) {
+            if (active.playing) active.pause()
+            if (active.currentTime < active.duration - 0.05) paused = true
+            return
+        }
+        if (
+            event is IosAudioSystemEvent.ApplicationDidBecomeActive &&
+            !active.playing &&
+            active.currentTime < active.duration - 0.05
+        ) {
+            paused = true
+        }
     }
 }

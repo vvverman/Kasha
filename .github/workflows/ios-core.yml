@@ -25,7 +25,7 @@ jobs:
         with:
           gradle-version: '9.3.1'
           cache-read-only: false
-      - name: Compile Kasha Core, AI catalog and shared Kasha UI for iPhone and Apple Silicon simulator
+      - name: Compile and test Kasha shared iOS layer
         run: |
           set -o pipefail
           python -m pip install fonttools==4.59.2
@@ -37,6 +37,8 @@ jobs:
             :aiCatalog:compileKotlinIosSimulatorArm64 \
             :composeApp:compileKotlinIosArm64 \
             :composeApp:compileKotlinIosSimulatorArm64 \
+            :composeApp:compileTestKotlinIosArm64 \
+            :composeApp:iosSimulatorArm64Test \
             2>&1 | tee ios-shared.log
       - uses: actions/upload-artifact@v4
         if: always()
