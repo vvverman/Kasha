@@ -14,7 +14,13 @@ internal fun SettingsScreen(s: StudioState) {
     val scope = rememberCoroutineScope()
     val p = s.preferences
     val c = MaterialTheme.colorScheme
+    val services = s.repository as? AiPlatformServices
+    var cloudConnections by remember(services) { mutableStateOf<List<CloudAiConnection>>(emptyList()) }
     var audioPage by remember { mutableStateOf(false) }
+
+    LaunchedEffect(services) {
+        cloudConnections = runCatching { services?.cloudAi?.connections().orEmpty() }.getOrDefault(emptyList())
+    }
 
     fun save(transform: (Preferences) -> Preferences) {
         scope.launch { s.savePreferences(transform(s.preferences)) }
@@ -122,7 +128,16 @@ internal fun SettingsScreen(s: StudioState) {
         Spacer(Modifier.height(28.dp))
         Text(KashaCopy.text(s.language, "aiPrivacy") ?: "", style = MaterialTheme.typography.titleSmall)
         Spacer(Modifier.height(10.dp))
-        val externalAi = AiRole.entries.any { role -> AiCatalog.selectedDescriptor(p.ai.engineId(role))?.isExternal == true }
+        val externalAi = AiRole.entries.any { role ->
+            val engineId = p.ai.engineId(role)
+            val providerId = AiCatalog.cloudProviderId(engineId) ?: return@any false
+            cloudConnections.any { connection ->
+                connection.providerId == providerId &&
+                    connection.enabled &&
+                    connection.privacyConsentVersion >= AiPrivacy.CONSENT_VERSION &&
+                    connection.modelFor(role) != null
+            }
+        }
         KashaPanel(Modifier.fillMaxWidth(), padding = 16.dp) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 KashaIcon(if (externalAi) Glyph.EXTERNAL else Glyph.CHECK, Modifier.size(21.dp), c.onSurfaceVariant)
