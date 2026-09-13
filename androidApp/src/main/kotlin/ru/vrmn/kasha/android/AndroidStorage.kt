@@ -31,6 +31,7 @@ internal class AndroidStorage(root: File) {
 
     fun read(file: File): String? = file.takeIf { it.isFile }?.readText(Charsets.UTF_8)
 
+    /** Атомарная замена небольших JSON-файлов состояния с fsync временного файла. */
     fun write(file: File, value: String) {
         require(file.parentFile?.canonicalFile == root.canonicalFile)
         val temp = File(file.parentFile, ".${file.name}.${UUID.randomUUID()}.tmp")
@@ -59,12 +60,22 @@ internal class AndroidStorage(root: File) {
     fun pendingFiles(): List<File> = pendingDir.listFiles()
         .orEmpty()
         .filter { it.isFile && it.extension.equals("m4a", ignoreCase = true) }
+        .filter { runCatching { pendingId(it) }.isSuccess }
         .sortedBy { it.name }
 
+    fun pendingId(file: File): String {
+        require(file.parentFile?.canonicalFile == pendingDir.canonicalFile)
+        require(file.extension.equals("m4a", ignoreCase = true))
+        return file.nameWithoutExtension.also(UUID::fromString)
+    }
+
+    /**
+     * Pending-файл и capture имеют один UUID. Если процесс погибнет после move, но до
+     * записи brain.json, reconcile() вернёт orphan audio обратно в pending.
+     */
     fun acceptPending(source: File, captureId: String): File {
         require(source.isFile && source.length() > 0)
-        require(source.parentFile?.canonicalFile == pendingDir.canonicalFile)
-        UUID.fromString(captureId)
+        require(pendingId(source) == captureId)
         val targetDir = File(audioDir, captureId)
         require(!targetDir.exists())
         require(targetDir.mkdir())
@@ -77,6 +88,48 @@ internal class AndroidStorage(root: File) {
             targetDir.delete()
             throw error
         }
+    }
+
+    /** Восстанавливает незавершённые filesystem-транзакции после падения процесса. */
+    fun reconcile(captures: List<Capture>) {
+        val referenced = captures.map { it.id }.toSet()
+
+        // Если удаление capture оборвалось: state решает, восстанавливать файл или удалять staged copy.
+        audioDir.listFiles().orEmpty()
+            .filter { it.isDirectory && it.name.startsWith(DELETED_PREFIX) }
+            .forEach { trash ->
+                val captureId = trash.name.removePrefix(DELETED_PREFIX)
+                if (runCatching { UUID.fromString(captureId) }.isFailure) return@forEach
+                val target = File(audioDir, captureId)
+                if (captureId in referenced && !target.exists()) move(trash, target)
+                else trash.deleteRecursively()
+            }
+
+        // Если state уже содержит capture, его pending-дубликат не должен блокировать следующую запись.
+        captures.forEach { capture ->
+            val directory = File(audioDir, capture.id)
+            val saved = File(directory, "saved.m4a")
+            val pending = File(pendingDir, "${capture.id}.m4a")
+            when {
+                saved.isFile && pending.isFile -> pending.delete()
+                !saved.isFile && pending.isFile -> {
+                    require(directory.mkdirs() || directory.isDirectory)
+                    move(pending, saved)
+                }
+            }
+        }
+
+        // Move мог завершиться до атомарной записи state. Возвращаем такой файл в pending.
+        audioDir.listFiles().orEmpty()
+            .filter { it.isDirectory && !it.name.startsWith(DELETED_PREFIX) }
+            .forEach { directory ->
+                val captureId = directory.name
+                if (runCatching { UUID.fromString(captureId) }.isFailure || captureId in referenced) return@forEach
+                val saved = File(directory, "saved.m4a")
+                val pending = File(pendingDir, "$captureId.m4a")
+                if (saved.isFile && saved.length() > 0 && !pending.exists()) move(saved, pending)
+                directory.deleteRecursively()
+            }
     }
 
     fun relative(file: File): String {
@@ -97,10 +150,12 @@ internal class AndroidStorage(root: File) {
     }
 
     fun stageDeleteCaptureAudio(captureId: String): File? {
+        UUID.fromString(captureId)
         val directory = File(audioDir, captureId).canonicalFile
         require(directory.parentFile == audioDir.canonicalFile)
         if (!directory.exists()) return null
-        val trash = File(audioDir, ".deleted-$captureId-${UUID.randomUUID()}")
+        val trash = File(audioDir, "$DELETED_PREFIX$captureId")
+        require(!trash.exists())
         move(directory, trash)
         return trash
     }
@@ -139,5 +194,9 @@ internal class AndroidStorage(root: File) {
         } catch (_: AtomicMoveNotSupportedException) {
             Files.move(source.toPath(), target.toPath())
         }
+    }
+
+    private companion object {
+        const val DELETED_PREFIX = ".deleted-"
     }
 }
