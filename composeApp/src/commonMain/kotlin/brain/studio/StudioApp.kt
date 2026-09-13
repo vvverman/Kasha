@@ -228,7 +228,7 @@ internal fun Heading(title: String, back: (() -> Unit)? = null, backLabel: Strin
 }
 
 @Composable
-private fun ConfirmationContent(title: String, body: String, confirm: String, cancel: String, onConfirm: () -> Unit, onCancel: () -> Unit) {
+private fun ColumnScope.ConfirmationContent(title: String, body: String, confirm: String, cancel: String, onConfirm: () -> Unit, onCancel: () -> Unit) {
     Text(title, style = MaterialTheme.typography.headlineMedium)
     Spacer(Modifier.height(18.dp))
     Text(body, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
