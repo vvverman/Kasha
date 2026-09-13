@@ -10,6 +10,7 @@ $Dist = Join-Path $Build "windows-dist"
 $MsiOut = Join-Path $Dist "msi"
 $ExeOut = Join-Path $Dist "exe"
 $Temp = Join-Path $Build "windows-jpackage-temp"
+$SmokeDir = Join-Path $Build "windows-install-smoke"
 $ResourceDir = Join-Path $PSScriptRoot "windows-jpackage"
 $InnoScript = Join-Path $PSScriptRoot "windows-inno\Kasha.iss"
 
@@ -20,7 +21,8 @@ Write-Host "== Compose Windows app image =="
 if ($LASTEXITCODE -ne 0) { throw "createDistributable failed with exit code $LASTEXITCODE" }
 
 $AppImage = Join-Path $Desktop "build\compose\binaries\main\app\Kasha"
-if (!(Test-Path (Join-Path $AppImage "Kasha.exe"))) { throw "Compose app image not found: $AppImage" }
+$AppExe = Join-Path $AppImage "Kasha.exe"
+if (!(Test-Path $AppExe)) { throw "Compose app image not found: $AppImage" }
 
 $Resources = Join-Path $AppImage "app\resources"
 foreach ($relative in @(
@@ -33,8 +35,13 @@ foreach ($relative in @(
     if (!(Test-Path (Join-Path $Resources $relative))) { throw "Bundled payload is missing $relative" }
 }
 
+Write-Host "== App image smoke =="
+& $AppExe --install-smoke
+if ($LASTEXITCODE -ne 0) { throw "app-image smoke failed with exit code $LASTEXITCODE" }
+
 Remove-Item $Dist -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item $Temp -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item $SmokeDir -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force $MsiOut, $ExeOut, $Temp | Out-Null
 
 $jpackage = Join-Path $env:JAVA_HOME "bin\jpackage.exe"
@@ -74,6 +81,8 @@ $isccCommand = Get-Command "ISCC.exe" -ErrorAction SilentlyContinue
 $iscc = if ($null -ne $isccCommand) { $isccCommand.Source } else { $null }
 if (!$iscc) {
     $candidates = @(
+        (Join-Path ${env:ProgramFiles(x86)} "Inno Setup 7\ISCC.exe"),
+        (Join-Path $env:ProgramFiles "Inno Setup 7\ISCC.exe"),
         (Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"),
         (Join-Path $env:ProgramFiles "Inno Setup 6\ISCC.exe")
     )
@@ -87,6 +96,21 @@ if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed with exit code $LASTEXITCODE
 $SetupExe = Get-ChildItem $ExeOut -Filter "*.exe" -File | Select-Object -First 1
 if ($null -eq $SetupExe) { throw "Self-contained setup EXE was not produced" }
 if ($SetupExe.Length -ge 4_000_000_000) { throw "Setup EXE is too close to the Windows single-executable size ceiling: $($SetupExe.Length) bytes" }
+
+Write-Host "== Installed EXE smoke =="
+$installArgs = @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/DIR=$SmokeDir")
+$install = Start-Process -FilePath $SetupExe.FullName -ArgumentList $installArgs -Wait -PassThru
+if ($install.ExitCode -ne 0) { throw "setup install failed with exit code $($install.ExitCode)" }
+$InstalledExe = Join-Path $SmokeDir "Kasha.exe"
+if (!(Test-Path $InstalledExe)) { throw "installed Kasha.exe is missing" }
+& $InstalledExe --install-smoke 2>&1 | Tee-Object -FilePath (Join-Path $Dist "windows-install-smoke.log")
+if ($LASTEXITCODE -ne 0) { throw "installed app smoke failed with exit code $LASTEXITCODE" }
+$uninstaller = Get-ChildItem $SmokeDir -Filter "unins*.exe" -File | Select-Object -First 1
+if ($null -ne $uninstaller) {
+    $uninstall = Start-Process -FilePath $uninstaller.FullName -ArgumentList @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART") -Wait -PassThru
+    if ($uninstall.ExitCode -ne 0) { throw "setup uninstall failed with exit code $($uninstall.ExitCode)" }
+}
+Remove-Item $SmokeDir -Recurse -Force -ErrorAction SilentlyContinue
 
 $ManifestPath = Join-Path $Dist "windows-packages.txt"
 $HashesPath = Join-Path $Dist "SHA256SUMS.txt"
