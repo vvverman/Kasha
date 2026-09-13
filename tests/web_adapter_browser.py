@@ -9,8 +9,16 @@ from playwright.sync_api import sync_playwright
 BASE = 'http://127.0.0.1:8787'
 
 
-def api(path):
-    request = urllib.request.Request(BASE + '/api/' + path, headers={'X-Kasha-Client': 'web'})
+def api(path, data=None, method=None):
+    headers = {'X-Kasha-Client': 'web'}
+    if data is not None:
+        headers['Content-Type'] = 'application/json'
+    request = urllib.request.Request(
+        BASE + '/api/' + path,
+        data=json.dumps(data).encode() if data is not None else None,
+        headers=headers,
+        method=method,
+    )
     with urllib.request.urlopen(request, timeout=10) as response:
         return json.load(response)
 
@@ -23,6 +31,10 @@ for _ in range(90):
         time.sleep(1)
 else:
     raise AssertionError('Локальный runtime не запущен')
+
+prefs = api('preferences')
+prefs['autoRecord'] = False
+api('preferences', prefs, 'PUT')
 
 with sync_playwright() as pw:
     executable = os.getenv('CHROME_PATH') or shutil.which('google-chrome') or shutil.which('chromium')
