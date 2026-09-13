@@ -69,7 +69,7 @@ adb shell dumpsys activity services ru.vrmn.kasha
 - устройство/API;
 - PASS / FAIL / BLOCKED;
 - фактическое состояние recorder/UI;
-- наличие/отсутствие FGS notification;
+- наличие/отсутствие FGS notification либо системного FGS Task Manager entry;
 - количество active/pending sources;
 - короткое описание отклонения;
 - commit Android PR #41 и commit `main`, на которых проводилась проверка.
@@ -179,7 +179,7 @@ Blocker: второй recorder/pending source.
 
 ### A4-06 — background после foreground start
 
-1. Начать запись из foreground Kasha.
+1. Начать запись из **видимой** Kasha Activity.
 2. Нажать Home.
 3. Оставить запись в background несколько минут.
 4. Заблокировать и разблокировать экран.
@@ -187,22 +187,50 @@ Blocker: второй recorder/pending source.
 
 Ожидается:
 
-- microphone FGS notification присутствует всё время незавершённой session;
+- microphone FGS был создан до ухода Activity в background;
+- дальнейшие `recording/paused` updates не вызывают повторный `startService()`/`startForegroundService()` из background, а только обновляют существующую notification;
+- в logcat нет `ForegroundServiceStartNotAllowedException`, `BackgroundServiceStartNotAllowedException` и сообщения о microphone FGS, созданном из запрещённого background-state;
+- системный FGS остаётся активным всё время незавершённой session;
 - process не создаёт второй recorder при возврате;
 - elapsed соответствует фактической active recording duration;
 - приложение не пытается скрытно restart-ить session.
 
-### A4-07 — notification tap
+Blocker:
 
-1. При активной записи уйти из Kasha.
-2. Нажать notification активной записи.
+- новый microphone FGS создаётся после ухода Activity в background;
+- system callback пытается повторно стартовать service;
+- recorder/session рестартует после foreground return.
+
+### A4-07 — notification / Task Manager entry
+
+Android 13+ отдельно проверяется в двух состояниях notification permission.
+
+#### A4-07a — app notifications разрешены
+
+1. Разрешить notifications для Kasha, если permission уже реализован соответствующим notification-этапом/сборкой.
+2. При активной записи уйти из Kasha.
+3. Нажать foreground notification.
 
 Ожидается:
 
+- notification видна в drawer;
 - открывается текущая `MainActivity`;
 - существующая session сохраняется;
 - второй recorder/start отсутствует;
 - notification использует Kasha icon.
+
+#### A4-07b — app notifications запрещены или ещё не запрашиваются
+
+На Android 13+ отсутствие FGS-card в notification drawer **не является дефектом recorder**, если `POST_NOTIFICATIONS` не выдан.
+
+Ожидается:
+
+- foreground service остаётся видимым системе в Task Manager / Active apps;
+- запись продолжает ту же session;
+- запрет notifications не останавливает recorder и не создаёт второй recorder;
+- Kasha не пытается обойти системный notification permission скрытым prompt.
+
+`POST_NOTIFICATIONS` и продуктовый permission UX не переносятся в этап 4 только ради этого теста; они должны появиться в своём notification flow.
 
 ## 8. System interruption / competing capture
 
