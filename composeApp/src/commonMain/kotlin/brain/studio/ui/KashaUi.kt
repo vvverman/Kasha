@@ -515,6 +515,7 @@ fun KashaPanel(
     )
 }
 
+/** Спокойная строка на Canvas: постоянной «карточки» нет, состояния появляются по взаимодействию. */
 @Composable
 fun KashaListCard(
     onClick: () -> Unit,
@@ -525,27 +526,35 @@ fun KashaListCard(
     val interactions = remember { MutableInteractionSource() }
     val hovered by interactions.collectIsHoveredAsState()
     val pressed by interactions.collectIsPressedAsState()
+    val focused by interactions.collectIsFocusedAsState()
     val shape = RoundedCornerShape(KashaMetrics.radiusSurface)
     val background = when {
-        pressed -> c.surfaceHighest
-        hovered -> c.surface
-        else -> c.surfaceLow
+        pressed -> c.overlayPressed
+        hovered || focused -> c.overlayHover
+        else -> Color.Transparent
     }
+    val outline = if (focused) c.focusRing else Color.Transparent
 
     Row(
         modifier
             .fillMaxWidth()
+            .heightIn(min = KashaMetrics.rowHeight)
             .clip(shape)
             .background(background)
-            .border(1.dp, c.hairline, shape)
+            .border(
+                if (focused) KashaMetrics.focusRingWidth else 1.dp,
+                outline,
+                shape,
+            )
             .hoverable(interactions)
+            .focusable(true, interactions)
             .clickable(
                 interactionSource = interactions,
                 indication = null,
                 role = Role.Button,
                 onClick = onClick,
             )
-            .padding(KashaMetrics.md),
+            .padding(horizontal = KashaMetrics.md, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         content = content,
     )
@@ -653,7 +662,7 @@ fun KashaCaptureOrb(
         }
         if (!recording) {
             KashaIcon(
-                Glyph.RECORD,
+                Glyph.MIC,
                 Modifier.size(34.dp),
                 c.orbInk,
                 animated = false,
