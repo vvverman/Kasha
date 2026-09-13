@@ -17,6 +17,14 @@ fun main(args:Array<String>){
     val demo=Files.exists(resources.resolve("demo-mode.txt"))
     val name=if(demo)"Kasha Test" else "Kasha"
     System.setProperty("apple.awt.application.name",name)
+    if("--install-smoke" in args){
+        try{
+            val env=bundledEnvironment(resources)
+            check(env.values.all{Files.exists(Path.of(it))})
+            println("KASHA DESKTOP INSTALL SMOKE PASSED")
+            return
+        }catch(e:Exception){e.printStackTrace();exitProcess(1)}
+    }
     if("--self-test-demo" in args){
         try{val index=args.indexOf("--self-test-demo");runBlocking{StudioSelfTest.run(resources,Path.of(args[index+1]))};return}
         catch(e:Exception){e.printStackTrace();exitProcess(1)}
