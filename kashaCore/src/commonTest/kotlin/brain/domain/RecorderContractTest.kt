@@ -2,6 +2,7 @@ package brain.domain
 
 import brain.model.Capture
 import brain.model.CaptureStatus
+import kotlin.coroutines.startCoroutine
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFails
