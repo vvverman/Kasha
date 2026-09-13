@@ -25,7 +25,7 @@ fun main(args:Array<String>){
         try{val index=args.indexOf("--self-test");runBlocking{SelfTest.run(resources,Path.of(args[index+1]),Path.of(args[index+2]))};return}
         catch(e:Exception){e.printStackTrace();exitProcess(1)}
     }
-    val root=System.getenv("KASHA_HOME")?.let(Path::of)?:Path.of(System.getProperty("user.home"),"Library","Application Support",name)
+    val root=DesktopPlatform.dataRoot(name)
     val services=try{DesktopServices(root.toAbsolutePath(),resources)}catch(e:Exception){JOptionPane.showMessageDialog(null,e.message,name,JOptionPane.ERROR_MESSAGE);return}
     val smokeAt=args.indexOf("--ui-smoke")
     val smokeOutput=if(smokeAt>=0)Path.of(args[smokeAt+1])else null
