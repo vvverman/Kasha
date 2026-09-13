@@ -35,13 +35,14 @@ jobs:
           python scripts/prepare-fonts.py
           python scripts/check-ui-boundary.py
           bash -n run-web.sh scripts/gradle.sh
-      - name: Kasha Core, AI catalog и общий UI на JVM/Android; runtime и production WebAssembly
+      - name: Kasha Core, AI catalog, общий UI, Android shell, runtime и production WebAssembly
         run: |
           set -o pipefail
           gradle --continue \
             :kashaCore:assemble :kashaCore:jvmTest :kashaCore:compileKotlinMetadata \
             :aiCatalog:assemble :aiCatalog:jvmTest :aiCatalog:compileKotlinMetadata \
             :composeApp:assemble :composeApp:jvmTest \
+            :androidApp:assembleDebug \
             :runtime:test :desktopApp:test \
             :composeApp:wasmJsBrowserDistribution :runtime:installDist \
             2>&1 | tee kotlin.log
@@ -58,7 +59,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: kasha-web-verification-${{ github.sha }}
+          name: kasha-verification-${{ github.sha }}
           retention-days: 14
           path: |
             kotlin.log
@@ -70,5 +71,6 @@ jobs:
             composeApp/build/test-results
             runtime/build/test-results
             desktopApp/build/test-results
+            androidApp/build/outputs/apk/debug/androidApp-debug.apk
             composeApp/build/dist/wasmJs/productionExecutable
             runtime/build/install
