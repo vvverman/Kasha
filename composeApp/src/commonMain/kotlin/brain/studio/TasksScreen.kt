@@ -74,6 +74,8 @@ internal fun TasksScreen(s: StudioState) {
                 onManualOrder = { ids -> scope.launch { s.reorderTasks(ids) } },
                 modifier = Modifier.fillMaxSize(),
                 spacing = 10.dp,
+                moveUpLabel = s.tr("up"),
+                moveDownLabel = s.tr("down"),
             ) { item, dragging ->
                 KashaListCard(
                     onClick = { s.openTask(item.id) },
