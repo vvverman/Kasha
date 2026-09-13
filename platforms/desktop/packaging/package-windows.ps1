@@ -73,7 +73,7 @@ if ($null -eq $Msi) { throw "MSI was not produced" }
 $Cabs = @(Get-ChildItem $MsiOut -Filter "*.cab" -File | Sort-Object Name)
 if ($Cabs.Count -lt 2) { throw "Expected multiple external CABs for the bundled model payload" }
 foreach ($cab in $Cabs) {
-    if ($cab.Length -ge 1_900_000_000) { throw "CAB $($cab.Name) is too large: $($cab.Length) bytes" }
+    if ($cab.Length -ge 1900000000) { throw "CAB $($cab.Name) is too large: $($cab.Length) bytes" }
 }
 
 Write-Host "== Self-contained Inno Setup EXE =="
@@ -95,7 +95,7 @@ if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed with exit code $LASTEXITCODE
 
 $SetupExe = Get-ChildItem $ExeOut -Filter "*.exe" -File | Select-Object -First 1
 if ($null -eq $SetupExe) { throw "Self-contained setup EXE was not produced" }
-if ($SetupExe.Length -ge 4_000_000_000) { throw "Setup EXE is too close to the Windows single-executable size ceiling: $($SetupExe.Length) bytes" }
+if ($SetupExe.Length -ge 4000000000) { throw "Setup EXE is too close to the Windows single-executable size ceiling: $($SetupExe.Length) bytes" }
 
 Write-Host "== Installed EXE smoke =="
 $installArgs = @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/DIR=$SmokeDir")
