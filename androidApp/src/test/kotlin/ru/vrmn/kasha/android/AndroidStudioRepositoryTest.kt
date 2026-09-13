@@ -91,7 +91,7 @@ class AndroidStudioRepositoryTest {
     }
 
     @Test
-    fun orphanFinalizedAudioReturnsToPendingAfterCrashBeforeStateCommit() {
+    fun orphanFinalizedAudioReturnsToPendingAfterCrashBeforeStateCommit() = runBlocking {
         val root = Files.createTempDirectory("kasha-android-orphan-").toFile()
         try {
             val storage = AndroidStorage(root)
@@ -106,7 +106,7 @@ class AndroidStudioRepositoryTest {
 
             assertEquals(captureId, recovered.nameWithoutExtension)
             assertArrayEquals(byteArrayOf(12, 13, 14, 15), recovered.readBytes())
-            assertTrue(repository.snapshotBlocking().captures.isEmpty())
+            assertTrue(repository.snapshot().captures.isEmpty())
         } finally {
             root.deleteRecursively()
         }
@@ -122,17 +122,12 @@ class AndroidStudioRepositoryTest {
             val storage = AndroidStorage(root)
             val staged = storage.stageDeleteCaptureAudio(capture.id)
             assertNotNull(staged)
-            assertFalse(first.audioFileExists(capture.id))
+            assertTrue(runCatching { first.audioFile(capture.id) }.isFailure)
 
             val second = AndroidStudioRepository(root, intelligence, "ru-RU")
             assertTrue(second.audioFile(capture.id).isFile)
         } finally {
             root.deleteRecursively()
         }
-    }
-
-    private fun AndroidStudioRepository.snapshotBlocking(): AppSnapshot = runBlocking { snapshot() }
-    private fun AndroidStudioRepository.audioFileExists(captureId: String): Boolean = runBlocking {
-        runCatching { audioFile(captureId).isFile }.getOrDefault(false)
     }
 }
