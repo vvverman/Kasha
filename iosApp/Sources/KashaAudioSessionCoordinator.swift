@@ -36,7 +36,9 @@ final class KashaAudioSessionCoordinator {
     }
 
     deinit {
-        observers.forEach(NotificationCenter.default.removeObserver)
+        observers.forEach { observer in
+            NotificationCenter.default.removeObserver(observer)
+        }
     }
 
     private func activateRecording() {
