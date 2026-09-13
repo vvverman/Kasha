@@ -10,9 +10,10 @@ import kotlin.test.assertTrue
 
 class RecorderContractTest {
     @Test
-    fun activePhaseRequiresStableOpaqueSessionId() {
+    fun recorderPhaseAndSessionIdentityStayConsistent() {
         assertFails { RecorderSessionState(RecorderPhase.RECORDING) }
         assertFails { RecorderSessionState(RecorderPhase.PAUSED, " ") }
+        assertFails { RecorderSessionState(RecorderPhase.IDLE, "ghost-session") }
 
         val state = RecorderSessionState(
             phase = RecorderPhase.INTERRUPTED,
