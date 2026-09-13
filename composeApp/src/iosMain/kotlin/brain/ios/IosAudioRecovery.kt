@@ -3,6 +3,7 @@
 package brain.ios
 
 import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.get
 import platform.AVFAudio.AVAudioFile
 import platform.AVFAudio.AVAudioPCMBuffer
 import platform.AVFAudio.AVAudioPlayer
