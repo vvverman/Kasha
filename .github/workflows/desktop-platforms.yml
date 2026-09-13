@@ -127,6 +127,9 @@ jobs:
             mingw-w64-ucrt-x86_64-gcc
             mingw-w64-ucrt-x86_64-cmake
             mingw-w64-ucrt-x86_64-ninja
+      - name: Windows installer tools
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
       - uses: actions/cache@v4
         id: windows-native
         with:
@@ -138,12 +141,11 @@ jobs:
         if: steps.windows-native.outputs.cache-hit != 'true'
         shell: msys2 {0}
         run: bash platforms/desktop/packaging/build-native-windows.sh
-      - name: Tests and Windows packages
+      - name: Tests
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $env:Path = "$pwd\platforms\desktop\bundle\windows\bin;$env:Path"
-          Get-Command ffmpeg.exe
           $ffmpegVersion = & ffmpeg.exe -version 2>&1
           $ffmpegExitCode = $LASTEXITCODE
           if ($ffmpegExitCode -ne 0) { throw "Bundled ffmpeg failed with exit code $ffmpegExitCode" }
@@ -154,17 +156,24 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "font preparation failed with exit code $LASTEXITCODE" }
           gradle :kashaCore:jvmTest :aiCatalog:jvmTest :aiConnectors:jvmTest :composeApp:jvmTest :runtime:test :desktopApp:test 2>&1 | Tee-Object -FilePath windows-tests.log
           if ($LASTEXITCODE -ne 0) { throw "desktop tests failed with exit code $LASTEXITCODE" }
-          gradle :desktopApp:packageDistributionForCurrentOS 2>&1 | Tee-Object -FilePath windows-package.log
-          if ($LASTEXITCODE -ne 0) { throw "Windows packaging failed with exit code $LASTEXITCODE" }
-      - name: Verify packaged native resources
+      - name: Windows MSI CAB and EXE packaging
         shell: pwsh
         run: |
-          if (!(Test-Path platforms/desktop/bundle/windows/bin/whisper-cli.exe)) { throw 'whisper-cli.exe missing' }
-          if (!(Test-Path platforms/desktop/bundle/windows/bin/llama-completion.exe)) { throw 'llama-completion.exe missing' }
-          if (!(Test-Path platforms/desktop/bundle/windows/bin/ffmpeg.exe)) { throw 'ffmpeg.exe missing' }
-          $files = Get-ChildItem platforms/desktop/build/compose/binaries/main -Recurse -File | Where-Object { $_.Extension -in '.msi','.exe' }
-          $files | ForEach-Object { $_.FullName } | Set-Content windows-packages.txt
-          if ($files.Count -lt 2) { throw 'Windows MSI/EXE packages missing' }
+          ./platforms/desktop/packaging/package-windows.ps1 2>&1 | Tee-Object -FilePath windows-package.log
+          if ($LASTEXITCODE -ne 0) { throw "Windows packaging failed with exit code $LASTEXITCODE" }
+      - name: Verify Windows packages
+        shell: pwsh
+        run: |
+          $dist = "platforms/desktop/build/windows-dist"
+          $msi = @(Get-ChildItem "$dist/msi" -Filter '*.msi' -File)
+          $cabs = @(Get-ChildItem "$dist/msi" -Filter '*.cab' -File)
+          $exe = @(Get-ChildItem "$dist/exe" -Filter '*.exe' -File)
+          if ($msi.Count -ne 1) { throw 'Windows MSI missing' }
+          if ($cabs.Count -lt 2) { throw 'Windows split CAB payload missing' }
+          if ($exe.Count -ne 1) { throw 'Windows self-contained EXE missing' }
+          if (!(Test-Path "$dist/windows-install-smoke.log")) { throw 'Windows install smoke log missing' }
+          Get-Content "$dist/windows-install-smoke.log"
+          Get-Content "$dist/SHA256SUMS.txt"
       - name: Upload Windows diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -175,7 +184,7 @@ jobs:
           path: |
             windows-tests.log
             windows-package.log
-            windows-packages.txt
+            platforms/desktop/build/windows-dist/windows-install-smoke.log
             platforms/desktop/build/compose/logs/**
             platforms/desktop/build/test-results/**
             modules/infrastructure/jvm/build/test-results/**
@@ -186,6 +195,8 @@ jobs:
           retention-days: 14
           if-no-files-found: error
           path: |
-            platforms/desktop/build/compose/binaries/main/**/*.msi
-            platforms/desktop/build/compose/binaries/main/**/*.exe
-            windows-packages.txt
+            platforms/desktop/build/windows-dist/msi/*.msi
+            platforms/desktop/build/windows-dist/msi/*.cab
+            platforms/desktop/build/windows-dist/exe/*.exe
+            platforms/desktop/build/windows-dist/windows-packages.txt
+            platforms/desktop/build/windows-dist/SHA256SUMS.txt
