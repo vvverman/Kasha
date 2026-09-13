@@ -1,5 +1,6 @@
 package brain.studio
 
+import androidx.compose.foundation.Box
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.PaddingValues
@@ -9,6 +10,9 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
@@ -23,6 +27,8 @@ fun <T> KashaReorderableList(
     modifier: Modifier = Modifier,
     spacing: Dp = 10.dp,
     contentPadding: PaddingValues = PaddingValues(bottom = 20.dp),
+    moveUpLabel: String? = null,
+    moveDownLabel: String? = null,
     itemContent: @Composable (T, Boolean) -> Unit,
 ) {
     val state = rememberLazyListState()
@@ -42,6 +48,13 @@ fun <T> KashaReorderableList(
         if (from == to || from !in local.indices || to !in local.indices) return
         val item = local.removeAt(from)
         local.add(to, item)
+    }
+
+    fun commitMove(from: Int, to: Int): Boolean {
+        if (!manual || from == to || from !in local.indices || to !in local.indices) return false
+        move(from, to)
+        onManualOrder(local.map(key))
+        return true
     }
 
     fun restoreAuthoritativeOrder() {
@@ -96,6 +109,22 @@ fun <T> KashaReorderableList(
         verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(spacing),
         contentPadding = contentPadding,
     ) {
-        items(local, key = key) { item -> itemContent(item, key(item) == draggingKey) }
+        items(local, key = key) { item ->
+            val itemKey = key(item)
+            val index = local.indexOfFirst { key(it) == itemKey }
+            val accessibility = if (!manual || (moveUpLabel == null && moveDownLabel == null)) Modifier else Modifier.semantics {
+                customActions = buildList {
+                    if (moveUpLabel != null && index > 0) {
+                        add(CustomAccessibilityAction(moveUpLabel) { commitMove(index, index - 1) })
+                    }
+                    if (moveDownLabel != null && index >= 0 && index < local.lastIndex) {
+                        add(CustomAccessibilityAction(moveDownLabel) { commitMove(index, index + 1) })
+                    }
+                }
+            }
+            Box(accessibility) {
+                itemContent(item, itemKey == draggingKey)
+            }
+        }
     }
 }
