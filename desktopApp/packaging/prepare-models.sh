@@ -4,11 +4,17 @@ cd "$(dirname "$0")/../.."
 COMMON="$PWD/desktopApp/bundle/common"
 mkdir -p "$COMMON/models" "$COMMON/licenses"
 
+hash256() {
+  if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d ' ' -f1
+  else shasum -a 256 "$1" | cut -d ' ' -f1
+  fi
+}
+
 fetch_model() {
   local name="$1" url="$2" expected="$3" file="$COMMON/models/$1"
-  if [ -f "$file" ] && [ "$(shasum -a 256 "$file" | cut -d ' ' -f1)" = "$expected" ]; then return; fi
+  if [ -f "$file" ] && [ "$(hash256 "$file")" = "$expected" ]; then return; fi
   curl -fL --retry 3 --connect-timeout 30 --max-time 1800 "$url" -o "$file.part"
-  test "$(shasum -a 256 "$file.part" | cut -d ' ' -f1)" = "$expected"
+  test "$(hash256 "$file.part")" = "$expected"
   mv "$file.part" "$file"
 }
 
