@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
     <application
+        android:name=".KashaApplication"
         android:allowBackup="false"
         android:dataExtractionRules="@xml/kasha_data_extraction_rules"
         android:fullBackupContent="@xml/kasha_backup_rules"
