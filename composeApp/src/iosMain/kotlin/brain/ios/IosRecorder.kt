@@ -43,6 +43,8 @@ internal class IosRecorder(
 
     override fun sessionState(): RecorderSessionState = state
 
+    // Текущий файл физически лежит в pending-каталоге, но становится recoverable
+    // pending только после потери активной process-сессии.
     override suspend fun pendingRecordings(): List<PendingRecording> = pendingFileNames()
         .filter { it != state.activeSessionId }
         .sorted()
