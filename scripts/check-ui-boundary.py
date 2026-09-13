@@ -4,7 +4,8 @@ from pathlib import Path
 import re
 import sys
 
-ROOT = Path(__file__).resolve().parents[1] / "composeApp/src/commonMain/kotlin/brain/studio"
+REPO = Path(__file__).resolve().parents[1]
+ROOT = REPO / "composeApp/src/commonMain/kotlin/brain/studio"
 ALLOWED_CONTROLS = {(ROOT / "ui/KashaUi.kt").resolve(), (ROOT / "ui/KashaNoteText.kt").resolve()}
 CONTROL_PATTERN = re.compile(
     r"(?<![A-Za-z0-9_])(?:Button|IconButton|TextField|OutlinedTextField|Switch|Checkbox|RadioButton|Slider|RangeSlider|BasicTextField)\s*\("
@@ -50,8 +51,45 @@ else:
 if (ROOT / "ui/PhosphorFillPaths.kt").exists():
     violations.append("ui/PhosphorFillPaths.kt: legacy Phosphor должен быть удалён")
 
+# Канонический дизайн должен приходить из общего слоя, а не из платформенных скинов.
+tokens_file = ROOT / "ui/KashaTokens.kt"
+studio_file = ROOT / "StudioApp.kt"
+brand_file = ROOT / "Brand.kt"
+design_file = ROOT / "Design.kt"
+web_index = REPO / "composeApp/src/wasmJsMain/resources/index.html"
+macro_asset = REPO / "composeApp/src/commonMain/composeResources/drawable/buckwheat_dark_macro.png"
+
+if not tokens_file.exists():
+    violations.append("ui/KashaTokens.kt: семантические tokens из docs/design обязательны")
+else:
+    token_text = tokens_file.read_text(encoding="utf-8")
+    for required in ("KashaDarkColors", "KashaLightColors", "desktopBreakpoint", "orbIdle", "navigationBaseHeight"):
+        if required not in token_text:
+            violations.append(f"ui/KashaTokens.kt: отсутствует обязательный design token {required}")
+
+if studio_file.exists():
+    studio_text = studio_file.read_text(encoding="utf-8")
+    if "widthIn(max = 430.dp)" in studio_text:
+        violations.append("StudioApp.kt: запрещена старая телефонная рамка 430 dp")
+    for required in ("KashaMetrics.desktopBreakpoint", "KashaBottomNavigation", "KashaSidebarNavigation"):
+        if required not in studio_text:
+            violations.append(f"StudioApp.kt: адаптивная общая оболочка не использует {required}")
+
+if design_file.exists() and "Commissioner" in design_file.read_text(encoding="utf-8"):
+    violations.append("Design.kt: Commissioner запрещён, канонический шрифт — Geologica")
+
+if brand_file.exists():
+    brand_text = brand_file.read_text(encoding="utf-8")
+    if "buckwheat_dark_macro" not in brand_text:
+        violations.append("Brand.kt: тёмный splash должен использовать утверждённую макрогречку")
+if not macro_asset.exists():
+    violations.append("composeResources/drawable/buckwheat_dark_macro.png: splash asset отсутствует")
+
+if web_index.exists() and "max-width:430px" in web_index.read_text(encoding="utf-8").replace(" ", ""):
+    violations.append("wasm index.html: Web нельзя зажимать в max-width 430 px")
+
 if violations:
     print("Kasha UI boundary нарушен:\n" + "\n".join(violations), file=sys.stderr)
     sys.exit(1)
 
-print("Kasha UI + Kasha Icons boundary: OK")
+print("Kasha UI + Kasha Icons + canonical design boundary: OK")
