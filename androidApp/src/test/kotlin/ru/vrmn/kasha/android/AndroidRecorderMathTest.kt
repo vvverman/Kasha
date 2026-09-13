@@ -28,4 +28,21 @@ class AndroidRecorderMathTest {
     fun reduceWaveformClampsValuesAndKeepsShortInput() {
         assertEquals(listOf(0f, 0.5f, 1f), reduceWaveform(listOf(-1f, 0.5f, 2f), 512))
     }
+
+    @Test
+    fun pcmPeakAccumulatorKeepsPeakPerTimeBucketAndFlushesTail() {
+        val accumulator = PcmPeakAccumulator(samplesPerPoint = 4)
+        listOf(0.1f, 0.8f, 0.2f, 0.3f, 0.4f, 0.6f).forEach(accumulator::add)
+
+        assertEquals(listOf(0.8f, 0.6f), accumulator.finish())
+    }
+
+    @Test
+    fun pcmPeakAccumulatorClampsDecodedSamples() {
+        val accumulator = PcmPeakAccumulator(samplesPerPoint = 2)
+        accumulator.add(-1f)
+        accumulator.add(2f)
+
+        assertEquals(listOf(1f), accumulator.finish())
+    }
 }
