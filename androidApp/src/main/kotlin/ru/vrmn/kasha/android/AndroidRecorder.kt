@@ -333,74 +333,100 @@ internal class AndroidRecorder(
     private fun handleRouteChanged(source: MediaRecorder, newDeviceId: Int?) {
         scope.launch {
             control.withLock {
-                if (recorder !== source || session.phase == RecorderPhase.IDLE) return@withLock
-                val previous = routedDeviceId
-                if (session.phase == RecorderPhase.INTERRUPTED) {
-                    if (newDeviceId != previous) {
-                        routedDeviceId = newDeviceId
-                        val currentIssue = session.issue ?: return@withLock
-                        val sessionId = activeSessionId ?: return@withLock
-                        when (currentIssue.kind) {
-                            RecorderIssueKind.INPUT_UNAVAILABLE -> {
-                                session = RecorderSessionState(
-                                    phase = RecorderPhase.INTERRUPTED,
-                                    activeSessionId = sessionId,
-                                    issue = RecorderIssue(
-                                        RecorderIssueKind.INPUT_UNAVAILABLE,
-                                        recoverable = newDeviceId != null,
-                                    ),
-                                )
-                            }
-                            RecorderIssueKind.INTERRUPTION -> {
-                                session = RecorderSessionState(
-                                    phase = RecorderPhase.INTERRUPTED,
-                                    activeSessionId = sessionId,
-                                    issue = RecorderIssue(
-                                        RecorderIssueKind.INTERRUPTION,
-                                        recoverable = newDeviceId != null && !isRecorderSilenced(source),
-                                    ),
-                                )
-                            }
-                            else -> Unit
-                        }
-                    }
-                    return@withLock
-                }
-                if (previous == null) {
-                    routedDeviceId = newDeviceId
-                    return@withLock
-                }
-                if (newDeviceId == previous) return@withLock
+                handleRouteChangedLocked(source, newDeviceId)
+            }
+        }
+    }
+
+    /** Вызывать только под [control]. */
+    private fun handleRouteChangedLocked(source: MediaRecorder, newDeviceId: Int?) {
+        if (recorder !== source || session.phase == RecorderPhase.IDLE) return
+        val previous = routedDeviceId
+        if (session.phase == RecorderPhase.INTERRUPTED) {
+            if (newDeviceId != previous) {
                 routedDeviceId = newDeviceId
-                if (session.phase == RecorderPhase.RECORDING || session.phase == RecorderPhase.PAUSED) {
-                    interruptActive(
-                        source = source,
-                        kind = RecorderIssueKind.INPUT_UNAVAILABLE,
-                        recoverable = false,
-                    )
+                val currentIssue = session.issue ?: return
+                val sessionId = activeSessionId ?: return
+                when (currentIssue.kind) {
+                    RecorderIssueKind.INPUT_UNAVAILABLE -> {
+                        session = RecorderSessionState(
+                            phase = RecorderPhase.INTERRUPTED,
+                            activeSessionId = sessionId,
+                            issue = RecorderIssue(
+                                RecorderIssueKind.INPUT_UNAVAILABLE,
+                                recoverable = newDeviceId != null,
+                            ),
+                        )
+                    }
+                    RecorderIssueKind.INTERRUPTION -> {
+                        session = RecorderSessionState(
+                            phase = RecorderPhase.INTERRUPTED,
+                            activeSessionId = sessionId,
+                            issue = RecorderIssue(
+                                RecorderIssueKind.INTERRUPTION,
+                                recoverable = newDeviceId != null && !isRecorderSilenced(source),
+                            ),
+                        )
+                    }
+                    else -> Unit
                 }
             }
+            return
+        }
+        if (previous == null) {
+            routedDeviceId = newDeviceId
+            return
+        }
+        if (newDeviceId == previous) return
+        routedDeviceId = newDeviceId
+        if (session.phase == RecorderPhase.RECORDING || session.phase == RecorderPhase.PAUSED) {
+            interruptActive(
+                source = source,
+                kind = RecorderIssueKind.INPUT_UNAVAILABLE,
+                recoverable = false,
+            )
         }
     }
 
     private fun handleRecordingConfiguration(source: MediaRecorder, config: AudioRecordingConfiguration?) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q || config == null) return
         val deviceId = config.audioDevice?.id
-        if (deviceId != null) handleRouteChanged(source, deviceId)
         val silenced = config.isClientSilenced
 
         scope.launch {
             control.withLock {
                 if (recorder !== source || session.phase == RecorderPhase.IDLE) return@withLock
+
+                // Один framework callback может одновременно сообщить и новый route, и silencing.
+                // Системное прерывание имеет приоритет, чтобы причина не зависела от порядка корутин.
+                if (deviceId != null && deviceId != routedDeviceId) routedDeviceId = deviceId
+
                 if (silenced) {
-                    if (session.phase == RecorderPhase.RECORDING || session.phase == RecorderPhase.PAUSED) {
-                        interruptActive(
+                    when (session.phase) {
+                        RecorderPhase.RECORDING,
+                        RecorderPhase.PAUSED -> interruptActive(
                             source = source,
                             kind = RecorderIssueKind.INTERRUPTION,
                             recoverable = false,
                         )
+                        RecorderPhase.INTERRUPTED -> {
+                            val sessionId = activeSessionId ?: return@withLock
+                            val currentKind = session.issue?.kind
+                            if (currentKind != RecorderIssueKind.IO_FAILURE && currentKind != RecorderIssueKind.SESSION_LOST) {
+                                session = RecorderSessionState(
+                                    phase = RecorderPhase.INTERRUPTED,
+                                    activeSessionId = sessionId,
+                                    issue = RecorderIssue(RecorderIssueKind.INTERRUPTION, recoverable = false),
+                                )
+                            }
+                        }
+                        RecorderPhase.IDLE,
+                        RecorderPhase.FINALIZING -> Unit
                     }
-                } else if (
+                    return@withLock
+                }
+
+                if (
                     session.phase == RecorderPhase.INTERRUPTED &&
                     session.issue?.kind == RecorderIssueKind.INTERRUPTION
                 ) {
@@ -413,7 +439,10 @@ internal class AndroidRecorder(
                             recoverable = routedDeviceId != null,
                         ),
                     )
+                    return@withLock
                 }
+
+                if (deviceId != null) handleRouteChangedLocked(source, deviceId)
             }
         }
     }
