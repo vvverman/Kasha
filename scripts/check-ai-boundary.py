@@ -47,6 +47,9 @@ required_ai_fragments = (
     'enum class AiRole { SPEECH_TO_TEXT, TEXT, ROUTING }',
     'const val CONSENT_VERSION',
     'privacyConsentVersion',
+    'consentSnapshot',
+    'fun snapshot(connection: CloudAiConnection)',
+    'fun hasCurrentConsent(connection: CloudAiConnection)',
     'interface SpeechToTextEngine',
     'interface TextProcessingEngine',
     'interface RoutingEngine',
@@ -58,8 +61,12 @@ for fragment in required_ai_fragments:
 
 if 'val apiKey: String? = null' not in requests:
     errors.append('API key may only cross Core as an explicit transient request payload')
-if 'privacyConsentVersion = AiPrivacy.CONSENT_VERSION' not in settings:
+if 'privacyConsentVersion = if (consentGranted) AiPrivacy.CONSENT_VERSION else 0' not in settings:
     errors.append('Cloud connection UI must stamp current privacy consent version')
+if 'consentSnapshot = AiPrivacy.snapshot(base)' not in settings:
+    errors.append('Cloud connection UI must bind consent to the exact visible configuration')
+if 'AiPrivacy.hasCurrentConsent' not in settings:
+    errors.append('Cloud connection UI must distinguish stale consent from a currently executable connection')
 if not re.search(r'val\s+canSave\s*=\s*cloud\.available\s*&&\s*consent', settings):
     errors.append('Cloud connection actions must be gated by platform availability and explicit consent')
 if settings.count('enabled = canSave') < 2:
@@ -103,4 +110,4 @@ if errors:
     print('AI boundary violations:', file=sys.stderr)
     print('\n'.join(f'- {e}' for e in errors), file=sys.stderr)
     sys.exit(1)
-print('AI boundary: OK (one Core, three role ports, concrete catalog outside Core, explicit consent, no persisted secrets)')
+print('AI boundary: OK (one Core, three role ports, exact consent snapshot, concrete catalog outside Core, no persisted secrets)')
