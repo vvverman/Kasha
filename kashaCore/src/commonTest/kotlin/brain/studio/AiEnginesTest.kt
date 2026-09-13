@@ -5,6 +5,7 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFails
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class AiEnginesTest {
@@ -64,6 +65,48 @@ class AiEnginesTest {
             privacyConsentVersion = 1,
         )
         assertTrue(oldConnection.privacyConsentVersion < AiPrivacy.CONSENT_VERSION)
+        assertFalse(AiPrivacy.hasCurrentConsent(oldConnection))
+    }
+
+    @Test
+    fun consentSnapshotBindsProviderEndpointModelsRolesAndDataKinds() {
+        val base = CloudAiConnection(
+            providerId = "provider",
+            modelIds = mapOf(
+                AiRole.TEXT to " text-model ",
+                AiRole.ROUTING to "route-model",
+            ),
+            endpoint = "https://example.com/v1/",
+            enabled = true,
+            privacyConsentVersion = AiPrivacy.CONSENT_VERSION,
+        )
+        val snapshot = AiPrivacy.snapshot(base)
+        val consented = base.copy(consentSnapshot = snapshot)
+
+        assertEquals("provider", snapshot.providerId)
+        assertEquals("https://example.com/v1", snapshot.normalizedEndpoint)
+        assertEquals("example.com", snapshot.endpointHost)
+        assertEquals(setOf(AiRole.TEXT, AiRole.ROUTING), snapshot.roles)
+        assertEquals("text-model", snapshot.modelIds[AiRole.TEXT])
+        assertEquals(AiPrivacy.dataFor(snapshot.roles), snapshot.dataKinds)
+        assertTrue(AiPrivacy.hasCurrentConsent(consented))
+    }
+
+    @Test
+    fun changingEndpointOrModelInvalidatesConsentSnapshot() {
+        val base = CloudAiConnection(
+            providerId = "provider",
+            modelIds = mapOf(AiRole.TEXT to "model-a"),
+            endpoint = "https://example.com/v1",
+            enabled = true,
+            privacyConsentVersion = AiPrivacy.CONSENT_VERSION,
+        )
+        val consented = base.copy(consentSnapshot = AiPrivacy.snapshot(base))
+
+        assertTrue(AiPrivacy.hasCurrentConsent(consented))
+        assertFalse(AiPrivacy.hasCurrentConsent(consented.copy(endpoint = "https://other.example/v1")))
+        assertFalse(AiPrivacy.hasCurrentConsent(consented.copy(modelIds = mapOf(AiRole.TEXT to "model-b"))))
+        assertFalse(AiPrivacy.hasCurrentConsent(consented.copy(modelIds = mapOf(AiRole.ROUTING to "model-a"))))
     }
 
     @Test
