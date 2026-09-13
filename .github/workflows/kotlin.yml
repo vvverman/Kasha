@@ -53,6 +53,7 @@ jobs:
           bash runtime/build/install/runtime/bin/runtime > runtime.log 2>&1 &
           PID=$!
           trap 'kill "$PID" 2>/dev/null || true' EXIT
+          python tests/web_adapter_browser.py
           python tests/studio_browser.py
           python tests/sorting_browser.py
       - uses: actions/upload-artifact@v4
