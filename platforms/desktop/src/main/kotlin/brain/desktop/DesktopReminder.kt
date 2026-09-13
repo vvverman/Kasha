@@ -52,7 +52,7 @@ internal class DesktopReminder(
             ${'$'}xml=New-Object Windows.Data.Xml.Dom.XmlDocument
             ${'$'}xml.LoadXml("<toast><visual><binding template='ToastGeneric'><text>Kasha · Задача</text><text>${'$'}safe</text></binding></visual></toast>")
             ${'$'}toast=[Windows.UI.Notifications.ToastNotification]::new(${'$'}xml)
-            [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('Kasha').Show(${'$'}toast)
+            [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('ru.vrmn.kasha').Show(${'$'}toast)
         """.trimIndent()
         process.run(listOf(shell, "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script), body)
     }
