@@ -32,4 +32,12 @@ jobs:
           python -m pip install fonttools==4.59.2
           python scripts/prepare-fonts.py
       - name: Test Android persistence and assemble debug shell
-        run: gradle :androidApp:testDebugUnitTest :androidApp:assembleDebug
+        run: |
+          set -o pipefail
+          gradle :androidApp:testDebugUnitTest :androidApp:assembleDebug 2>&1 | tee android-build.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-shell-log-${{ github.sha }}
+          retention-days: 14
+          path: android-build.log
