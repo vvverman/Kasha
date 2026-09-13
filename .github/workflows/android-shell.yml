@@ -1,0 +1,35 @@
+name: Android shell verification
+on:
+  pull_request:
+    paths:
+      - 'androidApp/**'
+      - 'composeApp/**'
+      - 'kashaCore/**'
+      - 'gradle/**'
+      - 'build.gradle.kts'
+      - 'settings.gradle.kts'
+      - '.github/workflows/android-shell.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  assemble-debug:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+      - name: Prepare shared fonts
+        run: |
+          python -m pip install fonttools==4.59.2
+          python scripts/prepare-fonts.py
+      - name: Assemble Android debug shell
+        run: gradle :androidApp:assembleDebug
