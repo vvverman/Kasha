@@ -56,6 +56,7 @@ internal class AndroidStudioRepository(
             ?.let { runCatching { json.decodeFromString<BrainData>(it) }.getOrNull() }
             ?: BrainData()
         val migrated = loaded.migrated()
+        storage.reconcile(migrated.captures)
         data = migrated.copy(captures = migrated.captures.map { capture ->
             if (capture.status.isWorking) {
                 capture.copy(status = CaptureStatus.FAILED, message = "Обработка прервана; запись сохранена")
@@ -242,7 +243,7 @@ internal class AndroidStudioRepository(
     suspend fun acceptPending(source: File, durationSeconds: Double, waveform: List<Float>): Capture = mutex.withLock {
         require(data.captures.none { it.isInbox }) { "Сначала сохраните или удалите текущую запись" }
         require(durationSeconds.isFinite() && durationSeconds >= 0.0)
-        val captureId = id()
+        val captureId = storage.pendingId(source)
         val target = storage.acceptPending(source, captureId)
         try {
             val capture = Capture(
@@ -259,7 +260,7 @@ internal class AndroidStudioRepository(
             commit(data.addCapture(capture))
             capture
         } catch (error: Throwable) {
-            storage.deleteCaptureAudio(captureId)
+            storage.reconcile(data.captures)
             throw error
         }
     }
