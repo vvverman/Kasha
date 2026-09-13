@@ -4,7 +4,8 @@ from pathlib import Path
 import re
 import sys
 
-ROOT = Path(__file__).resolve().parents[1] / "composeApp/src/commonMain/kotlin/brain/studio"
+REPO = Path(__file__).resolve().parents[1]
+ROOT = REPO / "composeApp/src/commonMain/kotlin/brain/studio"
 ALLOWED_CONTROLS = {(ROOT / "ui/KashaUi.kt").resolve(), (ROOT / "ui/KashaNoteText.kt").resolve()}
 CONTROL_PATTERN = re.compile(
     r"(?<![A-Za-z0-9_])(?:Button|IconButton|TextField|OutlinedTextField|Switch|Checkbox|RadioButton|Slider|RangeSlider|BasicTextField)\s*\("
@@ -50,8 +51,32 @@ else:
 if (ROOT / "ui/PhosphorFillPaths.kt").exists():
     violations.append("ui/PhosphorFillPaths.kt: legacy Phosphor должен быть удалён")
 
+studio_file = ROOT / "StudioApp.kt"
+if not studio_file.exists():
+    violations.append("StudioApp.kt: общая оболочка Kasha отсутствует")
+else:
+    studio = studio_file.read_text(encoding="utf-8")
+    adaptive_contract = {
+        "WindowInsets.safeDrawing": "корневой shell обязан учитывать safe area",
+        "1024.dp": "desktop breakpoint 1024dp отсутствует",
+        "1440.dp": "максимальная ширина общей desktop-композиции отсутствует",
+        "KashaNavigationLayout.Sidebar": "desktop sidebar отсутствует",
+        "KashaNavigationSurface": "единая nav surface отсутствует",
+    }
+    for token, message in adaptive_contract.items():
+        if token not in studio:
+            violations.append(f"StudioApp.kt: {message}")
+    if "widthIn(max = 430.dp)" in studio or "width(430.dp)" in studio:
+        violations.append("StudioApp.kt: запрещён legacy phone clamp 430dp")
+
+web_index = REPO / "composeApp/src/wasmJsMain/resources/index.html"
+if web_index.exists():
+    html = web_index.read_text(encoding="utf-8").replace(" ", "").lower()
+    if "max-width:430px" in html:
+        violations.append("wasm index.html: запрещён legacy phone clamp 430px")
+
 if violations:
     print("Kasha UI boundary нарушен:\n" + "\n".join(violations), file=sys.stderr)
     sys.exit(1)
 
-print("Kasha UI + Kasha Icons boundary: OK")
+print("Kasha UI + Kasha Icons + adaptive shell boundary: OK")
