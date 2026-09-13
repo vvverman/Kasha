@@ -56,7 +56,7 @@ with sync_playwright() as pw:
     page.on('pageerror', lambda error: errors.append(str(error)))
     page.on('dialog', lambda dialog: (dialogs.append(dialog.type), dialog.accept()))
 
-    def stored_chunk_count():
+    def persisted_recording():
         return page.evaluate('''async () => {
             const db = await new Promise((resolve, reject) => {
                 const r = indexedDB.open('kasha-audio-v1', 1);
@@ -64,12 +64,16 @@ with sync_playwright() as pw:
                 r.onerror = () => reject(r.error);
             });
             try {
-                const chunks = await new Promise((resolve, reject) => {
-                    const r = db.transaction('chunks').objectStore('chunks').getAll();
+                const all = store => new Promise((resolve, reject) => {
+                    const r = db.transaction(store).objectStore(store).getAll();
                     r.onsuccess = () => resolve(r.result);
                     r.onerror = () => reject(r.error);
                 });
-                return chunks.filter(x => x.blob?.size > 0).length;
+                const sessions = (await all('sessions')).sort((a, b) => a.created - b.created);
+                const saved = sessions[0];
+                if (!saved) return null;
+                const chunks = (await all('chunks')).filter(x => x.id === saved.id && x.blob?.size > 0);
+                return {id: saved.id, chunks: chunks.length};
             } finally {
                 db.close();
             }
@@ -123,22 +127,31 @@ with sync_playwright() as pw:
         assert denied['pending'] is False, denied
         assert denied['phase'] == 'idle', denied
 
-        # Reload во время активной записи: уже подтверждённо записанный browser journal восстанавливается.
+        # Reload во время активной записи: общий launch автоматически восстанавливает тот же browser session id.
         assert page.evaluate('kashaPlatform.start()') == 'ok'
+        source = None
         deadline = time.monotonic() + 10
-        while time.monotonic() < deadline and stored_chunk_count() == 0:
+        while time.monotonic() < deadline:
+            source = persisted_recording()
+            if source and source['chunks'] > 0:
+                break
             page.wait_for_timeout(100)
-        assert stored_chunk_count() > 0, 'MediaRecorder не записал ни одного persisted chunk'
+        assert source and source['chunks'] > 0, 'MediaRecorder не записал ни одного persisted chunk'
+        source_id = source['id']
         assert page.evaluate('kashaPlatform.phase()') == 'recording'
         assert page.evaluate('kashaPlatform.consent()') is True
         page.reload(wait_until='networkidle')
         page.locator('canvas').first.wait_for(state='visible', timeout=30000)
         assert page.evaluate('kashaPlatform.phase()') == 'idle'
-        assert page.evaluate('kashaPlatform.pending()') is True
-        recovered_text = page.evaluate('(base) => kashaPlatform.recover(base)', BASE)
-        assert not recovered_text.startswith('ERROR:'), recovered_text
-        recovered = json.loads(recovered_text)
-        assert recovered['id']
+
+        recovered = None
+        deadline = time.monotonic() + 15
+        while time.monotonic() < deadline:
+            recovered = next((c for c in api('snapshot')['captures'] if c['id'] == source_id), None)
+            if recovered:
+                break
+            page.wait_for_timeout(100)
+        assert recovered is not None, 'Автоматическое recovery не опубликовало исходный browser session id'
         assert page.evaluate('kashaPlatform.pending()') is False
 
         # Paused playback остаётся занятым транспортом и блокирует recorder.
