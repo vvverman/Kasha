@@ -22,6 +22,10 @@
     <string>$(CURRENT_PROJECT_VERSION)</string>
     <key>LSRequiresIPhoneOS</key>
     <true/>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Kasha записывает голос в локальный аудиофайл на этом iPhone.</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>Kasha расшифровывает ваши голосовые записи. На поддерживаемых устройствах распознавание принудительно выполняется на устройстве.</string>
     <key>UILaunchScreen</key>
     <dict/>
     <key>UIRequiresFullScreen</key>
