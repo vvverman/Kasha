@@ -17,7 +17,10 @@ fun MainViewController() = ComposeUIViewController {
     val intelligence = remember { IosOnDeviceIntelligence() }
     val baseRepository = remember(intelligence) { IosRepository(intelligence) }
     val reminders = remember { IosReminder() }
-    val repository = remember(baseRepository, reminders) { IosReminderRepository(baseRepository, reminders) }
+    val deviceCapabilities = remember { IosDeviceCapabilities() }
+    val repository = remember(baseRepository, reminders, deviceCapabilities) {
+        IosReminderRepository(baseRepository, reminders, deviceCapabilities)
+    }
     val recorder = remember(baseRepository, scope) { IosRecorder(baseRepository, scope) }
     val audio = remember(baseRepository) { IosAudio(baseRepository) }
     val state = remember(repository, recorder, audio, reminders) {
