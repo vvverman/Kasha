@@ -76,6 +76,10 @@ class FileBrainStore(val root: Path, private val runtimeStatus: () -> RuntimeSta
         commit(state.pinNote(id, pinned)); state.notes.first { it.id == id }
     }
 
+    suspend fun orderNotePins(projectId: String, ids: List<String>): List<Note> = mutex.withLock {
+        commit(state.orderNotePins(projectId, ids)); state.notes.filter { it.projectId == projectId }
+    }
+
     suspend fun orderNotes(projectId: String, ids: List<String>): List<Note> = mutex.withLock {
         commit(state.orderNotes(projectId, ids)); state.notes.filter { it.projectId == projectId }
     }
