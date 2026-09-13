@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # Только сборочный Mac: ни веса, ни Whisper/LLM-движки сюда не попадают.
 set -euo pipefail
-cd "$(dirname "$0")/../.."
+REPO="$(cd "$(dirname "$0")/../../.." && pwd)"
+cd "$REPO"
 [ "$(uname -m)" = arm64 ]
 export MACOSX_DEPLOYMENT_TARGET=13.3
-RES="$PWD/desktopApp/bundle-test/common"
-SRC="$PWD/desktopApp/build/test-native/ffmpeg"
+RES="$REPO/platforms/desktop/bundle-test/common"
+SRC="$REPO/platforms/desktop/build/test-native/ffmpeg"
 mkdir -p "$RES/bin" "$RES/licenses" "$SRC"
 git -C "$SRC" init -q
 git -C "$SRC" remote add origin https://github.com/FFmpeg/FFmpeg.git 2>/dev/null || true
