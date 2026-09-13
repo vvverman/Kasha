@@ -22,7 +22,7 @@ val generateKashaIcons by tasks.registering(Exec::class) {
     commandLine("python3", "scripts/generate-kasha-icons.py")
     inputs.file(rootProject.file("docs/design/icons/registry.json"))
     inputs.file(rootProject.file("scripts/generate-kasha-icons.py"))
-    outputs.dir(layout.buildDirectory.dir("generated/kashaIcons"))
+    outputs.file(project.file("src/commonMain/kotlin/brain/studio/ui/GeneratedKashaIcons.kt"))
 }
 
 kotlin {
@@ -52,7 +52,6 @@ kotlin {
     }
 
     sourceSets {
-        commonMain.kotlin.srcDir(layout.buildDirectory.dir("generated/kashaIcons"))
         commonMain.dependencies {
             implementation(project(":kashaCore"))
             implementation(project(":aiCatalog"))
