@@ -48,11 +48,27 @@ fun StudioApp(state: StudioState) {
                 return@Surface
             }
 
-            BoxWithConstraints(Modifier.fillMaxSize()) {
-                if (maxWidth >= KashaMetrics.desktopBreakpoint) {
-                    KashaDesktopShell(state, scope)
-                } else {
-                    KashaCompactShell(state, scope, maxWidth)
+            val home = state.tab == Tab.HOME
+            val brandAlpha = when {
+                !home -> 0f
+                state.recording -> .008f
+                state.working -> .012f
+                state.current != null -> .008f
+                else -> .03f
+            }
+            Box(Modifier.fillMaxSize()) {
+                KashaWorkspaceBackground(
+                    Modifier.fillMaxSize(),
+                    showBrandGeometry = home,
+                    intensity = if (home) 1f else .5f,
+                    brandAlpha = brandAlpha,
+                )
+                BoxWithConstraints(Modifier.fillMaxSize()) {
+                    if (maxWidth >= KashaMetrics.desktopBreakpoint) {
+                        KashaDesktopShell(state, scope)
+                    } else {
+                        KashaCompactShell(state, scope, maxWidth)
+                    }
                 }
             }
         }
@@ -75,6 +91,7 @@ private fun KashaCompactShell(
     } else {
         KashaMetrics.contentColumnMax
     }
+    val playerVisible = state.recording || state.loadedAudio != null || state.working
 
     Column(Modifier.fillMaxSize()) {
         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
@@ -111,8 +128,10 @@ private fun KashaCompactShell(
                     .widthIn(max = KashaMetrics.navigationMax)
                     .fillMaxWidth(),
             ) {
-                GlobalPlayer(state)
-                Spacer(Modifier.height(KashaMetrics.navigationGapToPlayer))
+                if (playerVisible) {
+                    GlobalPlayer(state)
+                    Spacer(Modifier.height(KashaMetrics.navigationGapToPlayer))
+                }
                 KashaBottomNavigation(Modifier.fillMaxWidth()) {
                     KASHA_NAV_ITEMS.forEach { (tab, key, icon) ->
                         KashaNavigationItem(
