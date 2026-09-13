@@ -37,6 +37,28 @@
 - unit tests покрывают restart persistence и crash-recovery;
 - branch-head CI: `:androidApp:testDebugUnitTest` и `:androidApp:assembleDebug` проходят.
 
-Интеграционный PR-check отдельно может быть красным из-за текущих изменений shared Kasha UI в `main`; такие ошибки не обходятся Android-specific кодом и остаются ответственностью общего UI/Gradle слоя.
+### 4. Microphone/recording — в работе, Android-часть реализована
 
-Текущий этап: **4. Microphone/recording**.
+Готово в Android shell:
+
+- реальный `MediaRecorder`, AAC/M4A, mono 44.1 kHz, bitrate из общей `Preferences.quality`;
+- `RECORD_AUDIO` проверяется платформой, но system permission не запрашивается скрытно внутри recorder;
+- start/pause/resume/finalize и app-private pending;
+- duration исключает паузы;
+- реальные амплитуды собираются самим recorder независимо от UI lifecycle;
+- финальная waveform представляет всю временную шкалу и сводится максимум к 512 точкам;
+- process-scoped runtime не создаёт второй recorder при пересоздании Activity;
+- background capture защищён foreground service типа `microphone`; сервис запускается только вместе с уже инициированной записью и не рестартует её после process death;
+- recovery измеряет фактическую duration M4A и не выдумывает успешное восстановление нечитаемого файла;
+- до подключения реального Android AI capture остаётся сохранённым с честным `NEEDS_MODEL`, без demo/fake STT.
+
+Пункт пока **не закрывается** из-за общих межплатформенных контрактов:
+
+- #25 — shared Core/UI permission intent, безопасный cancel active recording, типизированные interruption/route/hardware причины и background capability;
+- #28 — общий контракт полного waveform/duration при recovery из готового файла.
+
+Android-specific обход этих разрывов запрещён. После появления общих контрактов Android должен только реализовать соответствующие системные операции и пройти device acceptance.
+
+Интеграционный PR-check отдельно может отражать свежие изменения shared Kasha UI в `main`; такие ошибки не обходятся Android-specific кодом.
+
+Текущий этап: **4. Microphone/recording**. Пункт 5 не начинать до закрытия пункта 4.
