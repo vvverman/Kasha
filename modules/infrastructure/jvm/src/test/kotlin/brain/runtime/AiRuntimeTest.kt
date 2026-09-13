@@ -32,6 +32,14 @@ class AiRuntimeTest {
     }
 
     @Test
+    fun cloudGatewayNeedsExplicitPlatformSecureStore() {
+        val root = Files.createTempDirectory("kasha-ai-no-platform-secret-")
+        try {
+            assertFalse(JvmCloudAiGateway(root).available)
+        } finally { root.toFile().deleteRecursively() }
+    }
+
+    @Test
     fun cloudMetadataNeverStoresApiKey() = runBlocking {
         val root = Files.createTempDirectory("kasha-ai-cloud-")
         val secrets = MemorySecrets()
