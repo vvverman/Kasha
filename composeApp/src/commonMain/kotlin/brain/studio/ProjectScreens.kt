@@ -88,6 +88,8 @@ internal fun ProjectsScreen(s: StudioState) {
                 manual = s.preferences.noteSort == SortMode.MANUAL,
                 onManualOrder = { ids -> scope.launch { s.reorderNotes(project.id, ids) } },
                 modifier = Modifier.fillMaxSize(),
+                moveUpLabel = s.tr("up"),
+                moveDownLabel = s.tr("down"),
             ) { n, dragging -> NoteLine(n, dragging) { s.openNote(n.id) } }
         }
         else -> Column {
@@ -103,6 +105,8 @@ internal fun ProjectsScreen(s: StudioState) {
                 onManualOrder = { ids -> scope.launch { s.reorderProjects(ids) } },
                 modifier = Modifier.fillMaxSize(),
                 spacing = 12.dp,
+                moveUpLabel = s.tr("up"),
+                moveDownLabel = s.tr("down"),
             ) { p, dragging ->
                 ProjectLine(p, { s.selectedProjectId = p.id; s.selectedNoteId = null }, { s.editingProjectId = p.id }, s.tr("edit"), dragging)
             }
