@@ -82,6 +82,7 @@ internal fun ProjectsScreen(s: StudioState) {
             KashaSortBar(s.preferences.noteSort, sortLabels(s), { scope.launch { s.setNoteSort(it) } })
             Spacer(Modifier.height(14.dp))
             val notes = s.projectNotes(project.id)
+            val listState = rememberKashaListState("project:${project.id}:notes")
             if (notes.isEmpty()) Text(s.tr("noNotes"), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             else KashaReorderableList(
                 items = notes,
@@ -91,6 +92,7 @@ internal fun ProjectsScreen(s: StudioState) {
                 modifier = Modifier.fillMaxSize(),
                 moveUpLabel = s.tr("up"),
                 moveDownLabel = s.tr("down"),
+                listState = listState,
             ) { n, dragging -> NoteLine(s, n, dragging) { s.openNote(n.id) } }
         }
         else -> Column {
@@ -98,6 +100,7 @@ internal fun ProjectsScreen(s: StudioState) {
             KashaSortBar(s.preferences.projectSort, sortLabels(s), { scope.launch { s.setProjectSort(it) } })
             Spacer(Modifier.height(14.dp))
             val projects = s.projects()
+            val listState = rememberKashaListState("projects")
             if (projects.isEmpty()) Text(s.tr("noProjects"), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             else KashaReorderableList(
                 items = projects,
@@ -108,6 +111,7 @@ internal fun ProjectsScreen(s: StudioState) {
                 spacing = 12.dp,
                 moveUpLabel = s.tr("up"),
                 moveDownLabel = s.tr("down"),
+                listState = listState,
             ) { p, dragging ->
                 ProjectLine(p, { s.selectedProjectId = p.id; s.selectedNoteId = null }, { s.editingProjectId = p.id }, s.tr("edit"), dragging)
             }
