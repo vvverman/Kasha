@@ -47,6 +47,7 @@ class StudioState(
     var confirmDelete by mutableStateOf(false)
     var confirmListenId by mutableStateOf<String?>(null)
     var recordPhase by mutableStateOf("idle"); private set
+    var recorderIssue by mutableStateOf<RecorderIssue?>(null); private set
     var elapsed by mutableStateOf(0L); private set
     var liveWave by mutableStateOf(List(80) { 0f }); private set
     var playback by mutableStateOf(AudioTelemetry()); private set
@@ -64,10 +65,16 @@ class StudioState(
     private var creatingForCaptureId: String? = null
     private val editLock = Mutex()
     private var actionScope: CoroutineScope? = null
+    private val sessionRecorder: RecorderSessionGateway? get() = recorder as? RecorderSessionGateway
 
     fun attachActionScope(scope: CoroutineScope) { actionScope = scope }
     fun detachActionScope(scope: CoroutineScope) { if (actionScope === scope) actionScope = null }
-    val recording get() = recordPhase == "recording" || recordPhase == "paused"
+    val recording get() = recordPhase == "recording" || recordPhase == "paused" || recordPhase == "interrupted" || recordPhase == "finalizing"
+    val recorderCanResume get() = when (recordPhase) {
+        "paused" -> recorderIssue?.recoverable != false
+        "interrupted" -> recorderIssue?.recoverable == true
+        else -> false
+    }
     val working get() = current?.status?.isWorking == true
     val loadedAudio get() = snapshot.captures.firstOrNull { it.id == loadedAudioId }
     fun tr(key: String) = Copy.text(language, key)
@@ -114,7 +121,7 @@ class StudioState(
                 repository.createProject(ProjectDraft(tr("firstProject")))
                 refresh()
             }
-            pending = recorder.hasPending()
+            pending = hasPendingRecording()
             initialized = true
         }
         if (!initialized) return
@@ -161,8 +168,7 @@ class StudioState(
         var tick = 0
         while (currentCoroutineContext().isActive) {
             delay(65)
-            val phase = recorder.phase()
-            if (recording && phase == "idle") { recordPhase = phase; mark = null; pending = recorder.hasPending() }
+            reconcileRecorderState()
             if (recording) {
                 elapsed = (recordedMillis + (mark?.elapsedNow()?.inWholeMilliseconds ?: 0L)) / 1000
                 if (recordPhase == "recording") {
@@ -227,7 +233,8 @@ class StudioState(
         check(current == null && !pending) { "currentExists" }
         check(playback.phase == "idle") { "stopPlayback" }
         recorder.start()
-        recordPhase = recorder.phase()
+        syncRecorderAfterControl()
+        check(recordPhase == "recording") { "audioFailed" }
         recordedMillis = 0
         elapsed = 0
         mark = TimeSource.Monotonic.markNow()
@@ -237,14 +244,14 @@ class StudioState(
 
     suspend fun pauseRecording() = controls {
         recorder.pause()
-        recordedMillis += mark?.elapsedNow()?.inWholeMilliseconds ?: 0
-        mark = null
-        recordPhase = "paused"
+        freezeRecordingClock()
+        syncRecorderAfterControl()
     }
 
     suspend fun resumeRecording() = controls {
         recorder.resume()
-        recordPhase = "recording"
+        syncRecorderAfterControl()
+        check(recordPhase == "recording") { "audioFailed" }
         mark = TimeSource.Monotonic.markNow()
     }
 
@@ -255,16 +262,27 @@ class StudioState(
             elapsed = 0
             refresh()
         } finally {
-            recordPhase = recorder.phase()
-            pending = recorder.hasPending()
+            syncRecorderAfterControl()
+            pending = hasPendingRecording()
         }
     }
 
     suspend fun stopRecording() = controls { finishRecording() }
 
     suspend fun recover() = controls {
-        try { recorder.recoverPending(); refresh() }
-        finally { pending = recorder.hasPending() }
+        try {
+            val typed = sessionRecorder
+            if (typed != null) {
+                val sources = typed.pendingRecordings()
+                require(sources.size == 1) { "Expected exactly one pending recording" }
+                typed.recoverPending(sources.single().id)
+            } else {
+                recorder.recoverPending()
+            }
+            refresh()
+        } finally {
+            pending = hasPendingRecording()
+        }
     }
 
     suspend fun demo() = action {
@@ -404,7 +422,9 @@ class StudioState(
     }
 
     private suspend fun startPlayback(id: String, position: Double = 0.0) {
-        check(!recording && recorder.phase() == "idle") { "stopRecording" }
+        val recorderIdle = sessionRecorder?.sessionState()?.phase == RecorderPhase.IDLE ||
+            (sessionRecorder == null && recorder.phase() == "idle")
+        check(!recording && recorderIdle) { "stopRecording" }
         audio.playCapture(id, false, position, playbackRate)
         loadedAudioId = id
         playback = audio.telemetry()
@@ -446,6 +466,51 @@ class StudioState(
             refresh()
         }
     }
+
+    private suspend fun reconcileRecorderState() {
+        val typed = sessionRecorder
+        if (typed == null) {
+            val phase = recorder.phase()
+            if (recording && phase == "idle") {
+                freezeRecordingClock()
+                recordPhase = phase
+                recorderIssue = null
+                pending = recorder.hasPending()
+            }
+            return
+        }
+
+        val actual = typed.sessionState()
+        val nextPhase = actual.phase.legacyValue
+        if (recordPhase == "recording" && nextPhase != "recording") freezeRecordingClock()
+        recordPhase = nextPhase
+        recorderIssue = actual.issue
+        if (actual.phase == RecorderPhase.IDLE) pending = typed.pendingRecordings().isNotEmpty()
+    }
+
+    private fun syncRecorderAfterControl() {
+        val typed = sessionRecorder
+        if (typed != null) {
+            val actual = typed.sessionState()
+            recordPhase = actual.phase.legacyValue
+            recorderIssue = actual.issue
+        } else {
+            recordPhase = recorder.phase()
+            recorderIssue = null
+        }
+    }
+
+    private fun freezeRecordingClock() {
+        val activeMark = mark
+        if (activeMark != null) {
+            recordedMillis += activeMark.elapsedNow().inWholeMilliseconds
+            mark = null
+        }
+        elapsed = recordedMillis / 1000
+    }
+
+    private suspend fun hasPendingRecording(): Boolean =
+        sessionRecorder?.pendingRecordings()?.isNotEmpty() ?: recorder.hasPending()
 
     private suspend fun action(block: suspend () -> Unit): Boolean {
         val owner = actionScope
