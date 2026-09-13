@@ -19,6 +19,6 @@ internal object IosAudioSessionBridge {
     fun deactivate() = post(DEACTIVATE)
 
     private fun post(name: String) {
-        NSNotificationCenter.defaultCenter.postNotificationName(name, object = null)
+        NSNotificationCenter.defaultCenter.postNotificationName(name, null)
     }
 }
