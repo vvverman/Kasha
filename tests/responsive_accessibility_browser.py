@@ -136,7 +136,6 @@ with sync_playwright() as pw:
                 'navigation exposes accessible names',
                 'navigation semantics stabilize after breakpoint resize',
             ],
-            'knownSharedGap': 'issue #67: native Tab focus remains on Compose Web canvas',
             'pageErrors': errors,
         }, ensure_ascii=False, indent=2), encoding='utf-8')
         print('RESPONSIVE ACCESSIBILITY BROWSER PASSED')
