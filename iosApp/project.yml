@@ -33,13 +33,13 @@ targets:
         buildPhase: resources
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: ru.vrmn.kasha.test
-        PRODUCT_NAME: Kasha Test
+        PRODUCT_BUNDLE_IDENTIFIER: ru.vrmn.kasha
+        PRODUCT_NAME: Kasha
+        MARKETING_VERSION: 1.2.0
+        CURRENT_PROJECT_VERSION: 1
         INFOPLIST_FILE: Info.plist
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        CODE_SIGN_STYLE: Manual
-        CODE_SIGNING_ALLOWED: NO
-        CODE_SIGNING_REQUIRED: NO
+        CODE_SIGN_STYLE: Automatic
     dependencies:
       - framework: ../composeApp/build/bin/iosArm64/releaseFramework/KashaShared.framework
         embed: false
