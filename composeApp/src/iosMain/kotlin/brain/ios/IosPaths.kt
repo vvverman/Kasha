@@ -21,6 +21,7 @@ internal object IosPaths {
     val pending: String by lazy { directory(child(root, "pending")) }
     val stateFile: String get() = child(root, "state.json")
     val preferencesFile: String get() = child(root, "preferences.json")
+    val aiConnectionsFile: String get() = child(root, "ai-connections.json")
 
     fun child(parent: String, name: String): String =
         (parent as NSString).stringByAppendingPathComponent(name)
