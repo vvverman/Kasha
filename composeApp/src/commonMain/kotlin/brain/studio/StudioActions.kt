@@ -7,6 +7,7 @@ import brain.model.Note
 
 /**
  * Общие actions поверх platform gateways. Здесь нет знаний об ОС или файловой системе.
+ * Команды контента делегируются API Core; транспорт переносится следующим срезом.
  */
 internal suspend fun StudioState.cancelActiveRecording(): Boolean {
     val gateway = recorder as? RecorderSessionGateway ?: return false
@@ -28,20 +29,5 @@ internal suspend fun StudioState.seekPlayback(seconds: Double): Boolean {
     return true
 }
 
-internal suspend fun StudioState.moveNotePin(note: Note, delta: Int): Boolean {
-    if (!note.pinned || delta == 0) return false
-    val projectId = note.projectId
-    val ids = snapshot.notes
-        .filter { it.projectId == projectId && it.pinned }
-        .sortedWith(compareBy<Note> { it.pinOrder }.thenBy { it.createdAt }.thenBy { it.id })
-        .map { it.id }
-        .toMutableList()
-    val old = ids.indexOf(note.id)
-    val next = old + delta
-    if (old < 0 || next !in ids.indices) return false
-    ids.removeAt(old)
-    ids.add(next, note.id)
-    repository.orderNotePins(projectId, ids)
-    refresh()
-    return true
-}
+internal suspend fun StudioState.moveNotePin(note: Note, delta: Int): Boolean =
+    moveNotePinInCore(note, delta)

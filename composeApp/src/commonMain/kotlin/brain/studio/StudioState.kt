@@ -1,11 +1,11 @@
 package brain.studio
 
 import androidx.compose.runtime.*
+import brain.application.KashaApplication
 import brain.domain.*
 import brain.model.*
 import kotlinx.coroutines.*
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.flow.collect
 import kotlinx.datetime.TimeZone
 import kotlin.time.Clock
 import kotlin.time.TimeMark
@@ -20,10 +20,16 @@ class StudioState(
     val systemLanguage: String = "ru",
     val reminders: ReminderGateway = NoopReminderGateway,
 ) {
-    var snapshot by mutableStateOf(AppSnapshot()); private set
-    var preferences by mutableStateOf(Preferences()); private set
+    val application = KashaApplication(repository)
+    // Ссылка на неизменяемое состояние Core для Compose; UI не правит его поля.
+    private var content by mutableStateOf(application.state.value)
+    val snapshot get() = content.snapshot
+    val preferences get() = content.preferences
     val language: String get() = Languages.resolve(preferences.language, systemLanguage)
-    val current: Capture? get() = snapshot.captures.firstOrNull { it.isInbox }
+    val current: Capture? get() = content.current
+    val title: String get() = content.title
+    val text: String get() = content.edit.text
+    val editRevision: Long get() = content.edit.revision
 
     var tab by mutableStateOf(Tab.HOME); private set
     var selectedProjectId by mutableStateOf<String?>(null)
@@ -38,9 +44,6 @@ class StudioState(
     var taskArchive by mutableStateOf(false)
     var languagePage by mutableStateOf(false)
 
-    var title by mutableStateOf(""); private set
-    var text by mutableStateOf(""); private set
-    var editRevision by mutableStateOf(0L); private set
     var busy by mutableStateOf(false); private set
     var controlBusy by mutableStateOf(false); private set
     var error by mutableStateOf<String?>(null)
@@ -56,19 +59,36 @@ class StudioState(
     var pending by mutableStateOf(false); private set
     var initialized by mutableStateOf(false); private set
 
-    private var loadedCurrentId: String? = null
-    private var dirty = false
     private var started = false
     private var recordedMillis = 0L
     private var mark: TimeMark? = null
     private var autoRouteFor: String? = null
     private var creatingForCaptureId: String? = null
-    private val editLock = Mutex()
     private var actionScope: CoroutineScope? = null
+    private var contentObserver: Job? = null
     private val sessionRecorder: RecorderSessionGateway? get() = recorder as? RecorderSessionGateway
 
-    fun attachActionScope(scope: CoroutineScope) { actionScope = scope }
-    fun detachActionScope(scope: CoroutineScope) { if (actionScope === scope) actionScope = null }
+    fun attachActionScope(scope: CoroutineScope) {
+        if (actionScope === scope) return
+        contentObserver?.cancel()
+        actionScope = scope
+        contentObserver = scope.launch(start = CoroutineStart.UNDISPATCHED) {
+            application.state.collect { syncContent() }
+        }
+    }
+
+    fun detachActionScope(scope: CoroutineScope) {
+        if (actionScope !== scope) return
+        contentObserver?.cancel()
+        contentObserver = null
+        actionScope = null
+    }
+
+    private fun syncContent() { content = application.state.value }
+
+    private suspend fun <T> core(block: suspend KashaApplication.() -> T): T =
+        try { application.block() } finally { syncContent() }
+
     val recording get() = recordPhase == "recording" || recordPhase == "paused" || recordPhase == "interrupted" || recordPhase == "finalizing"
     val recorderCanResume get() = when (recordPhase) {
         "paused" -> recorderIssue?.recoverable != false
@@ -79,12 +99,9 @@ class StudioState(
     val loadedAudio get() = snapshot.captures.firstOrNull { it.id == loadedAudioId }
     fun tr(key: String) = Copy.text(language, key)
 
-    /** Название не редактируется отдельно: оно всегда первая непустая строка текста. */
     fun editText(value: String) {
-        text = value
-        title = NoteText.title(value)
-        dirty = true
-        editRevision++
+        application.editText(value)
+        syncContent()
     }
 
     fun navigate(value: Tab) {
@@ -115,11 +132,10 @@ class StudioState(
         if (started) return
         started = true
         action {
-            preferences = repository.preferences()
+            core { loadPreferences() }
             refresh()
             if (snapshot.projects.isEmpty()) {
-                repository.createProject(ProjectDraft(tr("firstProject")))
-                refresh()
+                core { createProject(ProjectDraft(tr("firstProject"))) }
             }
             pending = hasPendingRecording()
             initialized = true
@@ -131,14 +147,12 @@ class StudioState(
 
     suspend fun refresh() {
         val previous = current
-        snapshot = repository.snapshot()
+        core { refresh() }
+        reconcileContentPresentation(previous)
+    }
+
+    private fun reconcileContentPresentation(previous: Capture?) {
         val c = current
-        if (loadedCurrentId != c?.id || !dirty) {
-            loadedCurrentId = c?.id
-            text = c?.textToSave.orEmpty()
-            title = NoteText.title(text)
-            dirty = false
-        }
         if (c != null && c.audioFinalized && loadedAudioId == null && !recording) loadedAudioId = c.id
         if (c != null && previous?.status?.isWorking == true && !c.status.isWorking && c.status == CaptureStatus.READY && autoRouteFor != c.id) {
             autoRouteFor = c.id
@@ -149,14 +163,7 @@ class StudioState(
         }
     }
 
-    suspend fun flush() = editLock.withLock {
-        val c = current ?: return@withLock
-        if (!dirty || c.status.isWorking) return@withLock
-        val version = editRevision
-        val saved = repository.updateCaptureDraft(c.id, CaptureDraftUpdate(text = text))
-        snapshot = snapshot.copy(captures = snapshot.captures.map { if (it.id == c.id) saved else it })
-        if (editRevision == version) dirty = false
-    }
+    suspend fun flush() = core { flush() }
 
     suspend fun autosave() {
         try { flush() }
@@ -196,38 +203,22 @@ class StudioState(
         }
     }
 
-    suspend fun savePreferences(value: Preferences) = action {
-        val validated = value.validated()
-        repository.savePreferences(validated)
-        preferences = validated
-    }
+    suspend fun savePreferences(value: Preferences) = action { core { savePreferences(value) } }
+    suspend fun setProjectSort(mode: SortMode) = action { core { setProjectSort(mode) } }
+    suspend fun setNoteSort(mode: SortMode) = action { core { setNoteSort(mode) } }
+    suspend fun setTaskSort(mode: SortMode) = action { core { setTaskSort(mode) } }
 
-    suspend fun setProjectSort(mode: SortMode) = savePreferences(preferences.copy(projectSort = mode))
-    suspend fun setNoteSort(mode: SortMode) = savePreferences(preferences.copy(noteSort = mode))
-    suspend fun setTaskSort(mode: SortMode) = savePreferences(preferences.copy(taskSort = mode))
-
-    suspend fun reorderProjects(ids: List<String>) = action {
-        check(preferences.projectSort == SortMode.MANUAL)
-        repository.orderProjects(ids)
-        refresh()
-    }
-
-    suspend fun reorderNotes(projectId: String, ids: List<String>) = action {
-        check(preferences.noteSort == SortMode.MANUAL)
-        repository.orderNotes(projectId, ids)
-        refresh()
-    }
-
+    suspend fun reorderProjects(ids: List<String>) = action { core { reorderProjects(ids) } }
+    suspend fun reorderNotes(projectId: String, ids: List<String>) = action { core { reorderNotes(projectId, ids) } }
     suspend fun reorderTasks(ids: List<String>) = action {
-        check(preferences.taskSort == SortMode.MANUAL && !taskArchive)
-        repository.orderTasks(ids)
-        refresh()
+        check(!taskArchive)
+        core { reorderTasks(ids) }
     }
 
-    fun projects(): List<Project> = UserSort.projects(snapshot.projects, preferences.projectSort)
-    fun projectNotes(id: String): List<Note> = UserSort.notes(snapshot.notes.filter { it.projectId == id }, preferences.noteSort)
-    fun tasks(): List<Task> = SnapshotQueries.tasks(snapshot.tasks, preferences.taskSort, taskArchive)
-    fun orderedProjects(): List<Project> = ProjectOrder.sorted(snapshot.projects, current?.relevance.orEmpty())
+    fun projects(): List<Project> = content.projects()
+    fun projectNotes(id: String): List<Note> = content.projectNotes(id)
+    fun tasks(): List<Task> = content.tasks(taskArchive)
+    fun orderedProjects(): List<Project> = content.destinationProjects()
 
     suspend fun startRecording() = controls {
         check(current == null && !pending) { "currentExists" }
@@ -292,40 +283,29 @@ class StudioState(
         loadedAudioId = null
     }
 
-    suspend fun retry() = action { current?.let { repository.reprocess(it.id); refresh() } }
+    suspend fun retry() = action { current?.let { capture -> core { retry(capture.id) } } }
 
     suspend fun tidy() = action {
-        flush()
-        val c = current ?: return@action
-        repository.tidy(c.id)
-        refresh()
+        val capture = current ?: return@action
+        core { tidy(capture.id) }
     }
 
-    /** Отправка в заметки: AI ранжирует проекты, затем открывается только выбор проекта. */
     suspend fun sendToNotes() = action {
-        flush()
-        val c = current ?: return@action
-        check(c.textToSave.isNotBlank()) { "emptyText" }
-        repository.rank(c.id)
-        refresh()
+        val capture = current ?: return@action
+        core { prepareNotes(capture.id) }
         choosingProject = true
         targetProjectId = null
     }
 
-    /** Отправка в задачи не требует проекта: сначала пользователь задаёт срок и повторы. */
     suspend fun sendToTasks() = action {
-        flush()
-        val c = current ?: return@action
-        check(c.textToSave.isNotBlank()) { "emptyText" }
+        val capture = current ?: return@action
+        core { prepareTask(capture.id) }
         taskScheduleTarget = "new"
     }
 
     suspend fun distribute(projectId: String, noteId: String? = null) = action {
-        flush()
-        val c = current ?: return@action
-        repository.distribute(c.id, DistributionRequest(projectId, noteId))
-        dirty = false
-        refresh()
+        val capture = current ?: return@action
+        core { distribute(capture.id, DistributionRequest(projectId, noteId)) }
         choosingProject = false
         targetProjectId = null
         tab = Tab.PROJECTS
@@ -335,18 +315,14 @@ class StudioState(
     suspend fun saveTaskSchedule(dueAt: Long, repeat: ReminderRepeat) = action {
         val target = taskScheduleTarget ?: return@action
         if (target == "new") {
-            flush()
-            val c = current ?: return@action
-            repository.distributeTask(c.id, TaskDistributionRequest(dueAt = dueAt, reminderRepeat = repeat))
-            dirty = false
-            refresh()
+            val capture = current ?: return@action
+            core { distributeTask(capture.id, TaskDistributionRequest(dueAt = dueAt, reminderRepeat = repeat)) }
             taskScheduleTarget = null
             tab = Tab.TASKS
             taskArchive = false
             selectedTaskId = null
         } else {
-            repository.rescheduleTask(target, TaskScheduleUpdate(dueAt, repeat))
-            refresh()
+            core { rescheduleTask(target, TaskScheduleUpdate(dueAt, repeat)) }
             taskScheduleTarget = null
             selectedTaskId = target
         }
@@ -356,20 +332,18 @@ class StudioState(
     fun cancelTaskSchedule() { taskScheduleTarget = null }
 
     suspend fun discard() = action {
-        val c = current ?: return@action
-        if (loadedAudioId == c.id) {
+        val capture = current ?: return@action
+        if (loadedAudioId == capture.id) {
             audio.stop(); loadedAudioId = null; playback = AudioTelemetry()
         }
-        repository.discard(c.id)
-        dirty = false
-        refresh()
+        core { discard(capture.id) }
         confirmDelete = false
         choosingProject = false
         taskScheduleTarget = null
         tab = Tab.HOME
     }
 
-    fun noteSources(id: String) = snapshot.captures.filter { it.noteId == id }.sortedBy { it.appendedAt }
+    fun noteSources(id: String) = content.noteSources(id)
 
     fun openNote(id: String) {
         selectedNoteId = id
@@ -381,33 +355,30 @@ class StudioState(
     fun cancelNoteEdit() { editingNoteId = null }
 
     suspend fun saveNote(id: String, body: String) = action {
-        repository.updateNote(id, NoteUpdate(body = body))
-        refresh()
+        core { saveNote(id, body) }
         editingNoteId = null
     }
 
     fun openTask(id: String) { selectedTaskId = id }
     fun closeTask() { selectedTaskId = null }
 
-    suspend fun saveTask(id: String, text: String) = action {
-        repository.updateTask(id, TaskUpdate(text))
-        refresh()
-    }
+    suspend fun saveTask(id: String, text: String) = action { core { saveTask(id, text) } }
 
     suspend fun completeTask(id: String) = action {
-        repository.completeTask(id)
-        refresh()
+        core { completeTask(id) }
         selectedTaskId = null
         taskArchive = false
     }
 
     suspend fun deleteTask(id: String) = action {
-        repository.deleteTask(id)
-        refresh()
+        core { deleteTask(id) }
         selectedTaskId = null
     }
 
-    suspend fun pinNote(note: Note) = action { repository.pinNote(note.id, !note.pinned); refresh() }
+    suspend fun pinNote(note: Note) = action { core { pinNote(note.id, !note.pinned) } }
+
+    internal suspend fun moveNotePinInCore(note: Note, delta: Int): Boolean =
+        core { moveNotePin(note.id, delta) }
 
     suspend fun requestListen(id: String) {
         if (recording) { confirmListenId = id; return }
@@ -437,8 +408,7 @@ class StudioState(
 
     suspend fun createProject(title: String, instruction: String) = action {
         val originCapture = creatingForCaptureId
-        val project = repository.createProject(ProjectDraft(title, instruction = instruction))
-        refresh()
+        val project = core { createProject(ProjectDraft(title, instruction = instruction)) }
         if (editingProjectId == "new" && creatingForCaptureId == originCapture) {
             if (originCapture != null && choosingProject && current?.id == originCapture) targetProjectId = project.id
             editingProjectId = null
@@ -447,25 +417,12 @@ class StudioState(
     }
 
     suspend fun updateProject(id: String, title: String, instruction: String) = action {
-        val p = snapshot.projects.first { it.id == id }
-        repository.updateProject(id, ProjectUpdate(title, p.description, instruction))
-        refresh()
+        core { updateProject(id, title, instruction) }
         editingProjectId = null
     }
 
-    suspend fun pin(p: Project) = action { repository.pinProject(p.id, !p.pinned); refresh() }
-
-    suspend fun movePin(p: Project, delta: Int) = action {
-        val ids = ProjectOrder.sorted(snapshot.projects).filter { it.pinned }.map { it.id }.toMutableList()
-        val old = ids.indexOf(p.id)
-        val next = old + delta
-        if (next in ids.indices) {
-            ids.removeAt(old)
-            ids.add(next, p.id)
-            repository.orderPins(ids)
-            refresh()
-        }
-    }
+    suspend fun pin(p: Project) = action { core { pinProject(p.id, !p.pinned) } }
+    suspend fun movePin(p: Project, delta: Int) = action { core { moveProjectPin(p.id, delta) } }
 
     private suspend fun reconcileRecorderState() {
         val typed = sessionRecorder
@@ -479,7 +436,6 @@ class StudioState(
             }
             return
         }
-
         val actual = typed.sessionState()
         val nextPhase = actual.phase.legacyValue
         if (recordPhase == "recording" && nextPhase != "recording") freezeRecordingClock()
@@ -520,10 +476,15 @@ class StudioState(
     private suspend fun performAction(block: suspend () -> Unit): Boolean {
         if (busy) return false
         busy = true
+        val previous = current
         return try { block(); true }
         catch (e: CancellationException) { throw e }
         catch (e: Exception) { error = e.message?.takeIf { Copy.has(it) } ?: "actionFailed"; false }
-        finally { busy = false }
+        finally {
+            syncContent()
+            reconcileContentPresentation(previous)
+            busy = false
+        }
     }
 
     private suspend fun controls(block: suspend () -> Unit): Boolean {
