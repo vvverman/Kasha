@@ -75,3 +75,36 @@ jobs:
             desktopApp/build/test-results
             composeApp/build/dist/wasmJs/productionExecutable
             runtime/build/install
+      - name: Входные файлы для автономной проверки общего кода
+        if: always() && github.head_ref == 'integration/platform-parity'
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, zipfile
+          root = pathlib.Path.cwd()
+          cache = pathlib.Path(os.environ.get('GRADLE_USER_HOME', str(pathlib.Path.home() / '.gradle'))) / 'caches/modules-2/files-2.1'
+          allowed = ('org.jetbrains.kotlin', 'org.jetbrains.kotlinx', 'org.jetbrains.compose', 'org.jetbrains.skiko', 'org.jetbrains.intellij.deps', 'org.jetbrains.annotations', 'androidx.', 'junit', 'org.hamcrest', 'org.jspecify', 'com.google.errorprone')
+          manifest = {}
+          with zipfile.ZipFile('parity-verification-inputs.zip', 'w', zipfile.ZIP_DEFLATED) as archive:
+              for group in sorted(cache.iterdir()):
+                  if not group.is_dir() or not any(group.name == item or group.name.startswith(item + '.') or (item.endswith('.') and group.name.startswith(item)) for item in allowed):
+                      continue
+                  for path in sorted(group.rglob('*.jar')):
+                      name = 'dependencies/' + path.relative_to(cache).as_posix()
+                      archive.write(path, name)
+                      manifest[name] = hashlib.sha256(path.read_bytes()).hexdigest()
+              for module in ('kashaCore', 'aiCatalog', 'composeApp'):
+                  for pattern in ('src/**/*.kt', 'build/generated/**/*.kt', 'build/libs/*.jar', 'build/test-results/**/*.xml'):
+                      for path in sorted((root / module).glob(pattern)):
+                          name = 'baseline/' + path.relative_to(root).as_posix()
+                          archive.write(path, name)
+                          manifest[name] = hashlib.sha256(path.read_bytes()).hexdigest()
+              archive.writestr('manifest.json', json.dumps({'commit': os.environ['GITHUB_SHA'], 'files': manifest}, indent=2))
+          print('Verification inputs:', len(manifest), 'files')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always() && github.head_ref == 'integration/platform-parity'
+        with:
+          name: parity-verification-inputs-${{ github.sha }}
+          retention-days: 3
+          if-no-files-found: error
+          path: parity-verification-inputs.zip
