@@ -1,51 +1,38 @@
-# Kasha Android — production plan
+# Kasha Android — рабочий план
 
-## Правила
-- Источник истины: `docs/SPEC.md`; для UI — `docs/design/`.
-- Android остаётся тонким platform-layer. Общие модели, state и UI не дублируются.
-- Если общий контракт отсутствует, Android не делает platform-only workaround.
+Источник требований: `docs/SPEC.md`, относящиеся документы `docs/design/` и существующие Core-контракты.
 
-## Текущий этап
+## Порядок работы
 
-**4/11 — Microphone/recording**
+По указанию владельца от 14 сентября 2026 сначала последовательно реализуем все функции и получаем устанавливаемое приложение. Физическая приёмка и полировка не блокируют следующий независимый адаптер. Обязательная успешная сборка перед слиянием сохраняется.
 
-### Сделано
-- [x] Android application shell.
-- [x] App-private persistence/filesystem и crash recovery.
-- [x] `AndroidRecorder : RecorderSessionGateway`.
-- [x] AAC/M4A start / pause / resume / finalize.
-- [x] Stable active session id и exact pending ids.
-- [x] Safe active cancel без Capture/STT/AI.
-- [x] Duration без пауз, live/final waveform, M4A recovery.
-- [x] Recorder error, route loss и system silencing → typed interruption.
-- [x] No auto-resume после system event.
-- [x] Microphone foreground service, `START_NOT_STICKY`.
-- [x] FGS стартует только из user-visible capture flow; callbacks не стартуют service повторно.
-- [x] Backup/device transfer для данных Kasha отключены.
-- [x] Active-recording Cancel уже подключён в shared `main` через exact session id.
-- [x] Android `testDebugUnitTest + assembleDebug` — GREEN.
-- [x] iOS Shared regression — GREEN.
-- [x] Core/UI/runtime/WASM build — GREEN.
+Не создавать Android-копии Core, продуктовых экранов или общих правил. Общие изменения разрешений и представления прерывания относятся к Core/shared Kasha UI.
 
-### Ожидает
-1. **#14** — отдельное presentation-state для `INTERRUPTED`; сейчас оно выглядит как обычная пауза.
-2. **#25** — explicit microphone request через существующий `DeviceCapabilityGateway` и shared flow: объяснение → явное действие → system prompt → один ранее запрошенный start.
-3. **Physical Android acceptance** — A4-01…A4-18 из `DEVICE_ACCEPTANCE.md`.
+## Реальное состояние на начало продолжения
 
-До выполнения этих трёх пунктов этап 4 не закрывается и этап 5 не начинается.
+Ветка PR #50: `platform/android-main-integration`, исходный commit `72cfc466a22714efc0fd755cefa9a5dc01cdcb7f`.
 
-## Дальше
-- [ ] 5. Playback/audio focus.
-- [ ] 6. Reminders/notifications.
-- [ ] 7. Secure storage / Android Keystore.
-- [ ] 8. Lifecycle/system integration.
-- [ ] 9. Accessibility/platform UX.
-- [ ] 10. CI/build/package APK/AAB.
-- [ ] 11. Финальная Android-приёмка.
+| Этап | Состояние |
+|---|---|
+| 1. Аудит | Выполнен; SPEC перечитан |
+| 2. Android shell | Реализован в ветке |
+| 3. Persistence/filesystem | Реализован в ветке |
+| 4. Микрофон и запись | Recorder реализован; permission integration и shared presentation остаются |
+| 5. Playback/audio focus | Подготовлен в локальном first-pass patch, ещё не опубликован |
+| 6. Reminders/notifications | Подготовлены в локальном first-pass patch, ещё не опубликованы |
+| 7. Keystore | Адаптер подготовлен локально; AI integration не подтверждена |
+| 8. Lifecycle/system integration | Подготовлена локально |
+| 9. Android accessibility | Сохранён общий UI; физическая проверка отложена |
+| 10. APK/AAB | Конфигурация подготовлена локально; новых APK/AAB нет |
+| 11. Приёмка | Не выполнена; глубокая проверка после рабочей сборки |
 
-## Основная интеграция
-- Android stage 4: PR #50, `platform/android-main-integration` → `main`.
-- Старый PR #41 закрыт как superseded.
-- Экспериментальный permission PR #53 закрыт без merge: отдельный permission API не нужен; используется существующий `DeviceCapabilityGateway`.
+Подготовленные исходники не считаются собранным приложением. Зелёный CI исходного PR не относится к неопубликованному патчу.
 
-Подробные ручные сценарии не дублируются здесь — они живут в `docs/android/DEVICE_ACCEPTANCE.md`.
+## Ближайшие действия
+
+1. Подключить существующие адаптеры и завершить разрешения без отдельной Android state-machine.
+2. Убрать оставшиеся функциональные заглушки в пределах SPEC.
+3. Собрать APK/AAB и исправить только фактические ошибки сборки.
+4. Зафиксировать полученные артефакты и отдельно оставить непроведённую физическую приёмку.
+
+Ручные сценарии находятся в `docs/android/DEVICE_ACCEPTANCE.md`. Новых этапов, экранов или возможностей этот план не добавляет.
