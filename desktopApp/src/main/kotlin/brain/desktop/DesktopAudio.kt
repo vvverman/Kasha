@@ -5,6 +5,7 @@ import brain.domain.PlaybackSessionGateway
 import brain.domain.PlaybackSessionState
 import brain.runtime.*
 import brain.studio.AudioTelemetry
+import brain.studio.SignalLevel
 import kotlinx.coroutines.*
 import java.nio.file.*
 import javax.sound.sampled.*
@@ -27,7 +28,18 @@ class DesktopAudio(
     @Volatile private var compactSource = false
 
     override suspend fun playCapture(captureId: String, compact: Boolean, fromSeconds: Double, rate: Double) {
+        startCapture(captureId, compact, fromSeconds, rate, PlaybackPhase.PLAYING)
+    }
+
+    private suspend fun startCapture(
+        captureId: String,
+        compact: Boolean,
+        fromSeconds: Double,
+        rate: Double,
+        targetPhase: PlaybackPhase,
+    ) {
         require(rate in .5..2.0 && fromSeconds.isFinite() && fromSeconds >= 0)
+        require(targetPhase == PlaybackPhase.PLAYING || targetPhase == PlaybackPhase.PAUSED)
         stop()
         val capture = store.capture(captureId) ?: error("Audio unavailable")
         sourceId = captureId
@@ -64,7 +76,10 @@ class DesktopAudio(
         val stream = withContext(Dispatchers.IO) { AudioSystem.getAudioInputStream(path.toFile()) }
         val output = try {
             withContext(Dispatchers.IO) {
-                AudioSystem.getSourceDataLine(stream.format).also { it.open(stream.format); it.start() }
+                AudioSystem.getSourceDataLine(stream.format).also {
+                    it.open(stream.format)
+                    if (targetPhase == PlaybackPhase.PLAYING) it.start()
+                }
             }
         } catch (e: Exception) {
             stream.close()
@@ -73,7 +88,7 @@ class DesktopAudio(
             throw e
         }
         line = output
-        phase = PlaybackPhase.PLAYING
+        phase = targetPhase
         job = scope.launch(Dispatchers.IO) {
             try {
                 stream.use { audio ->
@@ -132,9 +147,9 @@ class DesktopAudio(
         val before = playbackState()
         val target = before.seekTarget(positionSeconds) ?: error("audioFailed")
         val source = before.sourceId ?: error("audioFailed")
-        val wasPaused = before.phase == PlaybackPhase.PAUSED
-        playCapture(source, compactSource, target, rate)
-        if (wasPaused && target < duration) pause()
+        val compact = compactSource
+        val playbackRate = rate
+        startCapture(source, compact, target, playbackRate, before.phase)
         return playbackState()
     }
 
