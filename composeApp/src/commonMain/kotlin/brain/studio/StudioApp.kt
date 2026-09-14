@@ -4,7 +4,15 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.*
 import androidx.compose.ui.window.Dialog
@@ -34,7 +42,20 @@ fun StudioApp(state: StudioState) {
 
     StudioTheme(state.preferences.theme) {
         val colors = MaterialTheme.colorScheme
-        Surface(Modifier.fillMaxSize(), color = colors.background, contentColor = colors.onSurface) {
+        val focusManager = LocalFocusManager.current
+        val focusTraversal = Modifier.onPreviewKeyEvent { event ->
+            if (event.type == KeyEventType.KeyDown && event.key == Key.Tab) {
+                focusManager.moveFocus(if (event.isShiftPressed) FocusDirection.Previous else FocusDirection.Next)
+                true
+            } else {
+                false
+            }
+        }
+        Surface(
+            Modifier.fillMaxSize().then(focusTraversal),
+            color = colors.background,
+            contentColor = colors.onSurface,
+        ) {
             if (!state.initialized) {
                 KashaSplash()
                 return@Surface
