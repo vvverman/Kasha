@@ -68,9 +68,29 @@ internal fun bundledExecutable(resources: Path, name: String, os: DesktopOs = De
     return file.toString()
 }
 
-fun bundledEnvironment(resources:Path):Map<String,String> {
-    fun model(name:String)=resources.resolve("models/$name").toAbsolutePath().toString().also{require(Files.isRegularFile(Path.of(it))&&Files.size(Path.of(it))>1_000_000){"В пакете отсутствует модель $name"}}
-    return mapOf("KASHA_WHISPER_CLI" to bundledExecutable(resources,"whisper-cli"),"KASHA_WHISPER_MODEL" to model("ggml-small.bin"),
-        "KASHA_LLAMA_CLI" to bundledExecutable(resources,"llama-completion"),"KASHA_LLAMA_MODEL" to model("Qwen3-4B-Q4_K_M.gguf"),
-        "KASHA_FFMPEG" to bundledExecutable(resources,"ffmpeg"))
+internal fun bundledModel(resources: Path, name: String): String {
+    val models = resources.resolve("models")
+    val direct = models.resolve(name).toAbsolutePath()
+    if (Files.isRegularFile(direct) && Files.size(direct) > 1_000_000) return direct.toString()
+
+    if (name.endsWith(".gguf") && Files.isDirectory(models)) {
+        val stem = name.removeSuffix(".gguf")
+        val prefix = "$stem-00001-of-"
+        val firstShard = Files.list(models).use { files ->
+            files.filter { path ->
+                val fileName = path.fileName.toString()
+                Files.isRegularFile(path) && fileName.startsWith(prefix) && fileName.endsWith(".gguf")
+            }.sorted().findFirst().orElse(null)
+        }
+        if (firstShard != null && Files.size(firstShard) > 1_000_000) return firstShard.toAbsolutePath().toString()
+    }
+    error("В пакете отсутствует модель $name")
 }
+
+fun bundledEnvironment(resources:Path):Map<String,String> = mapOf(
+    "KASHA_WHISPER_CLI" to bundledExecutable(resources,"whisper-cli"),
+    "KASHA_WHISPER_MODEL" to bundledModel(resources,"ggml-small.bin"),
+    "KASHA_LLAMA_CLI" to bundledExecutable(resources,"llama-completion"),
+    "KASHA_LLAMA_MODEL" to bundledModel(resources,"Qwen3-4B-Q4_K_M.gguf"),
+    "KASHA_FFMPEG" to bundledExecutable(resources,"ffmpeg"),
+)
