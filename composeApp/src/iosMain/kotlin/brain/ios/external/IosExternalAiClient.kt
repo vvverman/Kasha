@@ -15,8 +15,13 @@ import io.ktor.http.*
 import kotlinx.cinterop.addressOf
 import kotlinx.cinterop.usePinned
 import kotlinx.serialization.json.*
-import platform.Foundation.NSFileHandle
-import platform.posix.memcpy
+import platform.posix.SEEK_END
+import platform.posix.fclose
+import platform.posix.fopen
+import platform.posix.fread
+import platform.posix.fseek
+import platform.posix.ftell
+import platform.posix.rewind
 
 /** Единственное место iOS shell с реальными endpoint-ами внешнего inference. */
 internal class IosExternalAiClient(
@@ -201,18 +206,23 @@ internal class IosExternalAiClient(
         .replace("#", "%23")
 
     private fun fileBytes(path: String): ByteArray {
-        val handle = NSFileHandle.fileHandleForReadingAtPath(path) ?: error("cloudAudioMissing")
-        val data = try {
-            handle.readDataToEndOfFile()
-        } finally {
-            handle.closeFile()
-        }
-        val size = data.length.toInt()
-        if (size == 0) return ByteArray(0)
-        return ByteArray(size).also { output ->
-            output.usePinned { pinned ->
-                memcpy(pinned.addressOf(0), data.bytes, data.length)
+        val handle = fopen(path, "rb") ?: error("cloudAudioMissing")
+        return try {
+            check(fseek(handle, 0L, SEEK_END) == 0) { "cloudAudioReadFailed" }
+            val length = ftell(handle)
+            check(length >= 0L && length <= Int.MAX_VALUE.toLong()) { "cloudAudioTooLarge" }
+            rewind(handle)
+
+            ByteArray(length.toInt()).also { output ->
+                if (output.isNotEmpty()) {
+                    val read = output.usePinned { pinned ->
+                        fread(pinned.addressOf(0), 1uL, output.size.toULong(), handle)
+                    }
+                    check(read == output.size.toULong()) { "cloudAudioReadFailed" }
+                }
             }
+        } finally {
+            fclose(handle)
         }
     }
 }
