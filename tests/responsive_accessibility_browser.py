@@ -60,12 +60,42 @@ with sync_playwright() as pw:
     errors = []
     page.on('pageerror', lambda error: errors.append(str(error)))
 
-    def nav_box(label):
-        item = page.get_by_role('button', name=label, exact=True)
-        item.wait_for(state='visible', timeout=30000)
-        box = item.bounding_box()
-        assert box and box['width'] >= 44 and box['height'] >= 44, (label, box)
-        return box
+    def current_nav_boxes():
+        boxes = []
+        for label in NAV:
+            try:
+                item = page.get_by_role('button', name=label, exact=True)
+                if item.count() != 1:
+                    return None
+                box = item.bounding_box()
+            except Exception:
+                return None
+            if not box or box['width'] < 44 or box['height'] < 44:
+                return None
+            boxes.append(box)
+        return boxes
+
+    def wait_for_viewport(name, width, height, seconds=5):
+        deadline = time.monotonic() + seconds
+        last = None
+        while time.monotonic() < deadline:
+            viewport = page.evaluate('({width: window.innerWidth, height: window.innerHeight})')
+            root = page.locator('#webApp').bounding_box()
+            boxes = current_nav_boxes()
+            last = {'viewport': viewport, 'root': root, 'boxes': boxes}
+            if (
+                viewport['width'] == width and viewport['height'] == height and
+                root and abs(root['width'] - width) <= 1 and abs(root['height'] - height) <= 1 and
+                boxes and all(
+                    box['x'] >= -1 and box['y'] >= -1 and
+                    box['x'] + box['width'] <= width + 1 and
+                    box['y'] + box['height'] <= height + 1
+                    for box in boxes
+                )
+            ):
+                return root, boxes
+            page.wait_for_timeout(100)
+        raise AssertionError((name, 'viewport/navigation reflow timeout', last))
 
     try:
         page.goto(BASE, wait_until='networkidle', timeout=60000)
@@ -74,18 +104,7 @@ with sync_playwright() as pw:
         viewport_results = []
         for name, width, height in VIEWPORTS:
             page.set_viewport_size({'width': width, 'height': height})
-            page.wait_for_timeout(500)
-            root = page.locator('#webApp').bounding_box()
-            assert root and abs(root['width'] - width) <= 1, (name, root)
-            assert abs(root['height'] - height) <= 1, (name, root)
-
-            boxes = []
-            for label in NAV:
-                box = nav_box(label)
-                assert box['x'] >= -1 and box['y'] >= -1, (name, label, box)
-                assert box['x'] + box['width'] <= width + 1, (name, label, box)
-                assert box['y'] + box['height'] <= height + 1, (name, label, box)
-                boxes.append(box)
+            root, boxes = wait_for_viewport(name, width, height)
 
             no_horizontal_scroll = page.evaluate(
                 'document.documentElement.scrollWidth <= window.innerWidth + 1 && document.body.scrollWidth <= window.innerWidth + 1'
@@ -110,7 +129,7 @@ with sync_playwright() as pw:
             'viewports': viewport_results,
             'checks': [
                 'web root follows current viewport width and height',
-                '320/390/844/1024/1280 without clipped navigation',
+                '320/390/844/1024/1280 after completed Compose reflow',
                 'navigation targets are at least 44x44',
                 'no horizontal page scroll',
                 'desktop navigation stays in sidebar area',
