@@ -70,23 +70,28 @@ fun KashaNavigationItem(
         .clickable(interactionSource = interactions, indication = null, role = Role.Tab, onClick = onClick)
         .semantics(mergeDescendants = true) { this.selected = selected }
 
-    when (layout) {
-        KashaNavigationLayout.Bottom -> Column(
-            base.padding(horizontal = 6.dp, vertical = 6.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-        ) {
-            KashaIcon(glyph, Modifier.size(22.dp), fg, animated = hovered || pressed || focused)
-            Spacer(Modifier.height(4.dp))
-            Text(label, style = MaterialTheme.typography.labelSmall, color = fg, maxLines = 2)
-        }
-        KashaNavigationLayout.Grid, KashaNavigationLayout.Sidebar -> Row(
-            base.padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            KashaIcon(glyph, Modifier.size(22.dp), fg, animated = hovered || pressed || focused)
-            Spacer(Modifier.width(if (layout == KashaNavigationLayout.Grid) 8.dp else 12.dp))
-            Text(label, style = if (layout == KashaNavigationLayout.Sidebar) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.labelMedium, color = fg, maxLines = 2)
+    Box(
+        base,
+        contentAlignment = if (layout == KashaNavigationLayout.Bottom) Alignment.Center else Alignment.CenterStart,
+    ) {
+        when (layout) {
+            KashaNavigationLayout.Bottom -> Column(
+                Modifier.padding(horizontal = 6.dp, vertical = 6.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                KashaIcon(glyph, Modifier.size(22.dp), fg, animated = hovered || pressed || focused)
+                Spacer(Modifier.height(4.dp))
+                Text(label, style = MaterialTheme.typography.labelSmall, color = fg, maxLines = 2)
+            }
+            KashaNavigationLayout.Grid, KashaNavigationLayout.Sidebar -> Row(
+                Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                KashaIcon(glyph, Modifier.size(22.dp), fg, animated = hovered || pressed || focused)
+                Spacer(Modifier.width(if (layout == KashaNavigationLayout.Grid) 8.dp else 12.dp))
+                Text(label, style = if (layout == KashaNavigationLayout.Sidebar) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.labelMedium, color = fg, maxLines = 2)
+            }
         }
     }
 }
