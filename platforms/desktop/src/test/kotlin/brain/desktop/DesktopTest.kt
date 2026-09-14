@@ -62,6 +62,18 @@ class DesktopTest {
         } finally { dir.toFile().deleteRecursively() }
     }
 
+    @Test fun bundledModelUsesFirstGgufShardWhenMonolithIsAbsent() {
+        val dir = Files.createTempDirectory("kasha-sharded-model")
+        try {
+            val models = Files.createDirectories(dir.resolve("models"))
+            val first = models.resolve("Qwen3-4B-Q4_K_M-00001-of-00002.gguf")
+            val second = models.resolve("Qwen3-4B-Q4_K_M-00002-of-00002.gguf")
+            Files.write(first, ByteArray(1_000_001))
+            Files.write(second, ByteArray(1_000_001))
+            assertEquals(first.toAbsolutePath().toString(), bundledModel(dir, "Qwen3-4B-Q4_K_M.gguf"))
+        } finally { dir.toFile().deleteRecursively() }
+    }
+
     @Test fun singleInstanceLockRejectsSecondProcessAndReleasesOnClose() {
         val dir = Files.createTempDirectory("kasha-instance-lock")
         try {
