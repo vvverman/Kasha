@@ -13,6 +13,7 @@ private enum KashaAudioBridgeEvent {
     static let interruptionEnded = Notification.Name("KashaAudioSessionInterruptionEnded")
     static let routeChanged = Notification.Name("KashaAudioRouteChanged")
     static let applicationDidBecomeActive = Notification.Name("KashaApplicationDidBecomeActive")
+    static let significantTimeChange = Notification.Name("KashaApplicationSignificantTimeChange")
 }
 
 /// Тонкий нативный владелец AVAudioSession и системных переходов iOS.
@@ -73,6 +74,13 @@ final class KashaAudioSessionCoordinator {
                 queue: nil
             ) { [weak self] _ in
                 self?.handleApplicationDidBecomeActive()
+            },
+            center.addObserver(
+                forName: UIApplication.significantTimeChangeNotification,
+                object: nil,
+                queue: nil
+            ) { [weak self] _ in
+                self?.postBridge(name: KashaAudioBridgeEvent.significantTimeChange, userInfo: [:])
             },
         ]
     }
