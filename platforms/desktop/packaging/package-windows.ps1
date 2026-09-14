@@ -25,15 +25,28 @@ $AppExe = Join-Path $AppImage "Kasha.exe"
 if (!(Test-Path $AppExe)) { throw "Compose app image not found: $AppImage" }
 
 $Resources = Join-Path $AppImage "app\resources"
+$Models = Join-Path $Resources "models"
+$WindowsModels = Join-Path $Desktop "bundle\windows\models"
+$MonolithicQwen = Join-Path $Models "Qwen3-4B-Q4_K_M.gguf"
+$SourceShards = @(Get-ChildItem $WindowsModels -Filter "Qwen3-4B-Q4_K_M-*-of-*.gguf" -File | Sort-Object Name)
+if ($SourceShards.Count -lt 2) { throw "Windows Qwen GGUF shards are missing" }
+foreach ($shard in $SourceShards) {
+    if ($shard.Length -ge 2000000000) { throw "Qwen shard $($shard.Name) is too large: $($shard.Length) bytes" }
+    Copy-Item $shard.FullName (Join-Path $Models $shard.Name) -Force
+}
+Remove-Item $MonolithicQwen -Force -ErrorAction SilentlyContinue
+
 foreach ($relative in @(
     "bin\whisper-cli.exe",
     "bin\llama-completion.exe",
     "bin\ffmpeg.exe",
-    "models\ggml-small.bin",
-    "models\Qwen3-4B-Q4_K_M.gguf"
+    "models\ggml-small.bin"
 )) {
     if (!(Test-Path (Join-Path $Resources $relative))) { throw "Bundled payload is missing $relative" }
 }
+$PackagedShards = @(Get-ChildItem $Models -Filter "Qwen3-4B-Q4_K_M-*-of-*.gguf" -File | Sort-Object Name)
+if ($PackagedShards.Count -ne $SourceShards.Count) { throw "Qwen shard copy is incomplete" }
+if (Test-Path $MonolithicQwen) { throw "Monolithic Qwen must not be present in the Windows package" }
 
 Write-Host "== App image smoke =="
 & $AppExe --install-smoke
