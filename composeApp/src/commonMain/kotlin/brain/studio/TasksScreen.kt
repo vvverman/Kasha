@@ -142,12 +142,7 @@ private fun TaskDetailScreen(s: StudioState, task: Task) {
         if (!task.completed) {
             Action(
                 taskText(s, "completeTask"),
-                {
-                    scope.launch {
-                        val saved = !changed || (text.isNotBlank() && s.saveTask(task.id, text))
-                        if (saved) s.completeTask(task.id)
-                    }
-                },
+                { scope.launch { s.completeTaskFromDetail(task.id, text) } },
                 primary = true,
                 glyph = Glyph.CHECK,
                 enabled = text.isNotBlank() && !s.busy,

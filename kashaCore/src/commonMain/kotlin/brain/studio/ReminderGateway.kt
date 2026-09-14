@@ -3,8 +3,13 @@ package brain.studio
 import brain.model.Task
 
 /**
- * Платформа доставляет локальные уведомления. `sync` позволяет ОС заранее поставить
- * системные напоминания, поэтому они могут сработать даже когда приложение закрыто.
+ * Platform boundary локальных task-reminders.
+ *
+ * `notify` — foreground/fallback доставка уже наступившего reminder.
+ * `sync` — reconciliation системной очереди: платформа получает актуальный список задач
+ * и обязана не держать pending notification для completed/deleted/unscheduled task.
+ * Платформа, которая не умеет заранее планировать системные notifications, может оставить
+ * default no-op `sync` и использовать только `notify` пока приложение запущено.
  */
 interface ReminderGateway {
     val available: Boolean
