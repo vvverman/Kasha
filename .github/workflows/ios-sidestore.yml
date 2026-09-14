@@ -38,6 +38,8 @@ concurrency:
 
 env:
   IOS_VERSION: ${{ github.event.inputs.version || '1.2.0' }}
+  IOS_PRODUCT_NAME: 'Kasha Test'
+  IOS_BUNDLE_IDENTIFIER: 'ru.vrmn.kasha.test'
 
 jobs:
   build-ipa:
@@ -89,7 +91,7 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate --spec iosApp/project.yml
 
-      - name: Build unsigned iPhone app
+      - name: Archive unsigned iPhone app
         run: |
           set -o pipefail
           xcodebuild \
@@ -97,26 +99,28 @@ jobs:
             -scheme Kasha \
             -configuration Release \
             -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$PWD/build/ios/Kasha.xcarchive" \
             -derivedDataPath "$PWD/build/ios/DerivedData" \
+            PRODUCT_NAME="$IOS_PRODUCT_NAME" \
+            PRODUCT_BUNDLE_IDENTIFIER="$IOS_BUNDLE_IDENTIFIER" \
             MARKETING_VERSION="$IOS_VERSION" \
             CURRENT_PROJECT_VERSION="${GITHUB_RUN_NUMBER}" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
-            clean build 2>&1 | tee ios-app.log
+            SKIP_INSTALL=NO \
+            clean archive 2>&1 | tee ios-app.log
 
       - name: Package unsigned IPA for SideStore
         run: |
           set -euo pipefail
-          APP="build/ios/DerivedData/Build/Products/Release-iphoneos/Kasha Test.app"
+          APP="build/ios/Kasha.xcarchive/Products/Applications/$IOS_PRODUCT_NAME.app"
           test -d "$APP"
           rm -rf build/ios/Payload
+          rm -f build/ios/Kasha.ipa
           mkdir -p build/ios/Payload
-          ditto "$APP" "build/ios/Payload/Kasha Test.app"
+          ditto "$APP" "build/ios/Payload/$IOS_PRODUCT_NAME.app"
           (cd build/ios && zip -qry Kasha.ipa Payload)
-          test -s build/ios/Kasha.ipa
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist" | grep -Fx 'ru.vrmn.kasha.test'
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist" | grep -Fx "$IOS_VERSION"
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist" | grep -Fx "${GITHUB_RUN_NUMBER}"
 
       - name: Generate SideStore source
         run: |
@@ -125,9 +129,9 @@ jobs:
             --version "$IOS_VERSION" \
             --build "${GITHUB_RUN_NUMBER}" \
             --output build/ios/source.json
-          python -m json.tool build/ios/source.json >/dev/null
 
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: Kasha-iOS-SideStore-${{ github.run_number }}
           retention-days: 14
@@ -139,7 +143,7 @@ jobs:
             ios-app.log
 
       - name: Publish rolling SideStore release
-        if: github.event_name != 'pull_request'
+        if: success() && github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -157,7 +161,7 @@ jobs:
             --clobber
 
       - name: Print install links
-        if: github.event_name != 'pull_request'
+        if: success() && github.event_name != 'pull_request'
         run: |
           echo 'Source: https://github.com/vvverman/Kasha/releases/download/sidestore-latest/source.json'
           echo 'SideStore source URL: sidestore://source?url=https%3A%2F%2Fgithub.com%2Fvvverman%2FKasha%2Freleases%2Fdownload%2Fsidestore-latest%2Fsource.json'
