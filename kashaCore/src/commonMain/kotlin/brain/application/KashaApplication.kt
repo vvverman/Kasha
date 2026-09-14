@@ -35,7 +35,7 @@ data class KashaApplicationState(
 ) {
     val current: Capture? get() = snapshot.captures.firstOrNull { it.isInbox }
     val title: String get() = NoteText.title(edit.text)
-    val canEdit: Boolean get() = current != null && publishingCaptureId == null
+    val canEdit: Boolean get() = current?.status?.isWorking == false && publishingCaptureId == null
 
     fun projects(): List<Project> = UserSort.projects(snapshot.projects, preferences.projectSort)
     fun projectNotes(id: String): List<Note> =
@@ -92,7 +92,9 @@ class KashaApplication(
                 // Неоднозначные источники остаются на месте; автоматического выбора первого нет.
                 val typed = recorder as? RecorderSessionGateway
                 if (typed == null || before.transport.pendingRecordings.size == 1) recoverUnlocked(null)
-            } else if (before.preferences.autoRecord && !before.transport.playback.occupied) {
+            } else if (before.preferences.autoRecord && !before.transport.playback.occupied && requireRecorder().hasConsent()) {
+                // Автозапуск не открывает системный запрос. Первый доступ запрашивается
+                // только явным действием через существующую команду начала записи.
                 startRecordingUnlocked()
             }
         }
@@ -608,7 +610,7 @@ class KashaApplication(
         require(captureId.isNotBlank())
         val capture = mutableState.value.snapshot.captures.firstOrNull { it.id == captureId }
             ?: error("currentExists")
-        // Повтор для уже опубликованного capture передаётся существующему идемпотентентному контракту.
+        // Повтор для уже опубликованного capture передаётся существующему идемпотентному контракту.
         if (capture.isInbox) requireCurrent(captureId)
         mutableState.update { it.copy(publishingCaptureId = captureId) }
         try {
