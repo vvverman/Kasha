@@ -54,7 +54,7 @@ class DesktopPlatformParityTest {
         for (os in listOf(DesktopOs.LINUX, DesktopOs.WINDOWS)) {
             val process = FakeProcess()
             val body = "Текст <&> ; не команда"
-            DesktopReminder(process, os).notify(Task("t", body, 1, 1))
+            DesktopReminder(process, os).notify(Task(id = "t", text = body, createdAt = 1, updatedAt = 1))
             assertEquals(body, process.input)
             assertTrue(process.command.none { body in it })
         }
@@ -63,7 +63,7 @@ class DesktopPlatformParityTest {
     @Test fun failedNotificationIsNotReportedAsSuccess() = runBlocking {
         val process = FakeProcess(exitCode = 1)
         assertFailsWith<IllegalStateException> {
-            DesktopReminder(process, DesktopOs.LINUX).notify(Task("t", "Текст", 1, 1))
+            DesktopReminder(process, DesktopOs.LINUX).notify(Task(id = "t", text = "Текст", createdAt = 1, updatedAt = 1))
         }
     }
 
@@ -71,7 +71,7 @@ class DesktopPlatformParityTest {
         val process = FakeProcess()
         val notifier = DesktopReminder(process, DesktopOs.OTHER)
         assertFalse(notifier.available)
-        assertFailsWith<IllegalStateException> { notifier.notify(Task("t", "Текст", 1, 1)) }
+        assertFailsWith<IllegalStateException> { notifier.notify(Task(id = "t", text = "Текст", createdAt = 1, updatedAt = 1)) }
         assertTrue(process.command.isEmpty())
     }
 

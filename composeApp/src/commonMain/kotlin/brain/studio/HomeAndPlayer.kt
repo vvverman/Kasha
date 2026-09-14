@@ -7,6 +7,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.*
 import androidx.compose.ui.unit.*
 import brain.model.CaptureStatus
@@ -27,7 +30,7 @@ private fun HomeStateContent(s: StudioState) {
     when {
         s.recording -> RecordingHome(s)
 
-        s.working || (s.busy && s.current != null) -> BoxWithConstraints(Modifier.fillMaxSize()) {
+        s.working -> BoxWithConstraints(Modifier.fillMaxSize()) {
             val compact = maxHeight < 460.dp
             Column(
                 Modifier.fillMaxSize().padding(vertical = if (compact) 12.dp else 24.dp),
@@ -66,6 +69,15 @@ private fun HomeStateContent(s: StudioState) {
 
         s.current != null -> Column(Modifier.fillMaxSize().padding(top = 12.dp, bottom = 12.dp)) {
             Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) {
+                if (s.current?.status == CaptureStatus.NEEDS_MODEL) {
+                    Text(KashaCopy.text(s.language, "captureNeedsModel").orEmpty(),
+                        style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant)
+                    Spacer(Modifier.height(12.dp))
+                    Action(s.tr("settings"), { s.navigate(Tab.SETTINGS) }, modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(8.dp))
+                    Action(s.tr("retry"), { scope.launch { s.retry() } }, enabled = !s.busy, modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(16.dp))
+                }
                 KashaNoteText(
                     value = s.text,
                     onValueChange = s::editText,
@@ -110,7 +122,15 @@ private fun HomeStateContent(s: StudioState) {
                     modifier = Modifier.widthIn(max = 320.dp),
                 )
                 Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    if (!compactHeight) KashaRecordingOrb(KashaOrbState.IDLE)
+                    if (!compactHeight) KashaRecordingOrb(
+                        KashaOrbState.IDLE,
+                        Modifier.semantics { contentDescription = s.tr("record") }
+                            .clickable(enabled = !s.pending && !s.controlBusy, role = Role.Button) {
+                                scope.launch { s.startRecording() }
+                            },
+                    )
+                    else if (!s.pending) Action(s.tr("record"), { scope.launch { s.startRecording() } },
+                        primary = true, enabled = !s.controlBusy, modifier = Modifier.fillMaxWidth())
                 }
                 if (s.pending) {
                     Text(s.tr("recoveryNotice"), style = MaterialTheme.typography.bodySmall)
@@ -140,7 +160,7 @@ private fun RecordingHome(s: StudioState) {
             Text(clock(s.elapsed), style = MaterialTheme.typography.displayLarge)
             Spacer(Modifier.height(4.dp))
             Text(
-                s.tr(if (activelyRecording) "recording" else "paused"),
+                recordingStatusKey(s.recordPhase).let { KashaCopy.text(s.language, it) ?: s.tr(it) },
                 style = MaterialTheme.typography.bodySmall,
                 color = c.onSurfaceVariant,
             )
@@ -218,6 +238,7 @@ private fun ResultActions(s: StudioState) {
 internal fun GlobalPlayer(s: StudioState) {
     val scope = rememberCoroutineScope(); val c = MaterialTheme.colorScheme; val loaded = s.loadedAudio
     val recordingId = s.activeRecordingSessionId
+    if (s.tab == Tab.HOME && !s.recording && s.current == null && !s.pending && loaded == null && !s.controlBusy) return
     KashaPanel(Modifier.fillMaxWidth(), padding = 12.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             when {
@@ -255,7 +276,7 @@ internal fun GlobalPlayer(s: StudioState) {
                     )
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         Text(clock(s.playback.position.toLong()), style = MaterialTheme.typography.labelSmall, color = c.onSurfaceVariant)
-                        Text(clock(loaded.durationSeconds.toLong()), style = MaterialTheme.typography.labelSmall, color = c.onSurfaceVariant)
+                        Text(clock(duration.toLong()), style = MaterialTheme.typography.labelSmall, color = c.onSurfaceVariant)
                     }
                 } else {
                     KashaWaveform(emptyList(), Modifier.fillMaxWidth().height(24.dp))
@@ -263,7 +284,7 @@ internal fun GlobalPlayer(s: StudioState) {
             }
             Spacer(Modifier.width(10.dp))
             when {
-                s.recording && !s.controlBusy -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                s.recording && s.recordPhase != "finalizing" && !s.controlBusy -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     IconAction(s.tr("delete"), Glyph.DELETE, {
                         val id = recordingId
                         if (id == null) s.error = "audioFailed"
@@ -276,4 +297,13 @@ internal fun GlobalPlayer(s: StudioState) {
             }
         }
     }
+}
+
+/** Подпись следует фактической фазе адаптера, а не двоичному recording/paused. */
+internal fun recordingStatusKey(phase: String): String = when (phase) {
+    "recording" -> "recording"
+    "paused" -> "paused"
+    "interrupted" -> "captureInterrupted"
+    "finalizing" -> "captureFinalizing"
+    else -> "audioFailed"
 }
