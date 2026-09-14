@@ -25,6 +25,7 @@ EXTERNAL_AI_ENDPOINT = re.compile(
 ALLOWED_EXTERNAL_AI_PREFIXES = (
     'runtime/src/main/kotlin/brain/runtime/ai/external/',
     'desktopApp/src/main/kotlin/brain/desktop/ai/external/',
+    'composeApp/src/iosMain/kotlin/brain/ios/external/',
     'apps/',
 )
 
