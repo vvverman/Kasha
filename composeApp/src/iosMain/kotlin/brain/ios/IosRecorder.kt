@@ -47,12 +47,25 @@ internal class IosRecorder(
 
     override fun sessionState(): RecorderSessionState = state
 
-    // Текущий файл физически лежит в pending-каталоге, но становится recoverable
-    // pending только после потери активной process-сессии.
-    override suspend fun pendingRecordings(): List<PendingRecording> = pendingFileNames()
-        .filter { it != state.activeSessionId }
-        .sorted()
-        .map { PendingRecording(id = it) }
+    // Pending включает обычные pending-файлы и orphan final-файлы, если процесс умер
+    // после move, но до сохранения Capture. Уже сохранённый Capture с тем же audio id
+    // никогда не выдаётся вторым pending.
+    override suspend fun pendingRecordings(): List<PendingRecording> {
+        val knownAudio = repository.snapshot().captures.mapNotNull { it.audioFileName }.toSet()
+        val knownFinalIds = knownAudio
+            .filter { it.startsWith(IosPaths.audio) }
+            .map { it.substringAfterLast('/') }
+            .toSet()
+        val ordinary = pendingFileNames()
+            .filter { it != state.activeSessionId && it !in knownFinalIds }
+        val orphanFinal = IosPaths.list(IosPaths.audio)
+            .filter { it.endsWith(".m4a", ignoreCase = true) }
+            .filter { id -> IosPaths.child(IosPaths.audio, id) !in knownAudio }
+        return (ordinary + orphanFinal)
+            .distinct()
+            .sorted()
+            .map { PendingRecording(id = it) }
+    }
 
     override fun level(): Float {
         val active = recorder ?: return 0f
@@ -147,8 +160,8 @@ internal class IosRecorder(
         systemInterruptionActive = false
         waitingForExternalInput = false
 
+        val finalPath = IosPaths.child(IosPaths.audio, source.substringAfterLast('/'))
         return try {
-            val finalPath = IosPaths.child(IosPaths.audio, source.substringAfterLast('/'))
             IosPaths.move(source, finalPath)
             val capture = repository.createAudioCapture(finalPath, duration, waveform.toList())
             waveform.clear()
@@ -156,10 +169,14 @@ internal class IosRecorder(
             scope.launch { repository.reprocess(capture.id) }
             capture
         } catch (error: Throwable) {
+            // Если metadata Capture не сохранилась, не теряем единственный recoverable source.
+            if (IosPaths.exists(finalPath) && !IosPaths.exists(source)) {
+                runCatching { IosPaths.move(finalPath, source) }
+            }
             state = RecorderSessionState(
                 issue = RecorderIssue(
                     RecorderIssueKind.IO_FAILURE,
-                    recoverable = IosPaths.exists(source),
+                    recoverable = IosPaths.exists(source) || IosPaths.exists(finalPath),
                 ),
             )
             throw error
@@ -188,18 +205,53 @@ internal class IosRecorder(
 
     override suspend fun recoverPending(pendingId: String): Capture {
         check(state.phase == RecorderPhase.IDLE)
-        val source = exactPendingPath(pendingId) ?: error("No pending audio")
         val finalPath = IosPaths.child(IosPaths.audio, pendingId)
-        IosPaths.move(source, finalPath)
-        val capture = repository.createAudioCapture(finalPath, 0.0, emptyList())
-        scope.launch { repository.reprocess(capture.id) }
-        return capture
+        val pendingPath = exactPendingPath(pendingId)
+
+        // Повтор одного recovery не создаёт второй Capture.
+        repository.snapshot().captures.firstOrNull { it.audioFileName == finalPath }?.let { existing ->
+            pendingPath?.let(IosPaths::remove) // только точный duplicate того же session id
+            return existing
+        }
+
+        val orphanFinal = finalPath.takeIf(IosPaths::exists)
+        val source = orphanFinal ?: pendingPath ?: error("No pending audio")
+        val metadata = IosAudioRecovery.inspect(source)
+        var moved = false
+
+        if (source != finalPath) {
+            IosPaths.move(source, finalPath)
+            moved = true
+        }
+
+        return try {
+            val capture = repository.createAudioCapture(
+                path = finalPath,
+                durationSeconds = metadata.durationSeconds,
+                waveform = metadata.waveform,
+            )
+            // Если после старого/прерванного recovery одновременно осталась pending-копия,
+            // удаляем только файл с тем же exact id после подтверждённого Capture.
+            pendingPath?.takeIf { IosPaths.exists(it) }?.let(IosPaths::remove)
+            scope.launch { repository.reprocess(capture.id) }
+            capture
+        } catch (error: Throwable) {
+            if (moved && IosPaths.exists(finalPath) && pendingPath != null && !IosPaths.exists(pendingPath)) {
+                runCatching { IosPaths.move(finalPath, pendingPath) }
+            }
+            throw error
+        }
     }
 
     override suspend fun discardPending(pendingId: String) {
-        val source = exactPendingPath(pendingId) ?: return
-        IosPaths.remove(source)
-        check(!IosPaths.exists(source)) { "recordingDeleteFailed" }
+        val pending = exactPendingPath(pendingId)
+        val finalPath = IosPaths.child(IosPaths.audio, pendingId)
+        val known = repository.snapshot().captures.any { it.audioFileName == finalPath }
+
+        pending?.let(IosPaths::remove)
+        if (!known && IosPaths.exists(finalPath)) IosPaths.remove(finalPath)
+        check(pending == null || !IosPaths.exists(pending)) { "recordingDeleteFailed" }
+        check(known || !IosPaths.exists(finalPath)) { "recordingDeleteFailed" }
     }
 
     private fun handleSystemEvent(event: IosAudioSystemEvent) {
