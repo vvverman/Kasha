@@ -14,12 +14,13 @@ import brain.studio.StudioState
 @Suppress("FunctionName")
 fun MainViewController() = ComposeUIViewController {
     val scope = rememberCoroutineScope()
-    val intelligence = remember { IosOnDeviceIntelligence() }
-    val baseRepository = remember(intelligence) { IosRepository(intelligence) }
+    val localIntelligence = remember { IosOnDeviceIntelligence() }
+    val cloudAi = remember { IosCloudAiGateway() }
+    val baseRepository = remember(localIntelligence, cloudAi) { IosRepository(localIntelligence, cloudAi) }
     val reminders = remember { IosReminder() }
     val deviceCapabilities = remember { IosDeviceCapabilities() }
-    val repository = remember(baseRepository, reminders, deviceCapabilities) {
-        IosReminderRepository(baseRepository, reminders, deviceCapabilities)
+    val repository = remember(baseRepository, reminders, deviceCapabilities, cloudAi) {
+        IosReminderRepository(baseRepository, reminders, deviceCapabilities, cloudAi)
     }
     val recorder = remember(baseRepository, scope) { IosRecorder(baseRepository, scope) }
     val audio = remember(baseRepository) { IosAudio(baseRepository) }
