@@ -69,6 +69,9 @@ kotlin {
             implementation(kotlin("test"))
             implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
         }
+        iosMain.dependencies {
+            implementation("com.russhwolf:multiplatform-settings:1.3.0")
+        }
         wasmJsMain.dependencies {
             implementation(libs.ktor.client.core)
             implementation(libs.ktor.client.content.negotiation)
