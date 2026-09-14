@@ -37,6 +37,7 @@ internal class AndroidStudioRepository(
             message = "Android · локальная AI-обработка не подключена",
         )
     },
+    defaultPreferences: Preferences = Preferences(),
 ) : StudioRepository {
     override val simulated: Boolean get() = intelligence.simulated
 
@@ -67,7 +68,7 @@ internal class AndroidStudioRepository(
 
         prefs = storage.read(storage.preferencesFile)
             ?.let { runCatching { json.decodeFromString<Preferences>(it).validated() }.getOrNull() }
-            ?: Preferences()
+            ?: defaultPreferences
     }
 
     override suspend fun snapshot(): AppSnapshot = mutex.withLock {

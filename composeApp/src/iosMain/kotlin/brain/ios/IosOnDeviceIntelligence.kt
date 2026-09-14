@@ -46,41 +46,10 @@ internal class IosOnDeviceIntelligence : Intelligence {
         }
     }
 
-    override suspend fun title(text: String, language: String): String = NoteText.title(text)
-
-    override suspend fun tidy(text: String, language: String): String {
-        var result = text.trim()
-            .replace(Regex("[ \\t]{2,}"), " ")
-            .replace(Regex("\\n{3,}"), "\n\n")
-        val replacements = mapOf(
-            "какая-то фигня" to "проблема",
-            "эта хрень" to "эта функция",
-            "фигня" to "проблема",
-            "хрень" to "проблема",
-            "пиздец" to "серьёзная проблема",
-            "crap" to "problem",
-        )
-        replacements.forEach { (from, to) ->
-            result = result.replace(
-                Regex("(?i)(?<![\\p{L}])${Regex.escape(from)}(?![\\p{L}])"),
-                to,
-            )
-        }
-        return result
-    }
-
-    override suspend fun rank(text: String, projects: List<Project>, language: String): Map<String, Int> {
-        fun words(value: String): Set<String> = Regex("[\\p{L}\\p{N}]{3,}")
-            .findAll(value.lowercase())
-            .map { it.value.take(7) }
-            .toSet()
-        val source = words(text)
-        return projects.associate { project ->
-            val titleHits = words(project.title).count { it in source }
-            val detailHits = words(project.description + " " + project.instruction).count { it in source }
-            project.id to (titleHits * 3 + detailHits).coerceIn(0, 4)
-        }
-    }
+    override suspend fun title(text: String, language: String) = brain.ai.BuiltInText.title(text, language)
+    override suspend fun tidy(text: String, language: String) = brain.ai.BuiltInText.tidy(text, language)
+    override suspend fun rank(text: String, projects: List<Project>, language: String) =
+        brain.ai.BuiltInText.rank(text, projects, language)
 
     private fun recognizer(language: String): SFSpeechRecognizer? {
         val localeId = when (language.substringBefore('-').substringBefore('_').lowercase()) {

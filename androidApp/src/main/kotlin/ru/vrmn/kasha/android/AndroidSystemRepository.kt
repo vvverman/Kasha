@@ -5,6 +5,8 @@ import brain.model.TaskDistributionRequest
 import brain.model.TaskScheduleUpdate
 import brain.model.TaskUpdate
 import brain.studio.AiPlatformServices
+import brain.studio.AiExecutionCapabilityGateway
+import brain.studio.NoopAiExecutionCapabilityGateway
 import brain.studio.NoopAiPackageGateway
 import brain.studio.NoopCloudAiGateway
 import brain.studio.StudioRepository
@@ -14,6 +16,7 @@ internal class AndroidSystemRepository(
     private val delegate: AndroidStudioRepository,
     private val reminders: AndroidReminders,
     override val deviceCapabilities: AndroidPermissions,
+    override val aiExecution: AiExecutionCapabilityGateway = NoopAiExecutionCapabilityGateway,
 ) : StudioRepository by delegate, AiPlatformServices {
     override val aiPackages = NoopAiPackageGateway
     override val cloudAi = NoopCloudAiGateway

@@ -53,6 +53,7 @@ android {
 dependencies {
     implementation(project(":kashaCore"))
     implementation(project(":composeApp"))
+    implementation(project(":aiCatalog"))
     implementation(libs.androidx.activity.compose)
     implementation(libs.kotlinx.coroutines.core)
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:${libs.versions.coroutines.get()}")

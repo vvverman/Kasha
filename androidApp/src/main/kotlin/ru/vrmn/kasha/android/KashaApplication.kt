@@ -1,6 +1,9 @@
 package ru.vrmn.kasha.android
 
 import android.app.Application
+import brain.ai.BuiltInAi
+import brain.model.RuntimeStatus
+import brain.studio.Preferences
 import brain.studio.StudioState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -20,11 +23,23 @@ class KashaApplication : Application() {
 internal class AndroidPlatformRuntime(application: Application) {
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val systemLanguage = Locale.getDefault().toLanguageTag()
-    private val data = AndroidStudioRepository(
-        root = File(application.filesDir, "Kasha"),
-        intelligence = AndroidUnavailableIntelligence,
-        systemLanguage = systemLanguage,
-    )
+    private lateinit var data: AndroidStudioRepository
+    private val intelligence = AndroidIntelligence(application) { data.preferences() }
+    init {
+        data = AndroidStudioRepository(
+            root = File(application.filesDir, "Kasha"),
+            intelligence = intelligence,
+            systemLanguage = systemLanguage,
+            runtimeStatus = { RuntimeStatus(
+                whisperConfigured = intelligence.speechAvailable(),
+                llmConfigured = false,
+                localOnly = true,
+                simulated = false,
+                message = "Android · системное распознавание требует поддерживаемого файлового ввода и установленного языка",
+            ) },
+            defaultPreferences = Preferences(ai = BuiltInAi.androidSelection()),
+        )
+    }
     val permissions = AndroidPermissions(application)
     private val nativeRecorder = AndroidRecorder(application, data, scope)
     val audio = AndroidAudio(application, data, scope,
@@ -33,7 +48,7 @@ internal class AndroidPlatformRuntime(application: Application) {
     )
     val recorder = AndroidPermissionRecorder(nativeRecorder, permissions, data, audio)
     val reminders = AndroidReminders(application, data, permissions)
-    val repository = AndroidSystemRepository(data, reminders, permissions)
+    val repository = AndroidSystemRepository(data, reminders, permissions, intelligence)
     // Не заявляет работающее облако: этот системный адаптер доступен инфраструктуре optional AI.
     val secrets by lazy { AndroidSecretStore(application) }
     val state = StudioState(repository, recorder, audio, systemLanguage, reminders)
