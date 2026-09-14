@@ -20,6 +20,7 @@ internal class IosReminderRepository(
     override val cloudAi: IosCloudAiGateway,
 ) : StudioRepository by delegate, AiPlatformServices {
     override val aiPackages: AiPackageGateway = NoopAiPackageGateway
+    override val aiExecution get() = delegate.aiExecution
 
     suspend fun syncReminders() {
         reminders.sync(delegate.snapshot().tasks)

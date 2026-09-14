@@ -1,5 +1,6 @@
 package brain.ios
 
+import brain.ai.BuiltInAi
 import brain.domain.BrainData
 import brain.domain.CaptureWorkflow
 import brain.domain.NoteText
@@ -33,9 +34,10 @@ internal class IosRepository(
 
     private var data: BrainData = readData()
     private var prefs: Preferences = readPreferences()
-    private val intelligence: Intelligence = cloudAi
-        ?.let { IosRoutedIntelligence(localIntelligence, it) { prefs } }
-        ?: localIntelligence
+    private val intelligence = IosRoutedIntelligence(localIntelligence, cloudAi) { prefs }
+    val aiExecution: AiExecutionCapabilityGateway = object : AiExecutionCapabilityGateway {
+        override suspend fun roles(selection: AiSelection) = intelligence.capabilities(selection, language())
+    }
     private val workflow = CaptureWorkflow(intelligence)
 
     private fun id(): String = NSUUID().UUIDString.lowercase()
@@ -48,7 +50,7 @@ internal class IosRepository(
         }
         val externalStt = AiRole.SPEECH_TO_TEXT in externalRoles
         val externalText = externalRoles.any { it == AiRole.TEXT || it == AiRole.ROUTING }
-        val localSpeechReady = localIntelligence.supportsOnDevice(language())
+        val localSpeechReady = prefs.ai.speechToText == BuiltInAi.APPLE_SPEECH && localIntelligence.supportsOnDevice(language())
         return AppSnapshot(
             projects = data.projects,
             notes = data.notes,
@@ -203,8 +205,10 @@ internal class IosRepository(
                     audioFinalized = true,
                 )
             }
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
         } catch (e: Throwable) {
-            val unavailable = e.message?.contains("onDeviceSpeechUnavailable") == true ||
+            val unavailable = e.message == "aiUnavailable" || e.message?.contains("onDeviceSpeechUnavailable") == true ||
                 e.message?.contains("speechPermissionDenied") == true
             fail(
                 id,
@@ -291,6 +295,7 @@ internal class IosRepository(
                 return it
             }
         }
-        return Preferences()
+        // Только новая установка. Сохранённый явный выбор не подменяется.
+        return Preferences(ai = BuiltInAi.appleSelection())
     }
 }

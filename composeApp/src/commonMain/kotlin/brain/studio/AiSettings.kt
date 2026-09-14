@@ -17,6 +17,7 @@ internal fun AiSettingsSection(s: StudioState) {
     val packages = services?.aiPackages ?: NoopAiPackageGateway
     val cloud = services?.cloudAi ?: NoopCloudAiGateway
 
+    var nativeCapabilities by remember { mutableStateOf<Map<Pair<AiRole, String>, AiRoleCapability>>(emptyMap()) }
     var packageStates by remember { mutableStateOf<List<AiPackageState>>(emptyList()) }
     var connections by remember { mutableStateOf<List<CloudAiConnection>>(emptyList()) }
     var expandedRole by remember { mutableStateOf<AiRole?>(null) }
@@ -53,7 +54,7 @@ internal fun AiSettingsSection(s: StudioState) {
                     it.providerId == providerId && it.enabled && AiPrivacy.hasCurrentConsent(it) && it.modelFor(role) != null
                 }
             }
-            AiLocality.NATIVE -> false
+            AiLocality.NATIVE -> nativeCapabilities[role to engineId]?.executable == true
         }
     }
     fun refreshPlatformState() {
@@ -66,6 +67,26 @@ internal fun AiSettingsSection(s: StudioState) {
     LaunchedEffect(packages, cloud) {
         packageStates = runCatching { packages.states() }.getOrDefault(emptyList())
         connections = runCatching { cloud.connections() }.getOrDefault(emptyList())
+    }
+
+    LaunchedEffect(services, s.preferences.ai, s.language) {
+        val gateway = services?.aiExecution ?: NoopAiExecutionCapabilityGateway
+        val selected = s.preferences.ai
+        val result = mutableMapOf<Pair<AiRole, String>, AiRoleCapability>()
+        for (engine in AiCatalog.engines.filter { it.locality == AiLocality.NATIVE }) {
+            for (role in engine.roles) {
+                try {
+                    gateway.roles(selected.with(role, engine.id))
+                        .firstOrNull { it.role == role && it.selectedEngineId == engine.id }
+                        ?.let { result[role to engine.id] = it }
+                } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    result[role to engine.id] = AiRoleCapability(role, engine.id, false, "platformUnavailable")
+                }
+            }
+        }
+        nativeCapabilities = result
     }
 
     Text(t("ai"), style = MaterialTheme.typography.titleSmall)
@@ -90,7 +111,7 @@ internal fun AiSettingsSection(s: StudioState) {
                     color = colors.onSurfaceVariant,
                 )
                 Text(
-                    if (ready) t("aiInstalled") else t("aiUnavailable"),
+                    if (!ready) t("aiUnavailable") else if (selected?.locality == AiLocality.NATIVE) t("aiSelected") else t("aiInstalled"),
                     style = MaterialTheme.typography.labelSmall,
                     color = colors.onSurfaceVariant,
                 )
@@ -101,9 +122,16 @@ internal fun AiSettingsSection(s: StudioState) {
             KashaPanel(Modifier.fillMaxWidth().padding(bottom = 10.dp), padding = 14.dp) {
                 Text(t("aiModels"), style = MaterialTheme.typography.labelLarge)
                 Spacer(Modifier.height(10.dp))
-                AiCatalog.enginesFor(role).forEach { engine ->
+                AiCatalog.enginesFor(role).filter { engine ->
+                    val native = nativeCapabilities[role to engine.id]
+                    engine.locality != AiLocality.NATIVE || selectedId == engine.id ||
+                        (native != null && native.reason != "platformUnavailable")
+                }.forEach { engine ->
                     val state = stateFor(engine.id)
                     val selectedNow = selectedId == engine.id
+                    val native = nativeCapabilities[role to engine.id]
+                    val engineReady = if (engine.locality == AiLocality.NATIVE) native?.executable == true else state?.installed == true
+                    val canSelect = engineReady || (engine.locality == AiLocality.NATIVE && native != null && native.reason != "platformUnavailable")
                     Row(Modifier.fillMaxWidth().padding(vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(engine.name, style = MaterialTheme.typography.bodyMedium)
@@ -115,15 +143,15 @@ internal fun AiSettingsSection(s: StudioState) {
                         }
                         when {
                             selectedNow -> Text(
-                                if (state?.installed == true) t("aiSelected") else t("aiUnavailable"),
+                                if (engineReady) t("aiSelected") else t("aiUnavailable"),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = colors.onSurfaceVariant,
                             )
-                            state?.installed == true -> Column(horizontalAlignment = Alignment.End) {
+                            canSelect -> Column(horizontalAlignment = Alignment.End) {
                                 KashaQuietButton(t("aiSelected"), {
                                     scope.launch { s.updatePreferences { it.copy(ai = it.ai.with(role, engine.id)) } }
                                 })
-                                if (packages.available && !engine.defaultInstalled) {
+                                if (engine.locality == AiLocality.LOCAL && packages.available && !engine.defaultInstalled) {
                                     KashaQuietButton(t("aiRemove"), {
                                         scope.launch {
                                             actionError = null
