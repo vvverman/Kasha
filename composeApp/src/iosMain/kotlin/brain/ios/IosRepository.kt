@@ -17,7 +17,8 @@ import kotlin.time.Clock
  * Вся бизнес-логика проектов/заметок/задач остаётся в BrainData.
  */
 internal class IosRepository(
-    private val intelligence: IosOnDeviceIntelligence,
+    private val localIntelligence: IosOnDeviceIntelligence,
+    cloudAi: IosCloudAiGateway? = null,
 ) : StudioRepository {
     override val simulated: Boolean = false
 
@@ -30,33 +31,46 @@ internal class IosRepository(
 
     private var data: BrainData = readData()
     private var prefs: Preferences = readPreferences()
+    private val intelligence: Intelligence = cloudAi
+        ?.let { IosRoutedIntelligence(localIntelligence, it) { prefs } }
+        ?: localIntelligence
 
     private fun id(): String = NSUUID().UUIDString.lowercase()
     private fun now(): Long = Clock.System.now().toEpochMilliseconds()
     private fun language(): String = Languages.resolve(prefs.language, "ru-RU")
 
-    override suspend fun snapshot(): AppSnapshot = AppSnapshot(
-        projects = data.projects,
-        notes = data.notes,
-        captures = data.captures,
-        tasks = data.tasks,
-        runtime = RuntimeStatus(
-            whisperConfigured = intelligence.supportsOnDevice(language()),
-            llmConfigured = false,
-            localOnly = true,
-            simulated = false,
-            message = if (intelligence.supportsOnDevice(language())) {
-                "iOS · распознавание речи строго на устройстве"
-            } else {
-                "iOS · для выбранного языка нет системного on-device STT"
-            },
-        ),
-    )
+    override suspend fun snapshot(): AppSnapshot {
+        val externalRoles = AiRole.entries.filter { role ->
+            AiCatalog.cloudProviderId(prefs.ai.engineId(role)) != null
+        }
+        val externalStt = AiRole.SPEECH_TO_TEXT in externalRoles
+        val externalText = externalRoles.any { it == AiRole.TEXT || it == AiRole.ROUTING }
+        val localSpeechReady = localIntelligence.supportsOnDevice(language())
+        return AppSnapshot(
+            projects = data.projects,
+            notes = data.notes,
+            captures = data.captures,
+            tasks = data.tasks,
+            runtime = RuntimeStatus(
+                whisperConfigured = externalStt || localSpeechReady,
+                llmConfigured = externalText,
+                localOnly = externalRoles.isEmpty(),
+                simulated = false,
+                message = when {
+                    externalRoles.isNotEmpty() -> "iOS · внешний AI включён для ${externalRoles.joinToString()}"
+                    localSpeechReady -> "iOS · распознавание речи строго на устройстве"
+                    else -> "iOS · для выбранного языка нет системного on-device STT"
+                },
+            ),
+        )
+    }
 
     override suspend fun preferences(): Preferences = prefs
 
     override suspend fun savePreferences(value: Preferences) {
-        prefs = value.validated()
+        val validated = value.validated()
+        AiCatalog.validateSelection(validated.ai)
+        prefs = validated
         persistPreferences()
     }
 
@@ -199,12 +213,13 @@ internal class IosRepository(
     override suspend fun tidy(id: String): Capture {
         val current = capture(id)
         val text = intelligence.tidy(current.textToSave, language())
+        val externalText = AiCatalog.cloudProviderId(prefs.ai.text) != null
         return updateCapture(id) {
             it.copy(
                 title = NoteText.title(text),
                 preparedText = text,
                 draftEdited = true,
-                llmApplied = false,
+                llmApplied = externalText,
                 rankingApplied = false,
                 relevance = emptyMap(),
                 status = CaptureStatus.READY,
@@ -274,7 +289,6 @@ internal class IosRepository(
         IosPaths.read(IosPaths.stateFile)?.let { stored ->
             runCatching { json.decodeFromString<BrainData>(stored) }.getOrNull()?.let { return it }
         }
-        // Однократная миграция старой SideStore/test-сборки.
         defaults.stringForKey("kasha.test.brain.v1")?.let { stored ->
             runCatching { json.decodeFromString<BrainData>(stored) }.getOrNull()?.let {
                 IosPaths.write(IosPaths.stateFile, json.encodeToString(it))
