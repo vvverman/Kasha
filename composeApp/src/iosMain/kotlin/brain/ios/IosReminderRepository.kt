@@ -6,6 +6,8 @@ import brain.studio.AiPlatformServices
 import brain.studio.DeviceCapabilityGateway
 import brain.studio.NoopAiPackageGateway
 import brain.studio.StudioRepository
+import kotlinx.datetime.TimeZone
+import kotlin.time.Clock
 
 /**
  * Side-effect adapter вокруг общего repository: Core меняет Task, iOS только
@@ -23,6 +25,14 @@ internal class IosReminderRepository(
         reminders.sync(delegate.snapshot().tasks)
     }
 
+    suspend fun reconcileReminders() {
+        delegate.claimTaskReminders(
+            Clock.System.now().toEpochMilliseconds(),
+            TimeZone.currentSystemDefault().id,
+        )
+        syncReminders()
+    }
+
     override suspend fun distributeTask(id: String, request: TaskDistributionRequest): Task =
         delegate.distributeTask(id, request).also { syncReminders() }
 
@@ -30,10 +40,16 @@ internal class IosReminderRepository(
         delegate.updateTask(id, update).also { syncReminders() }
 
     override suspend fun rescheduleTask(id: String, update: TaskScheduleUpdate): Task =
-        delegate.rescheduleTask(id, update).also { syncReminders() }
+        delegate.rescheduleTask(id, update).also {
+            reminders.cancel(id)
+            syncReminders()
+        }
 
     override suspend fun completeTask(id: String): Task =
-        delegate.completeTask(id).also { syncReminders() }
+        delegate.completeTask(id).also {
+            reminders.cancel(id)
+            syncReminders()
+        }
 
     override suspend fun deleteTask(id: String) {
         delegate.deleteTask(id)

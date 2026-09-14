@@ -1,11 +1,14 @@
 package brain.ios
 
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.window.ComposeUIViewController
 import brain.studio.StudioApp
 import brain.studio.StudioState
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 
 /**
  * Тонкая iOS composition root: весь продуктовый state/UI/Core общий,
@@ -35,7 +38,22 @@ fun MainViewController() = ComposeUIViewController {
     }
 
     LaunchedEffect(repository) {
-        repository.syncReminders()
+        repository.reconcileReminders()
+    }
+
+    DisposableEffect(repository, scope) {
+        val stop = IosReminderLifecycleBridge.observe {
+            scope.launch {
+                try {
+                    repository.reconcileReminders()
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (_: Exception) {
+                    // Notification resync не должен ломать приложение.
+                }
+            }
+        }
+        onDispose { stop() }
     }
 
     StudioApp(state)
