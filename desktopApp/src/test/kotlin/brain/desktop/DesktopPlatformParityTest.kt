@@ -50,7 +50,7 @@ class DesktopPlatformParityTest {
         } finally { root.toFile().deleteRecursively() }
     }
 
-    @Test fun notificationTextIsDataNotShellCode() = runBlocking {
+    @Test fun notificationTextIsDataNotShellCode(): Unit = runBlocking {
         for (os in listOf(DesktopOs.LINUX, DesktopOs.WINDOWS)) {
             val process = FakeProcess()
             val body = "Текст <&> ; не команда"
@@ -60,14 +60,14 @@ class DesktopPlatformParityTest {
         }
     }
 
-    @Test fun failedNotificationIsNotReportedAsSuccess() = runBlocking {
+    @Test fun failedNotificationIsNotReportedAsSuccess(): Unit = runBlocking {
         val process = FakeProcess(exitCode = 1)
         assertFailsWith<IllegalStateException> {
             DesktopReminder(process, DesktopOs.LINUX).notify(Task(id = "t", text = "Текст", createdAt = 1, updatedAt = 1))
         }
     }
 
-    @Test fun unavailableNotificationDoesNotSilentlySucceed() = runBlocking {
+    @Test fun unavailableNotificationDoesNotSilentlySucceed(): Unit = runBlocking {
         val process = FakeProcess()
         val notifier = DesktopReminder(process, DesktopOs.OTHER)
         assertFalse(notifier.available)
