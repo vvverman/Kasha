@@ -27,9 +27,13 @@ fun BrainData.migrated(): BrainData {
         noteOrderById[note.id]?.let { note.copy(manualOrder = it) } ?: note
     }
 
-    val taskOrderNeedsRepair = tasks.map { it.manualOrder }.toSet().size != tasks.size
-    val migratedTasks = tasks.mapIndexed { index, task ->
-        if (taskOrderNeedsRepair) task.copy(manualOrder = index) else task
+    // orderTasks меняет только активные задачи. Совпадение с номером в архиве
+    // допустимо и не должно сбрасывать сохранённую раскладку при перезапуске.
+    val activeTasks = tasks.filterNot { it.completed }
+    val taskOrderNeedsRepair = activeTasks.map { it.manualOrder }.toSet().size != activeTasks.size
+    var activeIndex = 0
+    val migratedTasks = tasks.map { task ->
+        if (taskOrderNeedsRepair && !task.completed) task.copy(manualOrder = activeIndex++) else task
     }
 
     return copy(
