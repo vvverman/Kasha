@@ -46,9 +46,7 @@ internal class IosRecorder(
         check(currentPhase == "idle") { "recordingAlreadyStarted" }
         check(pendingPath() == null) { "pendingRecordingExists" }
         check(requestMicrophonePermission()) { "microphonePermissionDenied" }
-
-        val session = AVAudioSession.sharedInstance()
-        session.setCategory(AVAudioSessionCategoryPlayAndRecord, error = null)
+        IosAudioSessionBridge.activateRecording()
 
         val path = IosPaths.child(IosPaths.pending, "${NSUUID().UUIDString.lowercase()}.m4a")
         val settings = mapOf<Any?, Any>(
@@ -58,8 +56,12 @@ internal class IosRecorder(
         )
         val created = AVAudioRecorder(NSURL.fileURLWithPath(path), settings, null)
         created.meteringEnabled = true
-        check(created.prepareToRecord()) { "audioFailed" }
-        check(created.record()) { "audioFailed" }
+        if (!created.prepareToRecord() || !created.record()) {
+            created.stop()
+            IosAudioSessionBridge.deactivate()
+            IosPaths.remove(path)
+            error("audioFailed")
+        }
 
         recorder = created
         currentPath = path
@@ -75,6 +77,7 @@ internal class IosRecorder(
 
     override suspend fun resume() {
         check(currentPhase == "paused")
+        IosAudioSessionBridge.activateRecording()
         check(recorder?.record() == true) { "audioFailed" }
         currentPhase = "recording"
     }
@@ -84,6 +87,7 @@ internal class IosRecorder(
         val source = currentPath ?: error("recordingNotStarted")
         val duration = active.currentTime
         active.stop()
+        IosAudioSessionBridge.deactivate()
         recorder = null
         currentPath = null
         currentPhase = "idle"

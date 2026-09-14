@@ -47,13 +47,32 @@ fun main(args:Array<String>){
         DesktopReminder(),
     )
     Thread.setDefaultUncaughtExceptionHandler{_,error->runCatching{Files.writeString(root.resolve("last-error.log"),error.stackTraceToString())};error.printStackTrace()}
+    // A normal JVM shutdown must close the audio journal even without a window event.
+    val shutdownHook=Thread({runCatching{services.close()}},"Kasha-shutdown")
+    Runtime.getRuntime().addShutdownHook(shutdownHook)
     try{
         application{
-            val scope=rememberCoroutineScope();var closing by remember{mutableStateOf(false)}
-            Window(onCloseRequest={if(!closing){closing=true;scope.launch{
-                try{state.flush();withContext(Dispatchers.IO){services.close()};exitApplication()}
-                catch(_:Exception){state.error="saveFailed";closing=false}
-            }}},title=name,state=rememberWindowState(width=430.dp,height=850.dp,position=WindowPosition(Alignment.Center)),resizable=true){
+            val scope=rememberCoroutineScope()
+            var closing by remember{mutableStateOf(false)}
+            val requestClose:()->Unit={
+                if(!closing){
+                    closing=true
+                    scope.launch{
+                        try{
+                            state.flush()
+                            withContext(Dispatchers.IO){services.close()}
+                            exitApplication()
+                        }catch(e:CancellationException){throw e}
+                        catch(_:Exception){state.error="saveFailed";closing=false}
+                    }
+                }
+            }
+            val currentCloseRequest by rememberUpdatedState(requestClose)
+            DisposableEffect(Unit){
+                val systemQuit=installDesktopQuitHandler{currentCloseRequest()}
+                onDispose{systemQuit.close()}
+            }
+            Window(onCloseRequest=requestClose,title=name,state=rememberWindowState(width=430.dp,height=850.dp,position=WindowPosition(Alignment.Center)),resizable=true){
                 LaunchedEffect(Unit){
                     window.minimumSize=Dimension(390,680)
                     if(smokeOutput!=null){
@@ -68,11 +87,14 @@ fun main(args:Array<String>){
                         val image=java.awt.Robot().createScreenCapture(java.awt.Rectangle(window.locationOnScreen,window.size))
                         javax.imageio.ImageIO.write(image,"png",smokeOutput.resolve("$screen.png").toFile())
                         Files.writeString(smokeOutput.resolve("$screen-ready.txt"),"visible=${window.isShowing}; ${window.width}x${window.height}; Java=${System.getProperty("java.home")}; simulated=${services.simulated}")
-                        delay(200);state.flush();services.close();exitApplication()
+                        delay(200);requestClose()
                     }
                 }
                 StudioApp(state)
             }
         }
-    }finally{runCatching{services.close()}}
+    }finally{
+        runCatching{services.close()}
+        runCatching{Runtime.getRuntime().removeShutdownHook(shutdownHook)}
+    }
 }

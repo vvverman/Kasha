@@ -1,4 +1,6 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
+import org.jetbrains.compose.desktop.application.tasks.AbstractJPackageTask
+
 plugins {
     alias(libs.plugins.kotlinJvm)
     alias(libs.plugins.kotlinSerialization)
@@ -48,7 +50,18 @@ compose.desktop {
             linux {
                 menuGroup = "Utility"
                 appCategory = "Utility"
+                shortcut = true
             }
         }
+    }
+}
+
+// These commands are used by DesktopReminder and LinuxSecretServiceStore.
+// Keep distro package names in packaging, not in Core or shared UI.
+tasks.withType<AbstractJPackageTask>().configureEach {
+    when (targetFormat) {
+        TargetFormat.Deb -> freeArgs.addAll("--linux-package-deps", "libnotify-bin,libsecret-tools")
+        TargetFormat.Rpm -> freeArgs.addAll("--linux-package-deps", "libnotify,libsecret")
+        else -> Unit
     }
 }
