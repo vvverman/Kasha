@@ -1,8 +1,56 @@
-# Kasha Core handoffs
+# Kasha Core — состояние и контракты
 
-Документы в этой папке фиксируют платформонезависимые контракты Core, которые требуют реализации или потребления в platform/shared слоях.
+Основное ТЗ: [SPEC](../SPEC.md). Последовательный план: [issue #17](https://github.com/vvverman/Kasha/issues/17).
 
-- [Capture/recovery contract](capture-recovery-contract.md) — identity-aware recorder, безопасная отмена активной записи, точное recovery/discard pending и типизированные permission/interruption/error состояния.
-- [Playback/recording contract](playback-recording-contract.md) — typed playback phase, seek с сохранением play/pause и взаимоисключение recorder/playback.
-- [Task lifecycle contract](task-lifecycle-contract.md) — save-before-complete, идемпотентный архив, сроки/повторы и системный reminder boundary.
-- [AI workflow contract](ai-workflow-contract.md) — три независимые AI-роли, единые Core-проверки local/cloud и неразрушающий routing fallback.
+## Функциональная база
+
+Сверка 14.09.2026 по `main` на `d7beb11cc8c8c5111a7b1a9bef38642376f9b57a`.
+
+| Пункт | Реализация в main |
+|---|---|
+| 1. Закрепление и независимый ручной порядок | PR #12, `6099860` |
+| 2. AI privacy и точное согласие v2 | PR #24, `983fa16` |
+| 3. Контракты записи, отмены и восстановления | PR #62, `2da7417` |
+| 4. Контракты плеера, seek и взаимоисключения с записью | PR #65, `50a23bc` |
+| 5. Задачи: сохранение перед выполнением, архив, сроки и напоминания | PR #69, `ca21172` |
+| 6. Общие AI-проверки и безопасный routing fallback | PR #71, `e927af8` |
+
+Этап 7 — базовая сверка совместимости и передача существующих контрактов. По указанию владельца от 14.09.2026 глубокие проверки и полировка вынесены за этот функциональный проход; новых продуктовых требований он не добавляет. Статус завершения и результат CI фиксируются в #17.
+
+В сверке обнаружено и исправлено одно нарушение persistent manual order: совпадение `manualOrder` активной и архивной задачи не является поводом для ремонта порядка. `BrainData.migrated()` проверяет и при необходимости восстанавливает только активную группу; архив не переписывается. Добавлены два регрессионных теста: сохранение/загрузка после complete + reorder и миграция старой активной группы рядом с архивом.
+
+## Совместимость и хранение
+
+- На этапе 7 не меняются модели `Project`, `Note`, `Task`, `Capture`, `AppSnapshot`, JSON-поля и сигнатуры портов. Новая версия хранилища не вводится.
+- Существующий `BrainData.migrated()` сохраняется. Адаптер загружает и сохраняет данные; правила миграции остаются в Core. Уже потерянный старой реализацией порядок автоматически восстановить нельзя.
+- `pinOrder` и `manualOrder` независимы. `orderNotePins(projectId, ids)` ограничен закреплёнными заметками указанного проекта и не меняет полный ручной порядок.
+- `RecorderSessionGateway` и `PlaybackSessionGateway` расширяют legacy-порты. Старые адаптеры не обязаны поддерживать новые возможности, но UI не должен показывать их как работающие. Default-ошибка метода — не реализация функции.
+- Это совместимость исходного кода внутри проекта; готовые приложения и framework пересобираются с обновлённым Core. Бинарная ABI-совместимость отдельно не заявляется.
+- Для внешнего AI старое/изменённое согласие не обновляется автоматически: используется актуальный `AiPrivacy` snapshot. API-ключи не сохраняются в Core state.
+
+## Контракты для реализации
+
+- [Capture/recovery](capture-recovery-contract.md) — точные ID активной сессии и pending; cancel без создания capture и запуска AI; сохранность current + pending.
+- [Playback/recording](playback-recording-contract.md) — фактическая фаза, seek с сохранением play/pause и запрет одновременной записи и playback.
+- [Task lifecycle](task-lifecycle-contract.md) — save-before-complete, идемпотентный архив, сроки/повторы и `ReminderGateway`.
+- [AI workflow](ai-workflow-contract.md) — три независимые роли, общие проверки результата и routing fallback без потери источника.
+
+| Получатель | Что использует из общего кода | Что остаётся у получателя |
+|---|---|---|
+| Дизайн / shared Kasha UI | `UserSort`, `SnapshotQueries`, recorder/playback contracts, `TaskLifecycleActions`, `CaptureWorkflow`, `AiPrivacy` | Команды экранов подключаются к существующим контрактам; неподдерживаемые возможности не имитируются |
+| iOS | `BrainData`, общие AI-проверки, `RecorderSessionGateway`, `PlaybackSessionGateway`, `ReminderGateway` | Apple audio/lifecycle/permissions, локальное хранение, Keychain, системная доставка уведомлений и упаковка |
+| Android | Тот же Core и shared UI, те же порты | Installable shell и Android-адаптеры без копирования доменных правил |
+| Desktop | Общие Core/runtime и shared UI | Адаптеры ОС и упаковка macOS/Windows/Linux; foreground-уведомления не выдаются за планирование при закрытом приложении |
+| Web | Общие Core/shared UI и те же capability-порты | Browser microphone/storage/playback/permissions и локальный companion, если он используется |
+
+Готовый контракт Core не означает, что все платформы уже подключили его. Текущие ограничения интеграции перечислены в документах выше; выпуск устанавливаемых приложений остаётся работой платформенных слоёв по разделу 20 SPEC.
+
+## Проверки
+
+Для последнего функционального AI-изменения PR #71, head `ed10cb0cb6ded59ec8afc2729ab10530efff13fb`, уже получен SUCCESS:
+
+- Kotlin Multiplatform, включая Core/shared/runtime и browser E2E — run `34814698817`;
+- iOS Shared — run `34814698801`;
+- SideStore/IPA — run `34814698860`.
+
+Эти результаты относятся к указанному head, а не заменяют проверку нового исправления миграции. Для него используются добавленные целевые тесты и штатный CI; отдельные повторные полные прогоны ради документации не требуются. Глубокий аудит, испытания на физических устройствах и подтверждение готовности всех платформ здесь не заявляются.
