@@ -33,7 +33,8 @@ with sync_playwright() as pw:
         executable_path=os.getenv('CHROME_PATH') or shutil.which('google-chrome') or shutil.which('chromium'),
         headless=True, args=['--no-sandbox', '--use-fake-device-for-media-stream',
             '--use-fake-ui-for-media-stream', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'])
-    page = browser.new_page()
+    # Match the existing suites: all share the same local test store and its first project.
+    page = browser.new_page(locale='ru-RU')
     page.on('dialog', lambda dialog: dialog.accept())
     uploads = []
     page.on('request', lambda request: uploads.append(request.url)
