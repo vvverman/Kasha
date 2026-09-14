@@ -32,6 +32,17 @@ private fun repeatText(s: StudioState, repeat: ReminderRepeat): String = taskTex
 private fun taskTitle(task: Task): String = task.text.lineSequence().map(String::trim).firstOrNull { it.isNotEmpty() }?.take(90) ?: "—"
 
 @Composable
+private fun ReminderDeliveryStatus(s: StudioState) {
+    if (!s.reminderDeliveryFailed) return
+    Text(
+        "${taskText(s, "reminder")}: ${s.tr("actionFailed")}",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.error,
+    )
+    Spacer(Modifier.height(8.dp))
+}
+
+@Composable
 internal fun TasksScreen(s: StudioState) {
     val task = s.snapshot.tasks.firstOrNull { it.id == s.selectedTaskId }
     if (task != null) {
@@ -56,6 +67,7 @@ internal fun TasksScreen(s: StudioState) {
                 filled = s.taskArchive,
             )
         }
+        if (!s.taskArchive) ReminderDeliveryStatus(s)
         KashaSortBar(s.preferences.taskSort, labels, { scope.launch { s.setTaskSort(it) } })
         Spacer(Modifier.height(14.dp))
 
@@ -129,6 +141,7 @@ private fun TaskDetailScreen(s: StudioState, task: Task) {
                 Spacer(Modifier.height(4.dp))
                 Text("${taskText(s, "repeatReminder")}: ${repeatText(s, task.reminderRepeat)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+            if (!task.completed) ReminderDeliveryStatus(s)
             if (task.completed) {
                 Spacer(Modifier.height(12.dp))
                 Text(taskText(s, "completedLabel"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -152,7 +165,7 @@ private fun TaskDetailScreen(s: StudioState, task: Task) {
             Action(taskText(s, "changeTime"), { s.editTaskSchedule(task.id) }, glyph = Glyph.CLOCK, modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(10.dp))
         }
-        Action(taskText(s, "deleteTask"), { s.confirmDelete = true }, glyph = Glyph.DELETE, modifier = Modifier.fillMaxWidth())
+        Action(taskText(s, "deleteTask"), { s.requestTaskDeletion(task.id) }, glyph = Glyph.DELETE, modifier = Modifier.fillMaxWidth())
     }
 }
 
@@ -180,6 +193,7 @@ internal fun TaskScheduleScreen(s: StudioState) {
                 Text(taskText(s, "invalidSchedule"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
             }
             Spacer(Modifier.height(24.dp))
+            ReminderDeliveryStatus(s)
             Text(taskText(s, "repeatReminder"), style = MaterialTheme.typography.titleSmall)
             Spacer(Modifier.height(10.dp))
             ReminderRepeat.entries.forEach { option ->

@@ -2,14 +2,12 @@ package brain.studio
 
 import androidx.compose.runtime.*
 import brain.application.KashaApplication
+import brain.application.PlaybackRequestResult
+import brain.application.ApplicationPollFailure
 import brain.domain.*
 import brain.model.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.collect
-import kotlinx.datetime.TimeZone
-import kotlin.time.Clock
-import kotlin.time.TimeMark
-import kotlin.time.TimeSource
 
 enum class Tab { HOME, PROJECTS, TASKS, SETTINGS }
 
@@ -20,7 +18,7 @@ class StudioState(
     val systemLanguage: String = "ru",
     val reminders: ReminderGateway = NoopReminderGateway,
 ) {
-    val application = KashaApplication(repository)
+    val application = KashaApplication(repository, recorder, audio, reminders)
     // Ссылка на неизменяемое состояние Core для Compose; UI не правит его поля.
     private var content by mutableStateOf(application.state.value)
     val snapshot get() = content.snapshot
@@ -45,56 +43,39 @@ class StudioState(
     var languagePage by mutableStateOf(false)
 
     var busy by mutableStateOf(false); private set
-    var controlBusy by mutableStateOf(false); private set
+    val controlBusy get() = content.transport.operation != null
     var error by mutableStateOf<String?>(null)
-    var confirmDelete by mutableStateOf(false)
+    internal var deleteConfirmation by mutableStateOf<DeleteConfirmation?>(null); private set
     var confirmListenId by mutableStateOf<String?>(null)
-    var recordPhase by mutableStateOf("idle"); private set
-    var recorderIssue by mutableStateOf<RecorderIssue?>(null); private set
-    var elapsed by mutableStateOf(0L); private set
-    var liveWave by mutableStateOf(List(80) { 0f }); private set
-    var playback by mutableStateOf(AudioTelemetry()); private set
-    var playbackRate by mutableStateOf(1.0); private set
-    var loadedAudioId by mutableStateOf<String?>(null); private set
-    var pending by mutableStateOf(false); private set
-    var initialized by mutableStateOf(false); private set
+    val activeRecordingSessionId get() = content.transport.activeSessionId
+    val recordPhase get() = content.transport.recorderPhase.legacyValue
+    val recorderIssue get() = content.transport.recorderIssue
+    val elapsed get() = content.transport.elapsedMillis / 1000
+    val liveWave get() = content.transport.liveWave
+    val playback get() = content.transport.telemetry
+    val playbackRate get() = content.transport.playbackRate
+    val loadedAudioId get() = content.transport.loadedAudioId
+    val pending get() = content.transport.hasPending
+    val initialized get() = content.initialized
+    val reminderDeliveryFailed get() = content.reminderDeliveryFailed
 
-    private var started = false
-    private var recordedMillis = 0L
-    private var mark: TimeMark? = null
     private var autoRouteFor: String? = null
     private var creatingForCaptureId: String? = null
     private var actionScope: CoroutineScope? = null
-    private var contentObserver: Job? = null
-    private val sessionRecorder: RecorderSessionGateway? get() = recorder as? RecorderSessionGateway
+    fun attachActionScope(scope: CoroutineScope) { actionScope = scope }
+    fun detachActionScope(scope: CoroutineScope) { if (actionScope === scope) actionScope = null }
 
-    fun attachActionScope(scope: CoroutineScope) {
-        if (actionScope === scope) return
-        contentObserver?.cancel()
-        actionScope = scope
-        contentObserver = scope.launch(start = CoroutineStart.UNDISPATCHED) {
-            application.state.collect { syncContent() }
-        }
+    private fun syncContent() {
+        val previous = current
+        content = application.state.value
+        reconcileContentPresentation(previous)
     }
-
-    fun detachActionScope(scope: CoroutineScope) {
-        if (actionScope !== scope) return
-        contentObserver?.cancel()
-        contentObserver = null
-        actionScope = null
-    }
-
-    private fun syncContent() { content = application.state.value }
 
     private suspend fun <T> core(block: suspend KashaApplication.() -> T): T =
         try { application.block() } finally { syncContent() }
 
-    val recording get() = recordPhase == "recording" || recordPhase == "paused" || recordPhase == "interrupted" || recordPhase == "finalizing"
-    val recorderCanResume get() = when (recordPhase) {
-        "paused" -> recorderIssue?.recoverable != false
-        "interrupted" -> recorderIssue?.recoverable == true
-        else -> false
-    }
+    val recording get() = content.transport.recording
+    val recorderCanResume get() = content.transport.recorderCanResume
     val working get() = current?.status?.isWorking == true
     val loadedAudio get() = snapshot.captures.firstOrNull { it.id == loadedAudioId }
     fun tr(key: String) = Copy.text(language, key)
@@ -129,20 +110,7 @@ class StudioState(
     }
 
     suspend fun launch() {
-        if (started) return
-        started = true
-        action {
-            core { loadPreferences() }
-            refresh()
-            if (snapshot.projects.isEmpty()) {
-                core { createProject(ProjectDraft(tr("firstProject"))) }
-            }
-            pending = hasPendingRecording()
-            initialized = true
-        }
-        if (!initialized) return
-        if (pending && current == null) recover()
-        else if (preferences.autoRecord && current == null && !pending) startRecording()
+        action { core { launch(systemLanguage) { language -> Copy.text(language, "firstProject") } } }
     }
 
     suspend fun refresh() {
@@ -153,7 +121,6 @@ class StudioState(
 
     private fun reconcileContentPresentation(previous: Capture?) {
         val c = current
-        if (c != null && c.audioFinalized && loadedAudioId == null && !recording) loadedAudioId = c.id
         if (c != null && previous?.status?.isWorking == true && !c.status.isWorking && c.status == CaptureStatus.READY && autoRouteFor != c.id) {
             autoRouteFor = c.id
             if (preferences.autoRoute) {
@@ -171,36 +138,17 @@ class StudioState(
         catch (_: Exception) { error = "saveFailed" }
     }
 
-    suspend fun poll() {
-        var tick = 0
-        while (currentCoroutineContext().isActive) {
-            delay(65)
-            reconcileRecorderState()
-            if (recording) {
-                elapsed = (recordedMillis + (mark?.elapsedNow()?.inWholeMilliseconds ?: 0L)) / 1000
-                if (recordPhase == "recording") {
-                    val level = recorder.level().coerceIn(0f, 1f)
-                    liveWave = liveWave.drop(1) + level
-                }
-            }
-            playback = audio.telemetry()
-            if (++tick % 12 == 0 && working) {
-                try { refresh() }
-                catch (e: CancellationException) { throw e }
-                catch (_: Exception) { error = "actionFailed" }
-            }
-            if (tick % 150 == 0 && reminders.available) {
-                try {
-                    val due = repository.claimTaskReminders(
-                        Clock.System.now().toEpochMilliseconds(),
-                        TimeZone.currentSystemDefault().id,
-                    )
-                    due.forEach { reminders.notify(it) }
-                    if (due.isNotEmpty()) refresh()
-                } catch (e: CancellationException) { throw e }
-                catch (_: Exception) { /* напоминание не должно ломать приложение */ }
-            }
+    suspend fun poll() = coroutineScope {
+        val observer = launch(start = CoroutineStart.UNDISPATCHED) {
+            application.state.collect { syncContent() }
         }
+        try {
+            application.poll(::handlePollFailure)
+        } finally { observer.cancel() }
+    }
+
+    internal fun handlePollFailure(failure: ApplicationPollFailure) {
+        pollFailureMessageKey(failure)?.let { error = it }
     }
 
     suspend fun savePreferences(value: Preferences) = action { core { savePreferences(value) } }
@@ -220,68 +168,56 @@ class StudioState(
     fun tasks(): List<Task> = content.tasks(taskArchive)
     fun orderedProjects(): List<Project> = content.destinationProjects()
 
-    suspend fun startRecording() = controls {
-        check(current == null && !pending) { "currentExists" }
-        check(playback.phase == "idle") { "stopPlayback" }
-        recorder.start()
-        syncRecorderAfterControl()
-        check(recordPhase == "recording") { "audioFailed" }
-        recordedMillis = 0
-        elapsed = 0
-        mark = TimeSource.Monotonic.markNow()
-        liveWave = List(80) { 0f }
-        loadedAudioId = null
+    suspend fun startRecording() = controls { core { startRecording() } }
+    suspend fun pauseRecording() = controls { core { pauseRecording() } }
+    suspend fun resumeRecording() = controls { core { resumeRecording() } }
+    suspend fun stopRecording() = controls { core { stopRecording() } }
+    suspend fun recover() = controls { core { recover() } }
+    suspend fun demo() = action { core { createDemo() } }
+
+    internal suspend fun requestRecordingCancellation(expectedSessionId: String): Boolean = controls {
+        val wasRecording = core { prepareRecordingCancellation(expectedSessionId) }
+        deleteConfirmation = DeleteConfirmation.Recording(expectedSessionId, wasRecording)
     }
 
-    suspend fun pauseRecording() = controls {
-        recorder.pause()
-        freezeRecordingClock()
-        syncRecorderAfterControl()
+    internal fun requestCaptureDiscard(id: String) {
+        if (!busy && !controlBusy && current?.id == id) deleteConfirmation = DeleteConfirmation.Capture(id)
     }
 
-    suspend fun resumeRecording() = controls {
-        recorder.resume()
-        syncRecorderAfterControl()
-        check(recordPhase == "recording") { "audioFailed" }
-        mark = TimeSource.Monotonic.markNow()
+    internal fun requestTaskDeletion(id: String) {
+        if (!busy && snapshot.tasks.any { it.id == id }) deleteConfirmation = DeleteConfirmation.Task(id)
     }
 
-    private suspend fun finishRecording() {
-        try {
-            recorder.stopAndUpload()
-            mark = null
-            elapsed = 0
-            refresh()
-        } finally {
-            syncRecorderAfterControl()
-            pending = hasPendingRecording()
-        }
+    internal fun dismissDeletion(target: DeleteConfirmation) {
+        if (deleteConfirmation === target) deleteConfirmation = null
     }
 
-    suspend fun stopRecording() = controls { finishRecording() }
-
-    suspend fun recover() = controls {
-        try {
-            val typed = sessionRecorder
-            if (typed != null) {
-                val sources = typed.pendingRecordings()
-                require(sources.size == 1) { "Expected exactly one pending recording" }
-                typed.recoverPending(sources.single().id)
-            } else {
-                recorder.recoverPending()
-            }
-            refresh()
-        } finally {
-            pending = hasPendingRecording()
-        }
+    internal suspend fun keepDeletionTarget(target: DeleteConfirmation): Boolean {
+        if (deleteConfirmation !== target) return false
+        val kept = if (target is DeleteConfirmation.Recording && target.resumeOnKeep) {
+            controls { core { resumeRecording(target.id) } }
+        } else true
+        if (kept) dismissDeletion(target)
+        return kept
     }
 
-    suspend fun demo() = action {
-        check(!recording && current == null && !pending && playback.phase == "idle") { "currentExists" }
-        repository.createDemo()
-        refresh()
-        loadedAudioId = null
+    internal suspend fun confirmDeletion(target: DeleteConfirmation): Boolean {
+        if (deleteConfirmation !== target) return false
+        val deleted = target.execute(
+            cancelRecording = { id -> controls { core { cancelActiveRecording(id) } } },
+            discardCapture = { id -> discard(id) },
+            deleteTask = { id -> deleteTask(id) },
+        )
+        if (deleted) dismissDeletion(target)
+        return deleted
     }
+
+    internal suspend fun cancelRecordingInCore(): Boolean {
+        val target = deleteConfirmation as? DeleteConfirmation.Recording ?: return false
+        return confirmDeletion(target)
+    }
+
+    internal suspend fun seekPlaybackInCore(seconds: Double): Boolean = controls { core { seekPlayback(seconds) } }
 
     suspend fun retry() = action { current?.let { capture -> core { retry(capture.id) } } }
 
@@ -331,13 +267,9 @@ class StudioState(
     fun editTaskSchedule(id: String) { taskScheduleTarget = id }
     fun cancelTaskSchedule() { taskScheduleTarget = null }
 
-    suspend fun discard() = action {
-        val capture = current ?: return@action
-        if (loadedAudioId == capture.id) {
-            audio.stop(); loadedAudioId = null; playback = AudioTelemetry()
-        }
-        core { discard(capture.id) }
-        confirmDelete = false
+    suspend fun discard(captureId: String? = current?.id) = action {
+        val id = captureId ?: return@action
+        core { discard(id) }
         choosingProject = false
         taskScheduleTarget = null
         tab = Tab.HOME
@@ -348,7 +280,8 @@ class StudioState(
     fun openNote(id: String) {
         selectedNoteId = id
         editingNoteId = null
-        if (!recording && playback.phase == "idle") loadedAudioId = noteSources(id).firstOrNull()?.id
+        application.selectNoteAudio(id)
+        syncContent()
     }
 
     fun beginNoteEdit(id: String) { selectedNoteId = id; editingNoteId = id }
@@ -370,6 +303,12 @@ class StudioState(
         taskArchive = false
     }
 
+    internal suspend fun completeTaskDetailInCore(id: String, workingText: String): Boolean = action {
+        core { completeTaskFromDetail(id, workingText) }
+        selectedTaskId = null
+        taskArchive = false
+    }
+
     suspend fun deleteTask(id: String) = action {
         core { deleteTask(id) }
         selectedTaskId = null
@@ -381,30 +320,25 @@ class StudioState(
         core { moveNotePin(note.id, delta) }
 
     suspend fun requestListen(id: String) {
-        if (recording) { confirmListenId = id; return }
-        controls { startPlayback(id) }
+        controls {
+            if (core { requestPlayback(id) } == PlaybackRequestResult.NEEDS_RECORDING_FINISH) confirmListenId = id
+        }
     }
 
     suspend fun confirmStopAndListen() = controls {
         val id = confirmListenId ?: return@controls
-        finishRecording()
+        core { finishRecordingAndPlay(id) }
         confirmListenId = null
-        startPlayback(id)
     }
 
-    private suspend fun startPlayback(id: String, position: Double = 0.0) {
-        val recorderIdle = sessionRecorder?.sessionState()?.phase == RecorderPhase.IDLE ||
-            (sessionRecorder == null && recorder.phase() == "idle")
-        check(!recording && recorderIdle) { "stopRecording" }
-        audio.playCapture(id, false, position, playbackRate)
-        loadedAudioId = id
-        playback = audio.telemetry()
+    suspend fun play() = controls { core { play() } }
+    suspend fun pausePlayback() = controls { core { pausePlayback() } }
+    suspend fun resumePlayback() = controls { core { resumePlayback() } }
+    fun stopPlayback() {
+        try { application.stopPlayback() }
+        catch (e: Exception) { error = e.message?.takeIf { Copy.has(it) } ?: "audioFailed" }
+        finally { syncContent() }
     }
-
-    suspend fun play() = controls { loadedAudioId?.let { startPlayback(it) } }
-    suspend fun pausePlayback() = controls { audio.pause(); playback = audio.telemetry() }
-    suspend fun resumePlayback() = controls { check(!recording); audio.resume(); playback = audio.telemetry() }
-    fun stopPlayback() { audio.stop(); playback = AudioTelemetry() }
 
     suspend fun createProject(title: String, instruction: String) = action {
         val originCapture = creatingForCaptureId
@@ -423,50 +357,6 @@ class StudioState(
 
     suspend fun pin(p: Project) = action { core { pinProject(p.id, !p.pinned) } }
     suspend fun movePin(p: Project, delta: Int) = action { core { moveProjectPin(p.id, delta) } }
-
-    private suspend fun reconcileRecorderState() {
-        val typed = sessionRecorder
-        if (typed == null) {
-            val phase = recorder.phase()
-            if (recording && phase == "idle") {
-                freezeRecordingClock()
-                recordPhase = phase
-                recorderIssue = null
-                pending = recorder.hasPending()
-            }
-            return
-        }
-        val actual = typed.sessionState()
-        val nextPhase = actual.phase.legacyValue
-        if (recordPhase == "recording" && nextPhase != "recording") freezeRecordingClock()
-        recordPhase = nextPhase
-        recorderIssue = actual.issue
-        if (actual.phase == RecorderPhase.IDLE) pending = typed.pendingRecordings().isNotEmpty()
-    }
-
-    private fun syncRecorderAfterControl() {
-        val typed = sessionRecorder
-        if (typed != null) {
-            val actual = typed.sessionState()
-            recordPhase = actual.phase.legacyValue
-            recorderIssue = actual.issue
-        } else {
-            recordPhase = recorder.phase()
-            recorderIssue = null
-        }
-    }
-
-    private fun freezeRecordingClock() {
-        val activeMark = mark
-        if (activeMark != null) {
-            recordedMillis += activeMark.elapsedNow().inWholeMilliseconds
-            mark = null
-        }
-        elapsed = recordedMillis / 1000
-    }
-
-    private suspend fun hasPendingRecording(): Boolean =
-        sessionRecorder?.pendingRecordings()?.isNotEmpty() ?: recorder.hasPending()
 
     private suspend fun action(block: suspend () -> Unit): Boolean {
         val owner = actionScope
@@ -494,10 +384,9 @@ class StudioState(
 
     private suspend fun performControls(block: suspend () -> Unit): Boolean {
         if (controlBusy) return false
-        controlBusy = true
         return try { block(); true }
         catch (e: CancellationException) { throw e }
         catch (e: Exception) { error = e.message?.takeIf { Copy.has(it) } ?: "audioFailed"; false }
-        finally { controlBusy = false }
+        finally { syncContent() }
     }
 }

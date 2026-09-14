@@ -164,12 +164,13 @@ private fun RecordingHome(s: StudioState) {
 @Composable
 private fun ResultActions(s: StudioState) {
     val scope = rememberCoroutineScope()
+    val captureId = s.current?.id
     val canSave = s.text.isNotBlank() && !s.busy && s.current?.audioFinalized == true
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val horizontal = maxWidth >= 520.dp
         if (horizontal) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconAction(s.tr("cancelNote"), Glyph.DELETE, { s.confirmDelete = true })
+                IconAction(s.tr("cancelNote"), Glyph.DELETE, { captureId?.let { s.requestCaptureDiscard(it) } })
                 Action(
                     KashaCopy.text(s.language, "sendToNotes") ?: s.tr("send"),
                     { scope.launch { s.sendToNotes() } },
@@ -189,7 +190,7 @@ private fun ResultActions(s: StudioState) {
         } else {
             Column(Modifier.fillMaxWidth()) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconAction(s.tr("cancelNote"), Glyph.DELETE, { s.confirmDelete = true })
+                    IconAction(s.tr("cancelNote"), Glyph.DELETE, { captureId?.let { s.requestCaptureDiscard(it) } })
                     Spacer(Modifier.width(10.dp))
                     Action(
                         KashaCopy.text(s.language, "sendToNotes") ?: s.tr("send"),
@@ -216,6 +217,7 @@ private fun ResultActions(s: StudioState) {
 @Composable
 internal fun GlobalPlayer(s: StudioState) {
     val scope = rememberCoroutineScope(); val c = MaterialTheme.colorScheme; val loaded = s.loadedAudio
+    val recordingId = s.activeRecordingSessionId
     KashaPanel(Modifier.fillMaxWidth(), padding = 12.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             when {
@@ -262,7 +264,11 @@ internal fun GlobalPlayer(s: StudioState) {
             Spacer(Modifier.width(10.dp))
             when {
                 s.recording && !s.controlBusy -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    IconAction(s.tr("delete"), Glyph.DELETE, { s.confirmDelete = true })
+                    IconAction(s.tr("delete"), Glyph.DELETE, {
+                        val id = recordingId
+                        if (id == null) s.error = "audioFailed"
+                        else scope.launch { s.requestRecordingCancellation(id) }
+                    })
                     Action(s.tr("submitRecording"), { scope.launch { s.stopRecording() } }, primary = true, glyph = Glyph.SEND)
                 }
                 s.playback.phase != "idle" -> IconAction(s.tr("stop"), Glyph.STOP, s::stopPlayback)
