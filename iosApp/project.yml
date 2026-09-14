@@ -31,15 +31,26 @@ targets:
       - path: Sources
       - path: Assets.xcassets
         buildPhase: resources
+    preBuildScripts:
+      - name: Ресурсы Kasha UI
+        basedOnDependencyAnalysis: false
+        script: |
+          set -eu
+          export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+          export JAVA_HOME="${JAVA_HOME:-$(/usr/libexec/java_home -v 21)}"
+          cd "$SRCROOT/.."
+          gradle :composeApp:syncComposeResourcesForIos
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: ru.vrmn.kasha.test
-        PRODUCT_NAME: Kasha Test
+        PRODUCT_BUNDLE_IDENTIFIER: ru.vrmn.kasha
+        PRODUCT_NAME: Kasha
+        MARKETING_VERSION: 1.2.0
+        CURRENT_PROJECT_VERSION: 1
+        TARGETED_DEVICE_FAMILY: "1"
         INFOPLIST_FILE: Info.plist
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        CODE_SIGN_STYLE: Manual
-        CODE_SIGNING_ALLOWED: NO
-        CODE_SIGNING_REQUIRED: NO
+        ENABLE_USER_SCRIPT_SANDBOXING: "NO"
+        CODE_SIGN_STYLE: Automatic
     dependencies:
       - framework: ../composeApp/build/bin/iosArm64/releaseFramework/KashaShared.framework
         embed: false
