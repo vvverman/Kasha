@@ -2,6 +2,8 @@ package brain.runtime
 
 import brain.model.*
 import brain.runtime.ai.*
+import brain.runtime.system.JvmReminderGateway
+import brain.runtime.system.RuntimeReminderDelivery
 import brain.studio.*
 import io.ktor.http.*
 import io.ktor.http.content.*
@@ -63,11 +65,15 @@ fun main() {
     val webRoot = Path.of(System.getenv("KASHA_WEB_ROOT") ?: "composeApp/build/dist/wasmJs/productionExecutable")
     println("Kasha: http://127.0.0.1:8787 ; simulated AI=$simulated ; local-first=true")
     embeddedServer(Netty, host = "127.0.0.1", port = 8787) {
-        brainModule(store, legacy, webRoot, studio)
+        brainModule(store, legacy, webRoot, studio, JvmReminderGateway())
     }.start(wait = true)
 }
 
-fun Application.brainModule(store: FileBrainStore, processing: LocalProcessing, webRoot: Path? = null, studio: StudioRepository? = null) {
+fun Application.brainModule(store: FileBrainStore, processing: LocalProcessing, webRoot: Path? = null, studio: StudioRepository? = null, reminderGateway: ReminderGateway? = null) {
+    val reminderDelivery = if (studio != null && reminderGateway != null)
+        RuntimeReminderDelivery(studio::claimTaskReminders, reminderGateway) else null
+    // Один дочерний цикл на runtime, не по циклу на каждую браузерную вкладку.
+    if (reminderDelivery != null) launch { reminderDelivery.run() }
     install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true; encodeDefaults = true }) }
     install(StatusPages) {
         exception<LocalAccessDenied> { call, _ -> call.respond(HttpStatusCode.Forbidden, ApiError("Local access only")) }
@@ -86,6 +92,7 @@ fun Application.brainModule(store: FileBrainStore, processing: LocalProcessing, 
     }
     routing {
         get("/api/health") { call.respond(mapOf("ok" to true, "localOnly" to true)) }
+        get("/api/reminders/status") { call.respond(reminderDelivery?.status() ?: ReminderDeliveryStatus(false)) }
         get("/api/snapshot") { call.respond(store.snapshot()) }
         get("/api/preferences") { call.respond(studio?.preferences() ?: Preferences()) }
         put("/api/preferences") { check(studio != null); studio.savePreferences(call.receive<Preferences>()); call.respond(studio.preferences()) }
@@ -98,6 +105,7 @@ fun Application.brainModule(store: FileBrainStore, processing: LocalProcessing, 
         post("/api/pins/order") { call.respond(store.orderPins(call.receive<PinOrderRequest>().ids)) }
         post("/api/projects/order") { call.respond(store.orderProjects(call.receive<OrderRequest>().ids)) }
         post("/api/projects/{id}/notes/order") { call.respond(store.orderNotes(call.parameters["id"]!!, call.receive<OrderRequest>().ids)) }
+        post("/api/projects/{id}/notes/pins/order") { call.respond(store.orderNotePins(call.parameters["id"]!!, call.receive<OrderRequest>().ids)) }
 
         put("/api/notes/{id}") { call.respond(store.updateNote(call.parameters["id"]!!, call.receive<NoteUpdate>())) }
         post("/api/notes/{id}/pin") { call.respond(store.pinNote(call.parameters["id"]!!, call.receive<PinRequest>().pinned)) }

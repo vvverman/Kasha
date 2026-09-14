@@ -66,13 +66,16 @@ class WebBrainRepository(private val baseUrl: String) : StudioRepository, AiPlat
     override suspend fun distributeTask(id: String, request: TaskDistributionRequest): Task = client.post("$baseUrl/api/captures/$id/task") { contentType(ContentType.Application.Json); setBody(request) }.body()
     override suspend fun updateNote(id: String, update: NoteUpdate): Note = client.put("$baseUrl/api/notes/$id") { contentType(ContentType.Application.Json); setBody(update) }.body()
     override suspend fun pinNote(id: String, pinned: Boolean): Note = client.post("$baseUrl/api/notes/$id/pin") { contentType(ContentType.Application.Json); setBody(PinRequest(pinned)) }.body()
+    override suspend fun orderNotePins(projectId: String, ids: List<String>) { client.post("$baseUrl/api/projects/$projectId/notes/pins/order") { contentType(ContentType.Application.Json); setBody(OrderRequest(ids)) } }
     override suspend fun orderNotes(projectId: String, ids: List<String>) { client.post("$baseUrl/api/projects/$projectId/notes/order") { contentType(ContentType.Application.Json); setBody(OrderRequest(ids)) } }
     override suspend fun updateTask(id: String, update: TaskUpdate): Task = client.put("$baseUrl/api/tasks/$id") { contentType(ContentType.Application.Json); setBody(update) }.body()
     override suspend fun rescheduleTask(id: String, update: TaskScheduleUpdate): Task = client.put("$baseUrl/api/tasks/$id/schedule") { contentType(ContentType.Application.Json); setBody(update) }.body()
     override suspend fun completeTask(id: String): Task = client.post("$baseUrl/api/tasks/$id/complete").body()
     override suspend fun deleteTask(id: String) { client.delete("$baseUrl/api/tasks/$id") }
     override suspend fun orderTasks(ids: List<String>) { client.post("$baseUrl/api/tasks/order") { contentType(ContentType.Application.Json); setBody(OrderRequest(ids)) } }
-    override suspend fun claimTaskReminders(now: Long, zoneId: String): List<Task> = emptyList()
+    // Доставкой владеет RuntimeReminderDelivery. Случайный второй consumer не получает фиктивный успех.
+    override suspend fun claimTaskReminders(now: Long, zoneId: String): List<Task> =
+        throw UnsupportedOperationException("Reminder scheduling belongs to the local runtime")
     override suspend fun reprocess(id: String): Capture = client.post("$baseUrl/api/captures/$id/process").body()
     override suspend fun tidy(id: String): Capture = client.post("$baseUrl/api/captures/$id/tidy").body()
     override suspend fun rank(id: String): Capture = client.post("$baseUrl/api/captures/$id/rank").body()

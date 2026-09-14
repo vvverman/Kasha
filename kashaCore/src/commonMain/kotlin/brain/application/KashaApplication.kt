@@ -335,6 +335,18 @@ class KashaApplication(
                 launch {
                     while (isActive) {
                         delay(9750)
+                        try {
+                            val managed = reminders.deliveryStatus()
+                            if (managed != null) {
+                                mutableState.update { it.copy(reminderDeliveryFailed = managed.failed || !managed.available) }
+                                continue
+                            }
+                        } catch (e: CancellationException) { throw e }
+                        catch (_: Exception) {
+                            mutableState.update { it.copy(reminderDeliveryFailed = true) }
+                            onFailure(ApplicationPollFailure.REMINDERS)
+                            continue
+                        }
                         if (!reminders.available) continue
                         var delivered = false
                         try {
