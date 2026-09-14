@@ -18,7 +18,7 @@ internal class IosReminder : ReminderGateway {
         // Kasha использует локальные notifications только для задач, поэтому полная
         // пересборка pending-очереди проще и надёжнее частичного diff через ObjC NSArray.
         center.removeAllPendingNotificationRequests()
-        tasks.filterNot { it.completed }.forEach(::schedule)
+        tasks.filter { !it.completed && it.nextReminderAt > 0 }.forEach(::schedule)
     }
 
     private fun schedule(task: Task) {
