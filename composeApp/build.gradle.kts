@@ -71,6 +71,10 @@ kotlin {
         }
         iosMain.dependencies {
             implementation("com.russhwolf:multiplatform-settings:1.3.0")
+            implementation(libs.ktor.client.core)
+            implementation(libs.ktor.client.content.negotiation)
+            implementation(libs.ktor.serialization.kotlinx.json)
+            implementation("io.ktor:ktor-client-darwin:3.5.2")
         }
         wasmJsMain.dependencies {
             implementation(libs.ktor.client.core)
