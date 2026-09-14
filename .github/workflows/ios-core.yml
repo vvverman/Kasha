@@ -33,8 +33,10 @@ jobs:
           gradle \
             :kashaCore:compileKotlinIosArm64 \
             :kashaCore:compileKotlinIosSimulatorArm64 \
+            :kashaCore:iosSimulatorArm64Test \
             :aiCatalog:compileKotlinIosArm64 \
             :aiCatalog:compileKotlinIosSimulatorArm64 \
+            :aiCatalog:iosSimulatorArm64Test \
             :composeApp:compileKotlinIosArm64 \
             :composeApp:compileKotlinIosSimulatorArm64 \
             :composeApp:compileTestKotlinIosArm64 \
@@ -45,4 +47,8 @@ jobs:
         with:
           name: kasha-ios-shared-${{ github.sha }}
           retention-days: 14
-          path: ios-shared.log
+          path: |
+            ios-shared.log
+            kashaCore/build/test-results/
+            aiCatalog/build/test-results/
+            composeApp/build/test-results/
