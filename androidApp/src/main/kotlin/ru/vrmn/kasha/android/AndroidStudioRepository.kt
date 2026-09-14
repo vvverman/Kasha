@@ -4,6 +4,7 @@ import brain.domain.BrainData
 import brain.domain.CaptureWorkflow
 import brain.domain.NoteText
 import brain.domain.migrated
+import brain.domain.orderNotePins
 import brain.model.*
 import brain.studio.Intelligence
 import brain.studio.Languages
@@ -82,8 +83,9 @@ internal class AndroidStudioRepository(
     override suspend fun preferences(): Preferences = mutex.withLock { prefs }
 
     override suspend fun savePreferences(value: Preferences) = mutex.withLock {
-        prefs = value.validated()
-        storage.write(storage.preferencesFile, json.encodeToString(prefs))
+        val next = value.validated()
+        storage.write(storage.preferencesFile, json.encodeToString(next))
+        prefs = next
     }
 
     override suspend fun createProject(draft: ProjectDraft): Project = mutex.withLock {
@@ -134,6 +136,10 @@ internal class AndroidStudioRepository(
 
     override suspend fun orderNotes(projectId: String, ids: List<String>) = mutex.withLock {
         commit(data.orderNotes(projectId, ids))
+    }
+
+    override suspend fun orderNotePins(projectId: String, ids: List<String>) = mutex.withLock {
+        commit(data.orderNotePins(projectId, ids))
     }
 
     override suspend fun updateTask(id: String, update: TaskUpdate): Task = mutex.withLock {

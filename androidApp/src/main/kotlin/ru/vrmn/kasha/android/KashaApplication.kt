@@ -2,17 +2,15 @@ package ru.vrmn.kasha.android
 
 import android.app.Application
 import brain.studio.StudioState
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import java.io.File
 import java.util.Locale
 
-/**
- * Process-scoped Android composition root. Он переживает пересоздание Activity и не
- * создаёт второй recorder/repository при повороте экрана; после убийства процесса
- * состояние восстанавливается из app-private storage.
- */
+/** Один runtime на процесс; Activity не владеет записью или воспроизведением. */
 class KashaApplication : Application() {
     internal val platform by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         AndroidPlatformRuntime(this)
@@ -20,20 +18,39 @@ class KashaApplication : Application() {
 }
 
 internal class AndroidPlatformRuntime(application: Application) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val systemLanguage = Locale.getDefault().toLanguageTag()
-
-    val repository = AndroidStudioRepository(
+    private val data = AndroidStudioRepository(
         root = File(application.filesDir, "Kasha"),
         intelligence = AndroidUnavailableIntelligence,
         systemLanguage = systemLanguage,
     )
-    val recorder = AndroidRecorder(application, repository, scope)
-    val audio = AndroidUnavailableAudio
-    val state = StudioState(
-        repository = repository,
-        recorder = recorder,
-        audio = audio,
-        systemLanguage = systemLanguage,
+    val permissions = AndroidPermissions(application)
+    private val nativeRecorder = AndroidRecorder(application, data, scope)
+    val audio = AndroidAudio(application, data, scope,
+        recorderPhase = { nativeRecorder.sessionState().phase },
+        foreground = { permissions.foreground },
     )
+    val recorder = AndroidPermissionRecorder(nativeRecorder, permissions, data, audio)
+    val reminders = AndroidReminders(application, data, permissions)
+    val repository = AndroidSystemRepository(data, reminders, permissions)
+    // Не заявляет работающее облако: этот системный адаптер доступен инфраструктуре optional AI.
+    val secrets by lazy { AndroidSecretStore(application) }
+    val state = StudioState(repository, recorder, audio, systemLanguage, reminders)
+
+    fun onForeground() {
+        scope.launch {
+            try {
+                reminders.reconcile()
+                if (state.initialized) state.refresh()
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { state.error = "actionFailed" }
+        }
+        // launch/start/resume намеренно отсутствуют: ими управляет общий StudioState.
+    }
+
+    fun onBackground() {
+        scope.launch { state.autosave() }
+        // Переключение вкладок, поворот и background не закрывают системную аудиосессию.
+    }
 }

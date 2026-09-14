@@ -1,7 +1,7 @@
 name: Android shell verification
 on:
   push:
-    branches: [platform/android-production, platform/android-recorder-contract]
+    branches: [main, platform/android-production, platform/android-recorder-contract, platform/android-main-integration]
     paths:
       - 'androidApp/**'
       - 'composeApp/**'
@@ -45,13 +45,41 @@ jobs:
         run: |
           python -m pip install fonttools==4.59.2
           python scripts/prepare-fonts.py
-      - name: Test Android adapters and assemble debug shell
+      - name: Android adapter tests, APK and AAB
         run: |
           set -o pipefail
-          gradle :androidApp:testDebugUnitTest :androidApp:assembleDebug 2>&1 | tee android-build.log
+          gradle :androidApp:testDebugUnitTest :androidApp:assembleDebug :androidApp:assembleRelease :androidApp:bundleRelease 2>&1 | tee android-build.log
+          printf 'Commit: %s\nRelease signing: unsigned in CI\n' "$GITHUB_SHA" > android-artifact-info.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: android-shell-log-${{ github.sha }}
           retention-days: 14
           path: android-build.log
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: Kasha-android-debug-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            androidApp/build/outputs/apk/debug/*.apk
+            android-artifact-info.txt
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: Kasha-android-release-unsigned-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            androidApp/build/outputs/apk/release/*.apk
+            androidApp/build/outputs/bundle/release/*.aab
+            android-artifact-info.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Kasha-android-test-reports-${{ github.sha }}
+          retention-days: 14
+          path: |
+            androidApp/build/reports/tests/
+            androidApp/build/test-results/
