@@ -1,7 +1,7 @@
 /* Только платформенный адаптер: микрофон, журнал IndexedDB, HTMLAudio. UI и правила общие с macOS. */
 (() => {
   'use strict';
-  let recorder=null,stream=null,player=null,writes=Promise.resolve(),stopped=null,context=null,analyser=null;
+  let recorder=null,stream=null,player=null,playerLoading=false,writes=Promise.resolve(),stopped=null,context=null,analyser=null;
   let generation=0,openPromise;
   const db=()=>openPromise ||= new Promise((resolve,reject)=>{
     const r=indexedDB.open('kasha-audio-v1',1);
@@ -50,7 +50,7 @@
     await removeSession(saved.id);
     return text;
   };
-  const stopAudio=()=>{generation++;player?.pause();player=null;};
+  const stopAudio=()=>{generation++;playerLoading=false;player?.pause();player=null;};
   globalThis.kashaPlatform={
     baseUrl:()=>location.port==='8080'?'http://127.0.0.1:8787':location.origin,
     consent:async()=>{
@@ -128,18 +128,27 @@
     play:async(url,from,rate)=>{
       try{
         if(recorder&&recorder.state!=='inactive')throw Error('Stop recording first');
-        stopAudio();const ownGeneration=generation;const own=new Audio();player=own;own.preservesPitch=true;own.playbackRate=rate;
+        stopAudio();const ownGeneration=generation;const own=new Audio();player=own;playerLoading=true;own.preservesPitch=true;own.playbackRate=rate;
         await new Promise((resolve,reject)=>{
           const timeout=setTimeout(()=>reject(Error('Audio load timeout')),15000);
           own.onloadedmetadata=()=>{clearTimeout(timeout);resolve();};own.onerror=()=>{clearTimeout(timeout);reject(Error('Audio unavailable'));};own.src=url;
         });
         if(generation!==ownGeneration)throw Error('Playback cancelled');
-        own.currentTime=Math.max(0,Math.min(Number.isFinite(own.duration)?own.duration:from,from));await own.play();return 'ok';
-      }catch(e){return failure(e);}
+        own.currentTime=Math.max(0,Math.min(Number.isFinite(own.duration)?own.duration:from,from));await own.play();playerLoading=false;return 'ok';
+      }catch(e){playerLoading=false;return failure(e);}
     },
     pauseAudio:()=>{player?.pause();return 'ok';},
     resumeAudio:async()=>{try{if(recorder&&recorder.state!=='inactive')throw Error('Stop recording first');await player?.play();return 'ok';}catch(e){return failure(e);}},
-    audioState:()=>({phase:!player||player.ended?'idle':player.paused?'paused':'playing',position:player?.currentTime||0,duration:Number.isFinite(player?.duration)?player.duration:0,level:0}),
+    seekAudio:seconds=>{
+      try{
+        if(!player||playerLoading||player.ended)throw Error('Playback unavailable');
+        const duration=Number.isFinite(player.duration)?player.duration:0;
+        if(!Number.isFinite(seconds)||duration<=0)throw Error('Playback is not seekable');
+        player.currentTime=Math.max(0,Math.min(duration,seconds));
+        return 'ok';
+      }catch(e){return failure(e);}
+    },
+    audioState:()=>({phase:playerLoading?'loading':!player||player.ended?'idle':player.paused?'paused':'playing',position:player?.currentTime||0,duration:Number.isFinite(player?.duration)?player.duration:0,level:0}),
     stopAudio,
   };
   addEventListener('beforeunload',event=>{if(recorder&&recorder.state!=='inactive'){event.preventDefault();event.returnValue='';}});
