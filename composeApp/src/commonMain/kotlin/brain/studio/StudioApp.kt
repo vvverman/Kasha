@@ -128,29 +128,21 @@ private fun MobileShell(state: StudioState, width: Dp) {
             GlobalPlayer(state)
             Spacer(Modifier.height(8.dp))
         }
+        val navLayout = if (gridNav) KashaNavigationLayout.Grid else KashaNavigationLayout.Bottom
         KashaNavigationSurface(
-            if (gridNav) KashaNavigationLayout.Grid else KashaNavigationLayout.Bottom,
+            navLayout,
             Modifier.fillMaxWidth().widthIn(max = 560.dp).padding(bottom = 8.dp),
         ) {
-            if (gridNav) {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    navEntries.chunked(2).forEach { row ->
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            row.forEach { entry ->
-                                KashaNavigationItem(
-                                    navLabel(state, entry.key), entry.glyph, state.tab == entry.tab,
-                                    { state.navigate(entry.tab) }, Modifier.weight(1f), KashaNavigationLayout.Grid,
-                                )
-                            }
-                        }
-                    }
-                }
-            } else {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    navEntries.forEach { entry ->
+            KashaAdaptiveNavigationItems(gridNav, Modifier.fillMaxWidth()) {
+                navEntries.forEach { entry ->
+                    key(entry.tab) {
                         KashaNavigationItem(
-                            navLabel(state, entry.key), entry.glyph, state.tab == entry.tab,
-                            { state.navigate(entry.tab) }, Modifier.weight(1f), KashaNavigationLayout.Bottom,
+                            navLabel(state, entry.key),
+                            entry.glyph,
+                            state.tab == entry.tab,
+                            { state.navigate(entry.tab) },
+                            Modifier,
+                            navLayout,
                         )
                     }
                 }
