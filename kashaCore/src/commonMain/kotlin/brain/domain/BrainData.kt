@@ -94,6 +94,7 @@ data class BrainData(
 
     fun updateTask(id: String, update: TaskUpdate, now: Long): BrainData {
         val old = tasks.firstOrNull { it.id == id } ?: error("Задача не найдена")
+        require(!old.completed) { "Выполненная задача уже в архиве" }
         require(update.text.isNotBlank()) { "Введите текст задачи" }
         val changed = old.copy(text = update.text.trimEnd(), updatedAt = now)
         return copy(tasks = tasks.map { if (it.id == id) changed else it })
