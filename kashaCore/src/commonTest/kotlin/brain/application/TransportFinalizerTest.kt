@@ -83,4 +83,21 @@ class TransportFinalizerTest {
         assertSame(cause, completion)
     }
 
+    @Test fun recoveredCopyOfOriginalFailureDoesNotCreateCauseCycle() = runTest {
+        val cause = CancellationException("original")
+        val recovered = CancellationException("original").also { it.initCause(cause) }
+        reconcileTransportFinalizer(cause) { throw recovered }
+        assertTrue(cause.suppressedExceptions.isEmpty())
+        assertSame(cause, recovered.cause)
+    }
+
+    @Test fun separateCleanupFailureRetainsItsDiagnosticCause() = runTest {
+        val cause = CancellationException("original")
+        val diskFailure = IllegalStateException("disk unavailable")
+        val cleanup = IllegalStateException("read failed", diskFailure)
+        reconcileTransportFinalizer(cause) { delay(1); throw cleanup }
+        assertSame(cleanup, cause.suppressedExceptions.single())
+        assertSame(diskFailure, cause.suppressedExceptions.single().cause)
+    }
+
 }
