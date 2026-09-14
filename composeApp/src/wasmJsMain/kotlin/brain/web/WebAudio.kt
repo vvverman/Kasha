@@ -22,8 +22,12 @@ class WebAudioGateway(private val baseUrl:String):PlaybackSessionGateway {
     override suspend fun resume(){checked(resumeAudio().await())}
     override fun playbackState():PlaybackSessionState{
         val legacy=Json.decodeFromString<AudioTelemetry>(audioState().toString())
+        val mapped=PlaybackPhase.fromLegacy(legacy.phase)
+        val phase=if(sourceId==null&&mapped in setOf(PlaybackPhase.LOADING,PlaybackPhase.PLAYING,PlaybackPhase.PAUSED)) {
+            PlaybackPhase.UNKNOWN
+        } else mapped
         return PlaybackSessionState(
-            phase=PlaybackPhase.fromLegacy(legacy.phase),
+            phase=phase,
             sourceId=sourceId,
             positionSeconds=legacy.position,
             durationSeconds=legacy.duration,
