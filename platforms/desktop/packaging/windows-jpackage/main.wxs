@@ -33,6 +33,7 @@
     Id="$(var.JpProductCode)"
     Name="$(var.JpAppName)"
     Language="$(var.JpProductLanguage)"
+    Codepage="65001"
     Version="$(var.JpAppVersion)"
     Manufacturer="$(var.JpAppVendor)"
     UpgradeCode="$(var.JpProductUpgradeCode)">
