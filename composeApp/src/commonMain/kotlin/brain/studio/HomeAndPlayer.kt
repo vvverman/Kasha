@@ -7,6 +7,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -238,7 +239,17 @@ private fun ResultActions(s: StudioState) {
 internal fun GlobalPlayer(s: StudioState) {
     val scope = rememberCoroutineScope(); val c = MaterialTheme.colorScheme; val loaded = s.loadedAudio
     val recordingId = s.activeRecordingSessionId
-    if (s.tab == Tab.HOME && !s.recording && s.current == null && !s.pending && loaded == null && !s.controlBusy) return
+    val captureHome = s.tab == Tab.HOME && s.taskScheduleTarget == null &&
+        !s.choosingProject && s.editingProjectId == null
+    when (captureTransportPresentation(captureHome, s.recording, s.current != null,
+        loaded != null || s.playback.phase != "idle", s.pending, s.controlBusy)) {
+        CaptureTransportPresentation.HIDDEN -> return
+        CaptureTransportPresentation.EXPANDED_RECORDING -> {
+            RecordingControls(s)
+            return
+        }
+        CaptureTransportPresentation.COMPACT -> Unit
+    }
     KashaPanel(Modifier.fillMaxWidth(), padding = 12.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             when {
@@ -279,7 +290,8 @@ internal fun GlobalPlayer(s: StudioState) {
                         Text(clock(duration.toLong()), style = MaterialTheme.typography.labelSmall, color = c.onSurfaceVariant)
                     }
                 } else {
-                    KashaWaveform(emptyList(), Modifier.fillMaxWidth().height(24.dp))
+                    Text(s.tr(if (s.pending) "recoveryNotice" else "preparing"),
+                        style = MaterialTheme.typography.bodySmall, color = c.onSurfaceVariant)
                 }
             }
             Spacer(Modifier.width(10.dp))
@@ -306,4 +318,55 @@ internal fun recordingStatusKey(phase: String): String = when (phase) {
     "interrupted" -> "captureInterrupted"
     "finalizing" -> "captureFinalizing"
     else -> "audioFailed"
+}
+
+/** На Главной волна уже показана выше: здесь только управление той же сессией. */
+@Composable
+private fun RecordingControls(s: StudioState) {
+    val scope = rememberCoroutineScope()
+    val id = s.activeRecordingSessionId
+    val enabled = !s.controlBusy && s.recordPhase != "finalizing"
+    val pause = s.recordPhase == "recording"
+    val primaryLabel = s.tr(if (pause) "pause" else "resume")
+    val primaryAction: () -> Unit = {
+        scope.launch { if (pause) s.pauseRecording() else s.resumeRecording() }
+    }
+    val cancel: () -> Unit = {
+        id?.let { scope.launch { s.requestRecordingCancellation(it) } }
+    }
+    val finish: () -> Unit = { scope.launch { s.stopRecording() } }
+    if (!enabled) {
+        Row(Modifier.fillMaxWidth().padding(vertical = 12.dp),
+            horizontalArrangement = Arrangement.Center) {
+            KashaProcessingRing(Modifier.size(48.dp))
+        }
+        return
+    }
+    if (LocalDensity.current.fontScale > 1.3f) {
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Action(primaryLabel, primaryAction, primary = true,
+                enabled = pause || s.recorderCanResume, modifier = Modifier.fillMaxWidth())
+            Action(s.tr("submitRecording"), finish, modifier = Modifier.fillMaxWidth())
+            Action(s.tr("delete"), cancel, enabled = id != null, modifier = Modifier.fillMaxWidth())
+        }
+    } else {
+        Row(Modifier.fillMaxWidth().padding(vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            RecordingControl(s.tr("delete"), Glyph.DELETE, cancel, Modifier.weight(1f), enabled = id != null)
+            RecordingControl(primaryLabel, if (pause) Glyph.PAUSE else Glyph.RECORD, primaryAction,
+                Modifier.weight(1f), primary = true, enabled = pause || s.recorderCanResume)
+            RecordingControl(s.tr("submitRecording"), Glyph.STOP, finish, Modifier.weight(1f))
+        }
+    }
+}
+
+@Composable
+private fun RecordingControl(label: String, glyph: Glyph, onClick: () -> Unit,
+    modifier: Modifier, primary: Boolean = false, enabled: Boolean = true) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        KashaIconButton(label, glyph, onClick,
+            Modifier.size(if (primary) 80.dp else 48.dp, 56.dp), filled = primary, enabled = enabled)
+        Spacer(Modifier.height(6.dp))
+        Text(label, style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
+    }
 }

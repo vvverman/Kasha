@@ -57,7 +57,9 @@ fun StudioApp(state: StudioState) {
             contentColor = colors.onSurface,
         ) {
             if (!state.initialized) {
-                KashaSplash()
+                InitializationContent(state) {
+                    scope.launch { state.error = null; state.launch() }
+                }
                 return@Surface
             }
             BoxWithConstraints(
