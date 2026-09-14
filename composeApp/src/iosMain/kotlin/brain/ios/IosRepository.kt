@@ -1,6 +1,7 @@
 package brain.ios
 
 import brain.domain.BrainData
+import brain.domain.CaptureWorkflow
 import brain.domain.NoteText
 import brain.domain.orderNotePins
 import brain.model.*
@@ -34,6 +35,7 @@ internal class IosRepository(
     private val intelligence: Intelligence = cloudAi
         ?.let { IosRoutedIntelligence(localIntelligence, it) { prefs } }
         ?: localIntelligence
+    private val workflow = CaptureWorkflow(intelligence)
 
     private fun id(): String = NSUUID().UUIDString.lowercase()
     private fun now(): Long = Clock.System.now().toEpochMilliseconds()
@@ -188,6 +190,7 @@ internal class IosRepository(
         updateCapture(id) { it.copy(status = CaptureStatus.TRANSCRIBING, message = "") }
         return try {
             val text = intelligence.transcribe(path, language(), prefs.demoExample)
+            require(text.isNotBlank()) { "emptyTranscription" }
             updateCapture(id) {
                 it.copy(
                     title = NoteText.title(text),
@@ -211,34 +214,13 @@ internal class IosRepository(
     }
 
     override suspend fun tidy(id: String): Capture {
-        val current = capture(id)
-        val text = intelligence.tidy(current.textToSave, language())
-        val externalText = AiCatalog.cloudProviderId(prefs.ai.text) != null
-        return updateCapture(id) {
-            it.copy(
-                title = NoteText.title(text),
-                preparedText = text,
-                draftEdited = true,
-                llmApplied = externalText,
-                rankingApplied = false,
-                relevance = emptyMap(),
-                status = CaptureStatus.READY,
-                simulated = false,
-            )
-        }
+        val changed = workflow.tidy(capture(id), language())
+        return updateCapture(id) { changed }
     }
 
     override suspend fun rank(id: String): Capture {
-        val current = capture(id)
-        val scores = intelligence.rank(current.textToSave, data.projects, language())
-        return updateCapture(id) {
-            it.copy(
-                title = NoteText.title(it.textToSave),
-                relevance = scores,
-                rankingApplied = true,
-                simulated = false,
-            )
-        }
+        val changed = workflow.rank(capture(id), data.projects, language())
+        return updateCapture(id) { changed }
     }
 
     override suspend fun discard(id: String) {

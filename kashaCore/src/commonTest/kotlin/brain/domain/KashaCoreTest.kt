@@ -149,7 +149,7 @@ class KashaCoreTest {
     }
 
     @Test
-    fun invalidRelevanceStillRejected() = runTest {
+    fun routingFailureDoesNotLoseCapture() = runTest {
         val projects = listOf(Project("p", "Kasha", createdAt = 1, updatedAt = 1))
         val capture = Capture(
             id = "c",
@@ -157,15 +157,25 @@ class KashaCoreTest {
             transcript = "Проверить сохранение локальной заметки",
             preparedText = "Проверить сохранение локальной заметки",
             status = CaptureStatus.COMPACTING,
+            audioFileName = "audio/c/saved.m4a",
+            audioFinalized = true,
         )
-        val invalidRank = object : Intelligence {
+        val failedRank = object : Intelligence {
             override val simulated = false
             override suspend fun transcribe(file: String, language: String, example: String) = ""
             override suspend fun title(text: String, language: String) = "не используется"
             override suspend fun tidy(text: String, language: String) = text
-            override suspend fun rank(text: String, projects: List<Project>, language: String) = mapOf("p" to 9)
+            override suspend fun rank(text: String, projects: List<Project>, language: String): Map<String, Int> = error("routing unavailable")
         }
-        assertFails { CaptureWorkflow(invalidRank).finish(capture, projects, "ru") }
+
+        val result = CaptureWorkflow(failedRank).finish(capture, projects, "ru")
+        assertEquals(CaptureStatus.READY, result.status)
+        assertFalse(result.rankingApplied)
+        assertTrue(result.relevance.isEmpty())
+        assertEquals(capture.transcript, result.transcript)
+        assertEquals(capture.preparedText, result.preparedText)
+        assertEquals(capture.audioFileName, result.audioFileName)
+        assertTrue(result.audioFinalized)
     }
 
     @Test
