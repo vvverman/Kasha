@@ -77,6 +77,7 @@ with sync_playwright() as pw:
             page.wait_for_timeout(500)
             root = page.locator('#webApp').bounding_box()
             assert root and abs(root['width'] - width) <= 1, (name, root)
+            assert abs(root['height'] - height) <= 1, (name, root)
 
             boxes = []
             for label in NAV:
@@ -108,6 +109,7 @@ with sync_playwright() as pw:
             'passed': True,
             'viewports': viewport_results,
             'checks': [
+                'web root follows current viewport width and height',
                 '320/390/844/1024/1280 without clipped navigation',
                 'navigation targets are at least 44x44',
                 'no horizontal page scroll',
