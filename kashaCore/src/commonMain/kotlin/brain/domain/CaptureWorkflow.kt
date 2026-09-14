@@ -4,6 +4,7 @@ import brain.model.Capture
 import brain.model.CaptureStatus
 import brain.model.Project
 import brain.studio.Intelligence
+import kotlin.coroutines.cancellation.CancellationException
 import kotlin.math.max
 
 /**
@@ -14,6 +15,11 @@ import kotlin.math.max
  */
 class CaptureWorkflow(private val intelligence: Intelligence) {
 
+    private data class RankingResult(
+        val scores: Map<String, Int>,
+        val applied: Boolean,
+    )
+
     private fun validatedScores(projects: List<Project>, scores: Map<String, Int>): Map<String, Int> {
         val expected = projects.map { it.id }.toSet()
         require(scores.keys == expected) { "Модель вернула оценки не для того набора проектов" }
@@ -21,14 +27,25 @@ class CaptureWorkflow(private val intelligence: Intelligence) {
         return scores
     }
 
+    private suspend fun rankOrFallback(text: String, projects: List<Project>, language: String): RankingResult = try {
+        RankingResult(
+            scores = validatedScores(projects, intelligence.rank(text, projects, language)),
+            applied = true,
+        )
+    } catch (error: CancellationException) {
+        throw error
+    } catch (_: Exception) {
+        RankingResult(scores = emptyMap(), applied = false)
+    }
+
     suspend fun finish(capture: Capture, projects: List<Project>, language: String): Capture {
         require(capture.isInbox)
         val original = capture.textToSave
-        val scores = validatedScores(projects, intelligence.rank(original, projects, language))
+        val ranking = rankOrFallback(original, projects, language)
         return capture.copy(
             title = NoteText.title(original),
-            relevance = scores,
-            rankingApplied = true,
+            relevance = ranking.scores,
+            rankingApplied = ranking.applied,
             status = CaptureStatus.READY,
             message = "",
             simulated = intelligence.simulated,
@@ -58,11 +75,11 @@ class CaptureWorkflow(private val intelligence: Intelligence) {
 
     suspend fun rank(capture: Capture, projects: List<Project>, language: String): Capture {
         require(capture.isInbox && !capture.status.isWorking)
-        val scores = validatedScores(projects, intelligence.rank(capture.textToSave, projects, language))
+        val ranking = rankOrFallback(capture.textToSave, projects, language)
         return capture.copy(
             title = NoteText.title(capture.textToSave),
-            relevance = scores,
-            rankingApplied = true,
+            relevance = ranking.scores,
+            rankingApplied = ranking.applied,
             simulated = intelligence.simulated,
         )
     }
