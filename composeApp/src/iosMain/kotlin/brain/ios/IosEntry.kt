@@ -19,7 +19,10 @@ fun MainViewController() = ComposeUIViewController {
     val scope = rememberCoroutineScope()
     val localIntelligence = remember { IosOnDeviceIntelligence() }
     val cloudAi = remember { IosCloudAiGateway() }
-    val baseRepository = remember(localIntelligence, cloudAi) { IosRepository(localIntelligence, cloudAi) }
+    val systemLanguage = remember { iosSystemLanguage() }
+    val baseRepository = remember(localIntelligence, cloudAi, systemLanguage) {
+        IosRepository(localIntelligence, cloudAi, systemLanguage)
+    }
     val reminders = remember { IosReminder() }
     val deviceCapabilities = remember { IosDeviceCapabilities() }
     val repository = remember(baseRepository, reminders, deviceCapabilities, cloudAi) {
@@ -33,7 +36,7 @@ fun MainViewController() = ComposeUIViewController {
             recorder = recorder,
             audio = audio,
             reminders = reminders,
-            systemLanguage = "ru-RU",
+            systemLanguage = systemLanguage,
         )
     }
 

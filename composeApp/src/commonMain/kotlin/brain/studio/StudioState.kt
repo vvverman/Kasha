@@ -151,10 +151,28 @@ class StudioState(
         pollFailureMessageKey(failure)?.let { error = it }
     }
 
-    suspend fun savePreferences(value: Preferences) = action { core { savePreferences(value) } }
-    suspend fun setProjectSort(mode: SortMode) = action { core { setProjectSort(mode) } }
-    suspend fun setNoteSort(mode: SortMode) = action { core { setNoteSort(mode) } }
-    suspend fun setTaskSort(mode: SortMode) = action { core { setTaskSort(mode) } }
+    suspend fun savePreferences(value: Preferences) = updatePreferences { value }
+
+    /** Изменения полей ставятся в очередь Core, а не теряются из-за занятого экрана. */
+    suspend fun updatePreferences(change: (Preferences) -> Preferences): Boolean {
+        val owner = actionScope
+        return if (owner == null) persistPreferenceChange(change)
+        else owner.async { persistPreferenceChange(change) }.await()
+    }
+
+    private suspend fun persistPreferenceChange(change: (Preferences) -> Preferences): Boolean = try {
+        core { updatePreferences(change) }
+        true
+    } catch (e: CancellationException) {
+        throw e
+    } catch (_: Exception) {
+        error = "saveFailed"
+        false
+    }
+
+    suspend fun setProjectSort(mode: SortMode) = updatePreferences { it.copy(projectSort = mode) }
+    suspend fun setNoteSort(mode: SortMode) = updatePreferences { it.copy(noteSort = mode) }
+    suspend fun setTaskSort(mode: SortMode) = updatePreferences { it.copy(taskSort = mode) }
 
     suspend fun reorderProjects(ids: List<String>) = action { core { reorderProjects(ids) } }
     suspend fun reorderNotes(projectId: String, ids: List<String>) = action { core { reorderNotes(projectId, ids) } }

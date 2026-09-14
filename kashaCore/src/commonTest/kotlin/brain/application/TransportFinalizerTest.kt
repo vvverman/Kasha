@@ -85,7 +85,7 @@ class TransportFinalizerTest {
 
     @Test fun recoveredCopyOfOriginalFailureDoesNotCreateCauseCycle() = runTest {
         val cause = CancellationException("original")
-        val recovered = CancellationException("original").also { it.initCause(cause) }
+        val recovered = CancellationException("original", cause)
         reconcileTransportFinalizer(cause) { throw recovered }
         assertTrue(cause.suppressedExceptions.isEmpty())
         assertSame(cause, recovered.cause)

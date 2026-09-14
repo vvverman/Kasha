@@ -20,6 +20,7 @@ import kotlin.time.Clock
 internal class IosRepository(
     private val localIntelligence: IosOnDeviceIntelligence,
     cloudAi: IosCloudAiGateway? = null,
+    private val systemLanguage: String = iosSystemLanguage(),
 ) : StudioRepository {
     override val simulated: Boolean = false
 
@@ -39,7 +40,7 @@ internal class IosRepository(
 
     private fun id(): String = NSUUID().UUIDString.lowercase()
     private fun now(): Long = Clock.System.now().toEpochMilliseconds()
-    private fun language(): String = Languages.resolve(prefs.language, "ru-RU")
+    private fun language(): String = Languages.resolve(prefs.language, systemLanguage)
 
     override suspend fun snapshot(): AppSnapshot {
         val externalRoles = AiRole.entries.filter { role ->

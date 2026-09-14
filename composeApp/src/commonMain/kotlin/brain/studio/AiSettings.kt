@@ -121,7 +121,7 @@ internal fun AiSettingsSection(s: StudioState) {
                             )
                             state?.installed == true -> Column(horizontalAlignment = Alignment.End) {
                                 KashaQuietButton(t("aiSelected"), {
-                                    scope.launch { s.savePreferences(s.preferences.copy(ai = s.preferences.ai.with(role, engine.id))) }
+                                    scope.launch { s.updatePreferences { it.copy(ai = it.ai.with(role, engine.id)) } }
                                 })
                                 if (packages.available && !engine.defaultInstalled) {
                                     KashaQuietButton(t("aiRemove"), {
@@ -156,7 +156,7 @@ internal fun AiSettingsSection(s: StudioState) {
                     Spacer(Modifier.height(6.dp))
                     cloudChoices.forEach { engine ->
                         KashaListCard(
-                            onClick = { scope.launch { s.savePreferences(s.preferences.copy(ai = s.preferences.ai.with(role, engine.id))) } },
+                            onClick = { scope.launch { s.updatePreferences { it.copy(ai = it.ai.with(role, engine.id)) } } },
                             modifier = Modifier.padding(bottom = 6.dp),
                         ) {
                             Column(Modifier.weight(1f)) {
@@ -307,17 +307,19 @@ internal fun AiSettingsSection(s: StudioState) {
                         if (result.secretDeletion == SecureSecretDeletion.FAILED) actionError = t("aiConnectionFailed")
                         connections = cloud.connections()
                         providerEditor = null
-                        var next = s.preferences.ai
-                        AiRole.entries.forEach { role ->
-                            if (AiCatalog.cloudProviderId(next.engineId(role)) == provider.id) {
-                                next = next.with(role, when (role) {
-                                    AiRole.SPEECH_TO_TEXT -> AiCatalog.DEFAULT_STT
-                                    AiRole.TEXT -> AiCatalog.DEFAULT_TEXT
-                                    AiRole.ROUTING -> AiCatalog.DEFAULT_ROUTING
-                                })
+                        s.updatePreferences { latest ->
+                            var next = latest.ai
+                            AiRole.entries.forEach { role ->
+                                if (AiCatalog.cloudProviderId(next.engineId(role)) == provider.id) {
+                                    next = next.with(role, when (role) {
+                                        AiRole.SPEECH_TO_TEXT -> AiCatalog.DEFAULT_STT
+                                        AiRole.TEXT -> AiCatalog.DEFAULT_TEXT
+                                        AiRole.ROUTING -> AiCatalog.DEFAULT_ROUTING
+                                    })
+                                }
                             }
+                            latest.copy(ai = next)
                         }
-                        s.savePreferences(s.preferences.copy(ai = next))
                     }
                 })
             }
