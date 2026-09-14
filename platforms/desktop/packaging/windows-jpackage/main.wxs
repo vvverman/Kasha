@@ -2,7 +2,7 @@
 <!-- OpenJDK 21 jpackage main.wxs adapted for Kasha: external CABs keep the
      multi-gigabyte local model payload outside the MSI database. The Qwen
      model itself is packaged as standard GGUF shards, each below WiX's 2 GiB
-     per-file limit. -->
+     per-file limit. Database codepage must match MsiInstallerStrings_en.wxl. -->
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
      xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
 
@@ -13,7 +13,7 @@
   <?endif?>
 
   <?define JpProductLanguage=1033 ?>
-  <?define JpInstallerVersion=200 ?>
+  <?define JpInstallerVersion=500 ?>
   <?define JpCompressedMsi=yes ?>
 
   <?include $(var.JpConfigDir)/overrides.wxi ?>
@@ -33,7 +33,7 @@
     Id="$(var.JpProductCode)"
     Name="$(var.JpAppName)"
     Language="$(var.JpProductLanguage)"
-    Codepage="65001"
+    Codepage="1251"
     Version="$(var.JpAppVersion)"
     Manufacturer="$(var.JpAppVendor)"
     UpgradeCode="$(var.JpProductUpgradeCode)">
@@ -76,15 +76,29 @@
     <?endif?>
 
     <Binary Id="JpCaDll" SourceFile="wixhelper.dll"/>
-
     <CustomAction Id="JpFindRelatedProducts" BinaryKey="JpCaDll" DllEntry="FindRelatedProductsEx" />
 
-    <Directory Id="TARGETDIR" Name="SourceDir"/>
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramMenuFolder">
+        <Directory Id="KashaProgramMenuFolder" Name="Kasha">
+          <Component Id="KashaStartMenuComponent" Guid="*" Win64="yes">
+            <Shortcut Id="KashaStartMenuShortcut" Name="Kasha"
+                      Target="[INSTALLDIR]Kasha.exe" WorkingDirectory="INSTALLDIR">
+              <ShortcutProperty Key="System.AppUserModel.ID" Value="ru.vrmn.kasha" />
+            </Shortcut>
+            <RemoveFolder Id="RemoveKashaProgramMenu" On="uninstall" />
+            <RegistryValue Root="HKCU" Key="Software\Kasha" Name="StartMenuShortcut"
+                           Type="integer" Value="1" KeyPath="yes" />
+          </Component>
+        </Directory>
+      </Directory>
+    </Directory>
 
     <Feature Id="DefaultFeature" Title="!(loc.MainFeatureTitle)" Level="1">
       <ComponentGroupRef Id="Shortcuts"/>
       <ComponentGroupRef Id="Files"/>
       <ComponentGroupRef Id="FileAssociations"/>
+      <ComponentRef Id="KashaStartMenuComponent"/>
     </Feature>
 
     <CustomAction Id="JpSetARPINSTALLLOCATION" Property="ARPINSTALLLOCATION" Value="[INSTALLDIR]" />
@@ -95,22 +109,18 @@
     <?ifdef JpHelpURL ?>
       <CustomAction Id="JpSetARPHELPLINK" Property="ARPHELPLINK" Value="$(var.JpHelpURL)" />
     <?endif?>
-
     <?ifdef JpAboutURL ?>
       <CustomAction Id="JpSetARPURLINFOABOUT" Property="ARPURLINFOABOUT" Value="$(var.JpAboutURL)" />
     <?endif?>
-
     <?ifdef JpUpdateURL ?>
       <CustomAction Id="JpSetARPURLUPDATEINFO" Property="ARPURLUPDATEINFO" Value="$(var.JpUpdateURL)" />
     <?endif?>
-
     <?ifdef JpIcon ?>
     <Property Id="ARPPRODUCTICON" Value="JpARPPRODUCTICON"/>
     <Icon Id="JpARPPRODUCTICON" SourceFile="$(var.JpIcon)"/>
     <?endif?>
 
     <UIRef Id="JpUI"/>
-
     <InstallExecuteSequence>
       <Custom Action="JpSetARPINSTALLLOCATION" After="CostFinalize">Not Installed</Custom>
       <Custom Action="JpSetARPCOMMENTS" After="CostFinalize">Not Installed</Custom>
@@ -125,7 +135,6 @@
       <?ifdef JpUpdateURL ?>
       <Custom Action="JpSetARPURLUPDATEINFO" After="CostFinalize">Not Installed</Custom>
       <?endif?>
-
       <?ifndef JpAllowUpgrades ?>
       <Custom Action="JpDisallowUpgrade" After="JpFindRelatedProducts">JP_UPGRADABLE_FOUND</Custom>
       <?endif?>
@@ -135,10 +144,8 @@
       <RemoveExistingProducts Before="CostInitialize"/>
       <Custom Action="JpFindRelatedProducts" After="FindRelatedProducts"/>
     </InstallExecuteSequence>
-
     <InstallUISequence>
       <Custom Action="JpFindRelatedProducts" After="FindRelatedProducts"/>
     </InstallUISequence>
-
   </Product>
 </Wix>

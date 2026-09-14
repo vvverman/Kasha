@@ -14,6 +14,15 @@ $SmokeDir = Join-Path $Build "windows-install-smoke"
 $ResourceDir = Join-Path $PSScriptRoot "windows-jpackage"
 $InnoScript = Join-Path $PSScriptRoot "windows-inno\Kasha.iss"
 
+function Invoke-InstallSmoke([string]$Executable, [string]$LogPath) {
+    $stderr = "$LogPath.stderr"
+    $app = Start-Process -FilePath $Executable -ArgumentList "--install-smoke" -Wait -PassThru `
+        -RedirectStandardOutput $LogPath -RedirectStandardError $stderr
+    Get-Content $LogPath -ErrorAction SilentlyContinue | Write-Host
+    Get-Content $stderr -ErrorAction SilentlyContinue | Write-Host
+    if ($app.ExitCode -ne 0) { throw "Kasha install smoke failed with exit code $($app.ExitCode)" }
+}
+
 Set-Location $Repo
 
 Write-Host "== Compose Windows app image =="
@@ -48,19 +57,19 @@ $PackagedShards = @(Get-ChildItem $Models -Filter "Qwen3-4B-Q4_K_M-*-of-*.gguf" 
 if ($PackagedShards.Count -ne $SourceShards.Count) { throw "Qwen shard copy is incomplete" }
 if (Test-Path $MonolithicQwen) { throw "Monolithic Qwen must not be present in the Windows package" }
 
-Write-Host "== App image smoke =="
-& $AppExe --install-smoke
-if ($LASTEXITCODE -ne 0) { throw "app-image smoke failed with exit code $LASTEXITCODE" }
-
 Remove-Item $Dist -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item $Temp -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item $SmokeDir -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force $MsiOut, $ExeOut, $Temp | Out-Null
 
+Write-Host "== App image smoke =="
+Invoke-InstallSmoke $AppExe (Join-Path $Dist "windows-app-image-smoke.log")
+
 $jpackage = Join-Path $env:JAVA_HOME "bin\jpackage.exe"
 if (!(Test-Path $jpackage)) { throw "jpackage.exe not found under JAVA_HOME=$env:JAVA_HOME" }
 
 Write-Host "== MSI with external split CABs =="
+# main.wxs creates the Start menu shortcut with the same AppUserModelID as EXE.
 $jpackageArgs = @(
     "--type", "msi",
     "--app-image", $AppImage,
@@ -72,8 +81,6 @@ $jpackageArgs = @(
     "--description", "Kasha local-first voice notes and tasks",
     "--win-per-user-install",
     "--win-dir-chooser",
-    "--win-menu",
-    "--win-menu-group", "Kasha",
     "--win-shortcut",
     "--resource-dir", $ResourceDir,
     "--verbose"
@@ -111,13 +118,12 @@ if ($null -eq $SetupExe) { throw "Self-contained setup EXE was not produced" }
 if ($SetupExe.Length -ge 4000000000) { throw "Setup EXE is too close to the Windows single-executable size ceiling: $($SetupExe.Length) bytes" }
 
 Write-Host "== Installed EXE smoke =="
-$installArgs = @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/DIR=$SmokeDir")
+$installArgs = @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/DIR=`"$SmokeDir`"")
 $install = Start-Process -FilePath $SetupExe.FullName -ArgumentList $installArgs -Wait -PassThru
 if ($install.ExitCode -ne 0) { throw "setup install failed with exit code $($install.ExitCode)" }
 $InstalledExe = Join-Path $SmokeDir "Kasha.exe"
 if (!(Test-Path $InstalledExe)) { throw "installed Kasha.exe is missing" }
-& $InstalledExe --install-smoke 2>&1 | Tee-Object -FilePath (Join-Path $Dist "windows-install-smoke.log")
-if ($LASTEXITCODE -ne 0) { throw "installed app smoke failed with exit code $LASTEXITCODE" }
+Invoke-InstallSmoke $InstalledExe (Join-Path $Dist "windows-install-smoke.log")
 $uninstaller = Get-ChildItem $SmokeDir -Filter "unins*.exe" -File | Select-Object -First 1
 if ($null -ne $uninstaller) {
     $uninstall = Start-Process -FilePath $uninstaller.FullName -ArgumentList @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART") -Wait -PassThru

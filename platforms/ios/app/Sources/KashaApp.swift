@@ -4,6 +4,10 @@ import KashaShared
 
 @main
 struct KashaTestApp: App {
+    init() {
+        _ = KashaAudioSessionCoordinator.shared
+    }
+
     var body: some Scene {
         WindowGroup {
             ComposeRoot()

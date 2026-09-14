@@ -13,18 +13,16 @@ import org.jetbrains.compose.resources.painterResource
 
 const val KASHA_VERSION = "1.1.4"
 
-/**
- * Единая точка бренда: обе официальные версии знака лежат в common resources,
- * поэтому платформенные приложения не имеют собственных копий логотипа.
- */
+/** Официальный общий знак Kasha. Платформенные приложения не держат собственных копий. */
 @Composable
 fun KashaBrandSlot(
     modifier: Modifier = Modifier,
     solid: Boolean = false,
+    contentDescription: String? = "Kasha",
 ) {
     Icon(
         painter = painterResource(if (solid) Res.drawable.kasha_logo_solid else Res.drawable.kasha_logo),
-        contentDescription = "Kasha",
+        contentDescription = contentDescription,
         modifier = modifier,
         tint = MaterialTheme.colorScheme.onSurface,
     )
@@ -33,15 +31,18 @@ fun KashaBrandSlot(
 @Composable
 fun KashaSplash(modifier: Modifier = Modifier) {
     Box(modifier.fillMaxSize()) {
+        // Процедурный fallback обязателен и одинаков на всех платформах.
+        // Dark macro-photo подключается только как splash resource; рабочие экраны её не наследуют.
+        KashaProceduralBackground(Modifier.fillMaxSize(), home = false)
         KashaBrandSlot(
-            Modifier.align(Alignment.Center).width(190.dp).height(224.dp),
+            Modifier.align(Alignment.Center).width(168.dp).height(198.dp),
             solid = true,
         )
         Text(
             "v$KASHA_VERSION",
             Modifier.align(Alignment.BottomCenter).padding(bottom = 26.dp),
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = KashaTheme.colors.textSecondary,
         )
     }
 }

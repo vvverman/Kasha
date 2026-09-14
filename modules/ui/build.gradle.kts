@@ -1,3 +1,4 @@
+import org.gradle.api.tasks.Exec
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 
 plugins {
@@ -12,6 +13,17 @@ compose.resources {
     publicResClass = true
     packageOfResClass = "brain.studio.resources"
     generateResClass = always
+}
+
+val generateKashaIcons by tasks.registering(Exec::class) {
+    group = "build setup"
+    description = "Generate Compose runtime geometry from the canonical Kasha Icons registry"
+    workingDir(rootProject.projectDir)
+    val python = if (System.getProperty("os.name").startsWith("Windows", ignoreCase = true)) "python" else "python3"
+    commandLine(python, "scripts/generate-kasha-icons.py")
+    inputs.file(rootProject.file("docs/design/icons/registry.json"))
+    inputs.file(rootProject.file("scripts/generate-kasha-icons.py"))
+    outputs.file(project.file("src/commonMain/kotlin/brain/studio/ui/GeneratedKashaIcons.kt"))
 }
 
 kotlin {
@@ -47,5 +59,11 @@ kotlin {
             implementation(kotlin("test"))
             implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
         }
+    }
+}
+
+tasks.configureEach {
+    if (name.startsWith("compileKotlin") || name.contains("KotlinMetadata")) {
+        dependsOn(generateKashaIcons)
     }
 }
