@@ -1,5 +1,6 @@
 package brain.studio
 
+import brain.domain.PlaybackSessionGateway
 import brain.domain.RecorderPhase
 import brain.domain.RecorderSessionGateway
 import brain.model.Note
@@ -17,13 +18,13 @@ internal suspend fun StudioState.cancelActiveRecording(): Boolean {
 }
 
 internal suspend fun StudioState.seekPlayback(seconds: Double): Boolean {
-    val capture = loadedAudio ?: return false
-    if (!capture.audioFinalized || recording) return false
-    val duration = playback.duration.takeIf { it.isFinite() && it > 0.0 }
-        ?: capture.durationSeconds.takeIf { it.isFinite() && it > 0.0 }
-        ?: return false
-    val target = seconds.coerceIn(0.0, duration)
-    audio.playCapture(capture.id, false, target, playbackRate)
+    val gateway = audio as? PlaybackSessionGateway ?: return false
+    if (recording) return false
+    val before = gateway.playbackState()
+    val target = before.seekTarget(seconds) ?: return false
+    val after = gateway.seekTo(target)
+    if (after.sourceId != before.sourceId) return false
+    if (target < before.durationSeconds && after.phase != before.phase) return false
     return true
 }
 

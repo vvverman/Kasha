@@ -2,16 +2,19 @@
 
 package brain.ios
 
-import brain.domain.AudioGateway
+import brain.domain.PlaybackPhase
+import brain.domain.PlaybackSessionGateway
+import brain.domain.PlaybackSessionState
 import brain.studio.AudioTelemetry
 import platform.AVFAudio.AVAudioPlayer
 import platform.Foundation.NSURL
 
 internal class IosAudio(
     private val repository: IosRepository,
-) : AudioGateway {
+) : PlaybackSessionGateway {
     private var player: AVAudioPlayer? = null
     private var paused = false
+    private var sourceId: String? = null
 
     init {
         IosAudioSessionBridge.observeSystemEvents(
@@ -22,6 +25,7 @@ internal class IosAudio(
 
     override suspend fun playCapture(captureId: String, compact: Boolean, fromSeconds: Double, rate: Double) {
         val path = repository.audioPath(captureId) ?: error("Аудиофайл записи не найден")
+        val previousSource = sourceId
         stop()
         IosAudioSessionBridge.activatePlayback()
 
@@ -30,10 +34,12 @@ internal class IosAudio(
         created.rate = rate.toFloat().coerceIn(1f, 2f)
         created.currentTime = fromSeconds.coerceAtLeast(0.0).coerceAtMost(created.duration)
         if (!created.prepareToPlay() || !created.play()) {
+            sourceId = previousSource
             IosAudioSessionBridge.deactivate()
             error("audioFailed")
         }
         player = created
+        sourceId = captureId
         paused = false
     }
 
@@ -50,22 +56,60 @@ internal class IosAudio(
         paused = false
     }
 
-    override fun telemetry(): AudioTelemetry {
-        val active = player ?: return AudioTelemetry()
+    override fun playbackState(): PlaybackSessionState {
+        val active = player ?: return PlaybackSessionState(sourceId = sourceId)
+        val duration = active.duration.coerceAtLeast(0.0)
+        val position = active.currentTime.coerceAtLeast(0.0).coerceAtMost(duration)
         val phase = when {
-            active.playing -> "playing"
-            active.currentTime >= active.duration - 0.05 -> "idle"
-            else -> "paused"
+            active.playing -> PlaybackPhase.PLAYING
+            duration > 0.0 && position >= duration - 0.05 -> PlaybackPhase.IDLE
+            else -> PlaybackPhase.PAUSED
         }
-        if (phase == "idle") {
-            stop()
-            return AudioTelemetry()
+        if (phase == PlaybackPhase.IDLE) {
+            active.stop()
+            player = null
+            paused = false
+            IosAudioSessionBridge.deactivate()
+            return PlaybackSessionState(sourceId = sourceId, durationSeconds = duration)
         }
-        if (phase == "paused") paused = true
-        return AudioTelemetry(
+        if (phase == PlaybackPhase.PAUSED) paused = true
+        return PlaybackSessionState(
             phase = phase,
-            position = active.currentTime,
-            duration = active.duration,
+            sourceId = sourceId,
+            positionSeconds = position,
+            durationSeconds = duration,
+        )
+    }
+
+    override suspend fun seekTo(positionSeconds: Double): PlaybackSessionState {
+        val before = playbackState()
+        val target = before.seekTarget(positionSeconds) ?: error("audioFailed")
+        val active = player ?: error("audioFailed")
+        active.currentTime = target
+        when (before.phase) {
+            PlaybackPhase.PLAYING -> {
+                if (target < active.duration && !active.playing) {
+                    IosAudioSessionBridge.activatePlayback()
+                    check(active.play()) { "audioFailed" }
+                }
+                paused = false
+            }
+            PlaybackPhase.PAUSED -> {
+                if (active.playing) active.pause()
+                paused = true
+            }
+            else -> error("audioFailed")
+        }
+        return playbackState()
+    }
+
+    override fun telemetry(): AudioTelemetry {
+        val state = playbackState()
+        return AudioTelemetry(
+            phase = state.phase.legacyValue,
+            position = state.positionSeconds,
+            duration = state.durationSeconds,
+            level = state.level,
         )
     }
 
