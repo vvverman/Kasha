@@ -1,7 +1,18 @@
 name: Автономный установщик macOS
 on:
   push:
-    branches: [macos-installer]
+    branches: [macos-installer, main]
+    paths:
+      - 'modules/**'
+      - 'platforms/desktop/**'
+      - 'scripts/check-*.py'
+      - '.github/workflows/macos.yml'
+  pull_request:
+    paths:
+      - 'modules/**'
+      - 'platforms/desktop/**'
+      - 'scripts/check-*.py'
+      - '.github/workflows/macos.yml'
   workflow_dispatch:
 permissions:
   contents: read
@@ -20,6 +31,7 @@ jobs:
           python3 scripts/check-local-only.py
           python3 scripts/check-ai-boundary.py
           python3 scripts/check-ui-boundary.py
+          python3 scripts/check-platform-shells.py
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -39,8 +51,8 @@ jobs:
           python3 -m venv .build-python
           .build-python/bin/pip install pillow==11.3.0 piper-tts==1.4.2 fonttools==4.59.2
           .build-python/bin/python scripts/prepare-fonts.py
-          .build-python/bin/python desktopApp/packaging/make-icon.py
-      - name: Kasha Core, AI catalog, iOS/JVM и все Kotlin-тесты
+          .build-python/bin/python platforms/desktop/packaging/make-icon.py
+      - name: Core, AI, UI, iOS/JVM и Kotlin-тесты
         run: |
           set -o pipefail
           gradle -Pkotlin.compiler.execution.strategy=in-process \
@@ -50,21 +62,28 @@ jobs:
             :aiCatalog:jvmTest \
             :aiCatalog:compileKotlinIosArm64 \
             :aiCatalog:compileKotlinIosSimulatorArm64 \
+            :aiConnectors:jvmTest \
+            :aiConnectors:compileKotlinIosArm64 \
+            :aiConnectors:compileKotlinIosSimulatorArm64 \
             :composeApp:jvmTest :runtime:test :desktopApp:test :desktopApp:jar 2>&1 | tee macos-compile.log
       - uses: actions/cache/restore@v4
         id: native-cache
         with:
-          path: desktopApp/bundle/common
-          key: kasha-macos-arm64-bundle-${{ hashFiles('desktopApp/packaging/build-native.sh') }}
+          path: |
+            platforms/desktop/bundle/common
+            platforms/desktop/bundle/macos
+          key: kasha-macos-arm64-bundle-${{ hashFiles('platforms/desktop/packaging/prepare-models.sh', 'platforms/desktop/packaging/build-native.sh') }}
       - name: Статические движки и исходные модели внутри приложения
         if: steps.native-cache.outputs.cache-hit != 'true'
         run: |
           set -o pipefail
-          bash desktopApp/packaging/build-native.sh 2>&1 | tee macos-native.log
+          bash platforms/desktop/packaging/build-native.sh 2>&1 | tee macos-native.log
       - uses: actions/cache/save@v4
         if: steps.native-cache.outputs.cache-hit != 'true'
         with:
-          path: desktopApp/bundle/common
+          path: |
+            platforms/desktop/bundle/common
+            platforms/desktop/bundle/macos
           key: ${{ steps.native-cache.outputs.cache-primary-key }}
       - name: Тестовая русская речь
         run: |
@@ -73,11 +92,10 @@ jobs:
           cp test-output/real-models/russian-with-pauses.wav model-test/russian.wav
       - name: Самодостаточный .app с Java внутри
         run: |
-          cp desktopApp/packaging/Установка.txt desktopApp/bundle/common/Установка.txt
           gradle -Pkotlin.compiler.execution.strategy=in-process :desktopApp:createDistributable
           gradle --stop
       - name: Запуск без зависимостей и сети, проверка DMG
-        run: bash desktopApp/packaging/package-and-test.sh
+        run: bash platforms/desktop/packaging/package-and-test.sh
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -92,12 +110,13 @@ jobs:
             macos-output/*.png
             macos-output/self-test/*.json
             macos-output/self-test/*.log
-            desktopApp/build/compose/logs
-            kashaCore/build/test-results
-            aiCatalog/build/test-results
-            composeApp/build/test-results
-            runtime/build/test-results
-            desktopApp/build/test-results
+            platforms/desktop/build/compose/logs
+            modules/core/build/test-results
+            modules/ai/catalog/build/test-results
+            modules/ai/connectors/build/test-results
+            modules/ui/build/test-results
+            modules/infrastructure/jvm/build/test-results
+            platforms/desktop/build/test-results
       - uses: actions/upload-artifact@v4
         with:
           name: Kasha-macOS-arm64

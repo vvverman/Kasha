@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SOURCE_DIR = ROOT / "docs/design/assets/fonts"
 SOURCE_FONT = SOURCE_DIR / "Geologica-Variable.ttf"
 SOURCE_LICENSE = SOURCE_DIR / "OFL.txt"
-resources = ROOT / "composeApp/src/commonMain/composeResources"
+resources = ROOT / "modules/ui/src/commonMain/composeResources"
 font_dir = resources / "font"
 license_dir = resources / "files/licenses"
 font_dir.mkdir(parents=True, exist_ok=True)

@@ -1,0 +1,202 @@
+name: Kasha Desktop Windows Linux
+
+on:
+  pull_request:
+    paths:
+      - 'modules/**'
+      - 'platforms/desktop/**'
+      - 'scripts/check-*.py'
+      - '.github/workflows/desktop-platforms.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'modules/**'
+      - 'platforms/desktop/**'
+      - 'scripts/check-*.py'
+      - '.github/workflows/desktop-platforms.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+          cache-read-only: false
+      - name: Architecture boundary
+        run: |
+          python3 scripts/check-ai-boundary.py
+          python3 scripts/check-platform-shells.py
+      - name: Linux build tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y build-essential cmake ninja-build curl git file rpm fakeroot
+      - uses: actions/cache@v4
+        id: linux-native
+        with:
+          path: |
+            platforms/desktop/bundle/common
+            platforms/desktop/bundle/linux
+          key: kasha-linux-x64-native-${{ hashFiles('platforms/desktop/packaging/prepare-models.sh', 'platforms/desktop/packaging/build-native-linux.sh') }}
+      - name: Native AI engines and models
+        if: steps.linux-native.outputs.cache-hit != 'true'
+        run: bash platforms/desktop/packaging/build-native-linux.sh
+      - name: Tests and Linux packages
+        run: |
+          set -euo pipefail
+          export PATH="$PWD/platforms/desktop/bundle/linux/bin:$PATH"
+          command -v ffmpeg
+          ffmpeg -version | head -n 1
+          python3 -m pip install fonttools==4.59.2
+          python3 scripts/prepare-fonts.py
+          gradle :kashaCore:jvmTest :aiCatalog:jvmTest :aiConnectors:jvmTest :composeApp:jvmTest :runtime:test :desktopApp:test 2>&1 | tee linux-tests.log
+          gradle :desktopApp:packageDistributionForCurrentOS 2>&1 | tee linux-package.log
+      - name: Verify packaged native resources
+        run: |
+          test -x platforms/desktop/bundle/linux/bin/whisper-cli
+          test -x platforms/desktop/bundle/linux/bin/llama-completion
+          test -x platforms/desktop/bundle/linux/bin/ffmpeg
+          test -s platforms/desktop/bundle/common/models/ggml-small.bin
+          test -s platforms/desktop/bundle/common/models/Qwen3-4B-Q4_K_M.gguf
+          find platforms/desktop/build/compose/binaries/main -type f \( -name '*.deb' -o -name '*.rpm' \) -print | tee linux-packages.txt
+          test "$(wc -l < linux-packages.txt)" -ge 2
+      - name: Upload Linux diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kasha-linux-diagnostics-${{ github.sha }}
+          retention-days: 7
+          if-no-files-found: ignore
+          path: |
+            linux-tests.log
+            linux-package.log
+            linux-packages.txt
+            platforms/desktop/build/compose/logs/**
+            platforms/desktop/build/test-results/**
+            modules/infrastructure/jvm/build/test-results/**
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Kasha-Linux-x64
+          compression-level: 0
+          retention-days: 14
+          if-no-files-found: error
+          path: |
+            platforms/desktop/build/compose/binaries/main/**/*.deb
+            platforms/desktop/build/compose/binaries/main/**/*.rpm
+            linux-packages.txt
+
+  windows:
+    runs-on: windows-2025
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+          cache-read-only: false
+      - name: Architecture boundary
+        shell: pwsh
+        run: |
+          python scripts/check-ai-boundary.py
+          python scripts/check-platform-shells.py
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            git
+            curl
+            make
+            gzip
+            tar
+            file
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+      - name: Windows installer tools
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+      - uses: actions/cache@v4
+        id: windows-native
+        with:
+          path: |
+            platforms/desktop/bundle/common
+            platforms/desktop/bundle/windows
+          key: kasha-windows-x64-native-${{ hashFiles('platforms/desktop/packaging/prepare-models.sh', 'platforms/desktop/packaging/build-native-windows.sh') }}
+      - name: Native AI engines and models
+        if: steps.windows-native.outputs.cache-hit != 'true'
+        shell: msys2 {0}
+        run: bash platforms/desktop/packaging/build-native-windows.sh
+      - name: Tests
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:Path = "$pwd\platforms\desktop\bundle\windows\bin;$env:Path"
+          $ffmpegVersion = & ffmpeg.exe -version 2>&1
+          $ffmpegExitCode = $LASTEXITCODE
+          if ($ffmpegExitCode -ne 0) { throw "Bundled ffmpeg failed with exit code $ffmpegExitCode" }
+          $ffmpegVersion | Select-Object -First 1
+          python -m pip install fonttools==4.59.2
+          if ($LASTEXITCODE -ne 0) { throw "pip failed with exit code $LASTEXITCODE" }
+          python scripts/prepare-fonts.py
+          if ($LASTEXITCODE -ne 0) { throw "font preparation failed with exit code $LASTEXITCODE" }
+          gradle :kashaCore:jvmTest :aiCatalog:jvmTest :aiConnectors:jvmTest :composeApp:jvmTest :runtime:test :desktopApp:test 2>&1 | Tee-Object -FilePath windows-tests.log
+          if ($LASTEXITCODE -ne 0) { throw "desktop tests failed with exit code $LASTEXITCODE" }
+      - name: Windows MSI CAB and EXE packaging
+        shell: pwsh
+        run: |
+          ./platforms/desktop/packaging/package-windows.ps1 2>&1 | Tee-Object -FilePath windows-package.log
+          if ($LASTEXITCODE -ne 0) { throw "Windows packaging failed with exit code $LASTEXITCODE" }
+      - name: Verify Windows packages
+        shell: pwsh
+        run: |
+          $dist = "platforms/desktop/build/windows-dist"
+          $msi = @(Get-ChildItem "$dist/msi" -Filter '*.msi' -File)
+          $cabs = @(Get-ChildItem "$dist/msi" -Filter '*.cab' -File)
+          $exe = @(Get-ChildItem "$dist/exe" -Filter '*.exe' -File)
+          if ($msi.Count -ne 1) { throw 'Windows MSI missing' }
+          if ($cabs.Count -lt 2) { throw 'Windows split CAB payload missing' }
+          if ($exe.Count -ne 1) { throw 'Windows self-contained EXE missing' }
+          if (!(Test-Path "$dist/windows-install-smoke.log")) { throw 'Windows install smoke log missing' }
+          Get-Content "$dist/windows-install-smoke.log"
+          Get-Content "$dist/SHA256SUMS.txt"
+      - name: Upload Windows diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kasha-windows-diagnostics-${{ github.sha }}
+          retention-days: 7
+          if-no-files-found: ignore
+          path: |
+            windows-tests.log
+            windows-package.log
+            platforms/desktop/build/windows-dist/windows-install-smoke.log
+            platforms/desktop/build/compose/logs/**
+            platforms/desktop/build/test-results/**
+            modules/infrastructure/jvm/build/test-results/**
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Kasha-Windows-x64
+          compression-level: 0
+          retention-days: 14
+          if-no-files-found: error
+          path: |
+            platforms/desktop/build/windows-dist/msi/*.msi
+            platforms/desktop/build/windows-dist/msi/*.cab
+            platforms/desktop/build/windows-dist/exe/*.exe
+            platforms/desktop/build/windows-dist/windows-packages.txt
+            platforms/desktop/build/windows-dist/SHA256SUMS.txt

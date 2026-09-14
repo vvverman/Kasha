@@ -1,0 +1,45 @@
+name: Kasha
+options:
+  bundleIdPrefix: ru.vrmn
+  deploymentTarget:
+    iOS: "16.0"
+  xcodeVersion: "16.0"
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+    TARGETED_DEVICE_FAMILY: "1"
+    SUPPORTS_MACCATALYST: "NO"
+
+schemes:
+  Kasha:
+    build:
+      targets:
+        Kasha: all
+    run:
+      config: Debug
+    archive:
+      config: Release
+
+targets:
+  Kasha:
+    type: application
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: Sources
+      - path: Assets.xcassets
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ru.vrmn.kasha.test
+        PRODUCT_NAME: Kasha Test
+        INFOPLIST_FILE: Info.plist
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGNING_ALLOWED: NO
+        CODE_SIGNING_REQUIRED: NO
+    dependencies:
+      - framework: ../shared/build/bin/iosArm64/releaseFramework/KashaShared.framework
+        embed: false

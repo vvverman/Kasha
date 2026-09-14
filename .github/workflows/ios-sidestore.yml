@@ -3,23 +3,17 @@ name: Kasha iOS SideStore
 on:
   pull_request:
     paths:
-      - 'kashaCore/**'
-      - 'aiCatalog/**'
-      - 'composeApp/**'
-      - 'iosApp/**'
-      - 'scripts/check-ai-boundary.py'
-      - 'scripts/check-local-only.py'
+      - 'modules/**'
+      - 'platforms/ios/**'
+      - 'scripts/check-*.py'
       - 'scripts/make-sidestore-source.py'
       - '.github/workflows/ios-sidestore.yml'
   push:
     branches: [main]
     paths:
-      - 'kashaCore/**'
-      - 'aiCatalog/**'
-      - 'composeApp/**'
-      - 'iosApp/**'
-      - 'scripts/check-ai-boundary.py'
-      - 'scripts/check-local-only.py'
+      - 'modules/**'
+      - 'platforms/ios/**'
+      - 'scripts/check-*.py'
       - 'scripts/make-sidestore-source.py'
       - '.github/workflows/ios-sidestore.yml'
   workflow_dispatch:
@@ -45,12 +39,10 @@ jobs:
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
-
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.3.1'
@@ -63,12 +55,13 @@ jobs:
           python scripts/check-ui-boundary.py
           python scripts/check-local-only.py
           python scripts/check-ai-boundary.py
+          python scripts/check-platform-shells.py
 
-      - name: Build shared Kasha framework for iPhone
+      - name: Build thin Kasha framework for iPhone
         run: |
           set -o pipefail
-          gradle :composeApp:linkReleaseFrameworkIosArm64 2>&1 | tee ios-framework.log
-          test -d composeApp/build/bin/iosArm64/releaseFramework/KashaShared.framework
+          gradle :iosShell:linkReleaseFrameworkIosArm64 2>&1 | tee ios-framework.log
+          test -d platforms/ios/shared/build/bin/iosArm64/releaseFramework/KashaShared.framework
 
       - name: Install deterministic project/icon tools
         run: |
@@ -78,22 +71,22 @@ jobs:
       - name: Generate Kasha app icons
         run: |
           set -euo pipefail
-          ICON_DIR="iosApp/Assets.xcassets/AppIcon.appiconset"
+          ICON_DIR="platforms/ios/app/Assets.xcassets/AppIcon.appiconset"
           mkdir -p "$ICON_DIR" build/ios
           for size in 40 58 60 80 87 120 180 1024; do
-            rsvg-convert -w "$size" -h "$size" iosApp/KashaAppIcon.svg -o "$ICON_DIR/icon-$size.png"
+            rsvg-convert -w "$size" -h "$size" platforms/ios/app/KashaAppIcon.svg -o "$ICON_DIR/icon-$size.png"
           done
           cp "$ICON_DIR/icon-120.png" "$ICON_DIR/icon-120-60.png"
           cp "$ICON_DIR/icon-1024.png" build/ios/Kasha-icon.png
 
       - name: Generate Xcode project
-        run: xcodegen generate --spec iosApp/project.yml
+        run: xcodegen generate --spec platforms/ios/app/project.yml
 
       - name: Build unsigned iPhone app
         run: |
           set -o pipefail
           xcodebuild \
-            -project iosApp/Kasha.xcodeproj \
+            -project platforms/ios/app/Kasha.xcodeproj \
             -scheme Kasha \
             -configuration Release \
             -sdk iphoneos \

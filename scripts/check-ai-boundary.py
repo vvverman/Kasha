@@ -5,11 +5,12 @@ import re
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-STUDIO = ROOT / 'kashaCore/src/commonMain/kotlin/brain/studio/Studio.kt'
-AI = ROOT / 'kashaCore/src/commonMain/kotlin/brain/studio/AiEngines.kt'
-REQUESTS = ROOT / 'kashaCore/src/commonMain/kotlin/brain/studio/AiRequests.kt'
-SETTINGS = ROOT / 'composeApp/src/commonMain/kotlin/brain/studio/AiSettings.kt'
-CATALOG = ROOT / 'aiCatalog/src/commonMain/kotlin/brain/ai/KashaAiCatalog.kt'
+STUDIO = ROOT / 'modules/core/src/commonMain/kotlin/brain/studio/Studio.kt'
+AI = ROOT / 'modules/core/src/commonMain/kotlin/brain/studio/AiEngines.kt'
+REQUESTS = ROOT / 'modules/core/src/commonMain/kotlin/brain/studio/AiRequests.kt'
+SETTINGS = ROOT / 'modules/ui/src/commonMain/kotlin/brain/studio/AiSettings.kt'
+CATALOG = ROOT / 'modules/ai/catalog/src/commonMain/kotlin/brain/ai/KashaAiCatalog.kt'
+CONNECTORS = ROOT / 'modules/ai/connectors/src/commonMain/kotlin/brain/ai/connectors/ExternalAiProtocol.kt'
 
 errors = []
 
@@ -17,7 +18,7 @@ def data_class_header(text: str, name: str) -> str:
     match = re.search(rf'data class {re.escape(name)}\((.*?)\)\s*(?:\{{|$)', text, re.S)
     return match.group(1) if match else ''
 
-for required in (STUDIO, AI, REQUESTS, SETTINGS, CATALOG):
+for required in (STUDIO, AI, REQUESTS, SETTINGS, CATALOG, CONNECTORS):
     if not required.is_file():
         errors.append(f'Missing AI architecture file: {required.relative_to(ROOT)}')
 
@@ -31,6 +32,7 @@ ai = AI.read_text(encoding='utf-8')
 requests = REQUESTS.read_text(encoding='utf-8')
 settings = SETTINGS.read_text(encoding='utf-8')
 catalog = CATALOG.read_text(encoding='utf-8')
+connectors = CONNECTORS.read_text(encoding='utf-8')
 
 for class_name, body in (
     ('Preferences', data_class_header(studio, 'Preferences')),
@@ -43,7 +45,7 @@ for class_name, body in (
         if re.search(re.escape(token), body, re.IGNORECASE):
             errors.append(f'{class_name} must not persist secret field: {token}')
 
-required_ai_fragments = (
+for fragment in (
     'enum class AiRole { SPEECH_TO_TEXT, TEXT, ROUTING }',
     'const val CONSENT_VERSION',
     'privacyConsentVersion',
@@ -51,8 +53,7 @@ required_ai_fragments = (
     'interface TextProcessingEngine',
     'interface RoutingEngine',
     'interface CloudAiGateway',
-)
-for fragment in required_ai_fragments:
+):
     if fragment not in ai:
         errors.append(f'Missing AI boundary contract: {fragment}')
 
@@ -65,29 +66,21 @@ if not re.search(r'val\s+canSave\s*=\s*cloud\.available\s*&&\s*consent', setting
 if settings.count('enabled = canSave') < 2:
     errors.append('Both cloud test and save actions must use the consent gate')
 
-# Конкретные модели/providers должны находиться за пределами Core.
 forbidden_core_fragments = (
-    'object AiCatalog',
-    'local.whisper.',
-    'local.qwen',
-    'local.gemma',
-    'CloudProviderDescriptor("openai"',
-    'CloudProviderDescriptor("anthropic"',
-    'CloudProviderDescriptor("gemini"',
-    'CloudProviderDescriptor("openrouter"',
-    'api.openai.com',
-    'api.anthropic.com',
-    'generativelanguage.googleapis.com',
+    'object AiCatalog', 'local.whisper.', 'local.qwen', 'local.gemma',
+    'CloudProviderDescriptor("openai"', 'CloudProviderDescriptor("anthropic"',
+    'CloudProviderDescriptor("gemini"', 'CloudProviderDescriptor("openrouter"',
+    'api.openai.com', 'api.anthropic.com', 'generativelanguage.googleapis.com', 'openrouter.ai',
 )
-for path in (ROOT / 'kashaCore').rglob('*.kt'):
+for path in (ROOT / 'modules/core').rglob('*.kt'):
     text = path.read_text(encoding='utf-8')
     rel = path.relative_to(ROOT).as_posix()
     for fragment in forbidden_core_fragments:
         if fragment in text:
             errors.append(f'Concrete AI catalog leaked into Core: {rel}: {fragment}')
     if 'apiKey' in text and rel not in {
-        'kashaCore/src/commonMain/kotlin/brain/studio/AiEngines.kt',
-        'kashaCore/src/commonMain/kotlin/brain/studio/AiRequests.kt',
+        'modules/core/src/commonMain/kotlin/brain/studio/AiEngines.kt',
+        'modules/core/src/commonMain/kotlin/brain/studio/AiRequests.kt',
     }:
         errors.append(f'API key leaked into unrelated Core file: {rel}')
 
@@ -99,8 +92,15 @@ for fragment in (
     if fragment not in catalog:
         errors.append(f'Concrete AI catalog is incomplete outside Core: {fragment}')
 
+for fragment in (
+    'class ExternalAiProtocol', 'interface AiHttpTransport',
+    'api.openai.com', 'api.anthropic.com', 'generativelanguage.googleapis.com', 'openrouter.ai',
+):
+    if fragment not in connectors:
+        errors.append(f'Shared AI connector protocol is incomplete: {fragment}')
+
 if errors:
     print('AI boundary violations:', file=sys.stderr)
     print('\n'.join(f'- {e}' for e in errors), file=sys.stderr)
     sys.exit(1)
-print('AI boundary: OK (one Core, three role ports, concrete catalog outside Core, explicit consent, no persisted secrets)')
+print('AI boundary: OK (one Core, three role ports, catalog + connectors outside Core, explicit consent, no persisted secrets)')

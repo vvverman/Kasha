@@ -12,14 +12,15 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
-      - name: Проверка бренда, local-first и AI privacy границ
+      - name: Проверка архитектурных границ
         run: |
           python3 scripts/check-brand-boundary.py
           python3 scripts/check-local-only.py
           python3 scripts/check-ai-boundary.py
+          python3 scripts/check-platform-shells.py
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -34,23 +35,25 @@ jobs:
           python -m pip install fonttools==4.59.2 playwright==1.55.0
           python scripts/prepare-fonts.py
           python scripts/check-ui-boundary.py
-          bash -n run-web.sh scripts/gradle.sh
-      - name: Kasha Core, AI catalog и общий UI на JVM/Android; runtime и production WebAssembly
+          bash -n scripts/run-web.sh scripts/gradle.sh
+      - name: Core, AI, UI и installable shells
         run: |
           set -o pipefail
           gradle --continue \
             :kashaCore:assemble :kashaCore:jvmTest :kashaCore:compileKotlinMetadata \
             :aiCatalog:assemble :aiCatalog:jvmTest :aiCatalog:compileKotlinMetadata \
+            :aiConnectors:assemble :aiConnectors:jvmTest :aiConnectors:compileKotlinMetadata \
             :composeApp:assemble :composeApp:jvmTest \
+            :androidApp:assembleDebug \
             :runtime:test :desktopApp:test \
-            :composeApp:wasmJsBrowserDistribution :runtime:installDist \
+            :webApp:wasmJsBrowserDistribution :runtime:installDist \
             2>&1 | tee kotlin.log
       - name: Весь пользовательский путь в браузере
         run: |
           export KASHA_HOME=$(mktemp -d)
           export KASHA_DEMO_AI=1
-          export KASHA_WEB_ROOT="$PWD/composeApp/build/dist/wasmJs/productionExecutable"
-          bash runtime/build/install/runtime/bin/runtime > runtime.log 2>&1 &
+          export KASHA_WEB_ROOT="$PWD/platforms/web/build/dist/wasmJs/productionExecutable"
+          bash modules/infrastructure/jvm/build/install/runtime/bin/runtime > runtime.log 2>&1 &
           PID=$!
           trap 'kill "$PID" 2>/dev/null || true' EXIT
           python tests/studio_browser.py
@@ -58,17 +61,19 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: kasha-web-verification-${{ github.sha }}
+          name: kasha-verification-${{ github.sha }}
           retention-days: 14
           path: |
             kotlin.log
             runtime.log
             test-output/studio
             test-output/sorting
-            kashaCore/build/test-results
-            aiCatalog/build/test-results
-            composeApp/build/test-results
-            runtime/build/test-results
-            desktopApp/build/test-results
-            composeApp/build/dist/wasmJs/productionExecutable
-            runtime/build/install
+            modules/core/build/test-results
+            modules/ai/catalog/build/test-results
+            modules/ai/connectors/build/test-results
+            modules/ui/build/test-results
+            modules/infrastructure/jvm/build/test-results
+            platforms/desktop/build/test-results
+            platforms/android/build/outputs/apk/debug/androidApp-debug.apk
+            platforms/web/build/dist/wasmJs/productionExecutable
+            modules/infrastructure/jvm/build/install

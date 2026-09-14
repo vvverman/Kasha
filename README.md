@@ -2,33 +2,59 @@
 
 **Записать → расшифровать → привести текст в порядок → отправить в заметки или задачи.**
 
-Главный принцип Kasha: **приложение полноценно работает локально и пользовательские данные принадлежат устройству**. Аккаунт, удалённый backend и облачная БД для основной функциональности не нужны. По умолчанию AI локальный; внешний AI можно подключить только явно, с отдельным выбором провайдера и подтверждением передачи соответствующих данных.
+Главный принцип Kasha: приложение полноценно работает локально, а пользовательские данные принадлежат устройству. Аккаунт, удалённый backend и облачная БД для основной функциональности не нужны. Внешний AI подключается только явно и только после подтверждения передачи данных.
 
 ## Архитектура
 
-Kasha построена вокруг отделяемого `kashaCore`:
-
 ```text
-                         kashaCore
-        models · domain · rules · contracts · AI ports
-                              │
-                         aiCatalog
-                    concrete AI metadata
-                              │
-                   shared Compose Kasha UI
-                              │
-       ┌──────────┬───────────┼──────────┬──────────┐
-     macOS      Windows     Android      iOS       Web
-       │            │          │          │          │
-     thin         thin       thin       thin       thin
-     shell        shell      shell      shell      shell
+                              modules/core
+                   models · domain · rules · ports
+                                   │
+             ┌─────────────────────┼────────────────────┐
+             │                     │                    │
+ modules/ai/catalog      modules/ai/connectors      modules/ui
+   AI metadata             provider protocol         Kasha UI
+             │                     │                    │
+             └─────────────────────┼────────────────────┘
+                                   │
+                             platforms/*
+                                   │
+      ┌──────────┬──────────┬──────┴───┬────────┬────────┬───────┐
+    macOS      Windows    Linux      Android    iOS      Web
 ```
 
-`kashaCore` не зависит от UI, конкретной ОС, конкретных AI-моделей и конкретных AI-провайдеров. Core хранит модели продукта, бизнес-правила, сортировки, manual order, task lifecycle, privacy rules и три AI-контракта: **Speech-to-Text / Text processing / Routing**.
+В Kasha ровно **одно бизнес-ядро**. Оно не знает Compose, ОС, конкретные AI-модели, provider URL, Keychain/Keystore/DPAPI или packaging.
 
-Конкретные Whisper/Qwen/Gemma и список внешних провайдеров находятся в отдельном общем модуле `aiCatalog`, поэтому не загрязняют Core и одновременно не дублируются по платформам.
+AI разделён на три независимые роли внутри одного Core: **Speech-to-Text / Text processing / Routing**. Конкретные модели и providers находятся вне Core: metadata — в `modules/ai/catalog`, общий сетевой protocol — в `modules/ai/connectors`.
 
-Правило проекта: **если логика может одинаково работать на двух платформах, она должна находиться в общем коде, а не в платформенном приложении.**
+Продуктовый интерфейс реализован один раз в `modules/ui`. Этот модуль физически platform-neutral: iOS/Web/Android/Desktop wiring находится только под `platforms/`.
+
+Правило проекта: **если код одинаково работает хотя бы на двух платформах, он должен быть поднят в reusable layer, а не скопирован в shell.**
+
+Подробности: [архитектура](docs/ARCHITECTURE.md) · [карта репозитория](docs/REPOSITORY_STRUCTURE.md).
+
+## Структура репозитория
+
+```text
+modules/
+├── core/                  # единственное бизнес-ядро
+├── ai/
+│   ├── catalog/           # модели/providers metadata
+│   └── connectors/        # OpenAI/Claude/Gemini/OpenRouter/custom protocol
+├── ui/                    # общий Kasha UI + StudioState
+└── infrastructure/
+    └── jvm/               # storage/process/http/localhost infrastructure
+
+platforms/
+├── android/               # APK shell
+├── desktop/               # общий JVM shell для macOS/Windows/Linux
+├── ios/
+│   ├── shared/            # Kotlin/Native adapters + framework
+│   └── app/               # минимальная Xcode/Swift wrapper
+└── web/                   # browser adapters + Wasm entry point
+```
+
+macOS, Windows и Linux используют один desktop implementation ради максимального reuse, но имеют независимые системные adapters/resources и отдельные установочные форматы: **DMG / MSI+EXE / DEB+RPM**.
 
 ## Интерфейс
 
@@ -36,18 +62,16 @@ Kasha построена вокруг отделяемого `kashaCore`:
 
 - разделы **Главная / Проекты / Задачи / Настройки**;
 - после голосового ввода две отдельные команды: **В заметки** и **В задачи**;
-- заметка — один текстовый документ без отдельного поля названия; первая непустая строка автоматически является названием;
+- заметка — один текстовый документ без отдельного поля названия; первая непустая строка является названием;
 - для заметки после отправки выбирается проект и новая/существующая заметка;
 - для задачи задаются срок и повтор напоминаний: 10/30 минут, час, день, неделя, будни или выходные;
-- невыполненная просроченная задача переносит срок на следующий день в то же локальное время;
-- выполненные задачи уходят в Архив; задачу можно открыть, изменить текст/время или удалить;
+- выполненные задачи уходят в Архив;
 - проекты, заметки и активные задачи сортируются по алфавиту, дате создания, дате изменения или вручную;
-- ручная раскладка хранится отдельно и не теряется после переключения сортировки;
+- manual order хранится отдельно и не теряется при переключении сортировки;
 - ручное изменение порядка — long-press + drag;
 - `Kasha UI` — единственный слой продуктовых контролов;
-- `Kasha Icons` — единый собственный набор иконок с короткими функциональными motion-состояниями; сторонние icon packs не используются;
-- **Geologica Variable** — основной шрифт целевого дизайна; миграция текущего Commissioner описана в дизайн-ТЗ;
-- светлая тема почти белая с едва тёплым жёлтым смещением, тёмная почти чёрная с едва коричневым смещением.
+- `Kasha Icons` — единый собственный набор иконок; параллельные icon packs запрещены;
+- светлая тема почти белая с тёплым смещением, тёмная почти чёрная с коричневым смещением.
 
 Восемь языков интерфейса: русский, английский, испанский, французский, немецкий, украинский, белорусский, казахский.
 
@@ -59,43 +83,43 @@ Kasha построена вокруг отделяемого `kashaCore`:
 2. **Text processing** — заголовок и приведение текста в порядок;
 3. **Routing** — релевантность заметки проектам.
 
-Для каждой роли можно использовать отдельный движок.
+Локальный режим остаётся базовым. OpenAI, Anthropic Claude, Gemini, OpenRouter, OpenAI-compatible и custom endpoints подключаются через общий `modules/ai/connectors` protocol.
 
-Локальный режим остаётся базовым. Внешние OpenAI/Anthropic/Gemini/OpenRouter/OpenAI-compatible/custom endpoints подключаются только через изолированный adapter, после явного consent. API keys не попадают в Preferences/Core state и должны храниться только в системном secure storage.
+Platform layer предоставляет только транспорт и secure storage. API keys не попадают в Preferences/Core state. Text processing независимо от движка проходит Core-проверки сохранения чисел, имён, отрицаний и смысла; external routing выполняется batch-запросом.
 
-Text processing независимо от движка проходит Core-проверки на сохранение чисел, имён, отрицаний и существенной части исходного текста. External routing выполняется batch-запросом по проектам, а не отдельным запросом на каждый проект.
+## Шесть delivery targets
 
-## Модули
+| Платформа | Shell | Artifact |
+| --- | --- | --- |
+| macOS | `platforms/desktop` | DMG |
+| Windows | `platforms/desktop` | MSI / EXE |
+| Linux | `platforms/desktop` | DEB / RPM |
+| Android | `platforms/android` | APK |
+| iOS | `platforms/ios/shared` + `platforms/ios/app` | IPA / SideStore |
+| Web | `platforms/web` | production Wasm |
 
-- `kashaCore` — платформонезависимое ядро;
-- `aiCatalog` — конкретные AI engines/providers metadata вне Core;
-- `composeApp` — общий Compose UI, состояние экранов и web-адаптер;
-- `runtime` — JVM/localhost infrastructure: storage, processing, local/cloud AI adapters;
-- `desktopApp` — desktop shell: микрофон, playback, notifications и packaging;
-- `iosApp` — тонкая iOS-оболочка; текущая тестовая сборка пока использует заглушки для AI/audio;
-- `tests` — end-to-end и browser smoke tests.
-
-## Приватность и границы
+## Приватность и архитектурные границы
 
 Запрещены обязательный remote backend, cloud DB/sync и telemetry/analytics SDK с пользовательскими данными. Web UI может общаться с локальным процессом через `127.0.0.1`.
 
-CI запускает guard-проверки:
+CI автоматически проверяет:
 
-- `check-local-only.py` — запрещает cloud sync/backend/telemetry и разрешает внешние AI endpoints только в изолированных adapter-ах;
-- `check-ai-boundary.py` — проверяет три AI-роли, consent/secrets и запрещает конкретный AI catalog внутри Core;
-- `check-ui-boundary.py` — запрещает обход `Kasha UI` и сторонние icon packs;
-- `check-brand-boundary.py` — запрещает возврат старого бренда.
+- `check-platform-shells.py` — физическую схему `modules/` + шесть shells и направление зависимостей;
+- `check-ai-boundary.py` — один Core, три AI-роли, catalog/connectors вне Core, consent и отсутствие persisted secrets;
+- `check-local-only.py` — отсутствие скрытого cloud sync/backend/telemetry;
+- `check-ui-boundary.py` — единый Kasha UI и Kasha Icons;
+- `check-brand-boundary.py` — отсутствие legacy-бренда.
 
 ## Сборка
 
-CI собирает и тестирует `kashaCore`, `aiCatalog`, общий UI/Android target, JVM runtime, desktop и production WebAssembly, а на macOS отдельно проверяет iOS shared framework. Затем browser E2E проходит основные пользовательские сценарии.
+CI отдельно проверяет Core/AI/UI, Android APK, iOS framework/IPA, production WebAssembly и desktop installers для macOS/Windows/Linux.
+
+Для локального Web-запуска: `bash scripts/run-web.sh`. Для первого запуска на macOS: `scripts/launch-macos.command`.
 
 Каноническое ТЗ продукта: [docs/SPEC.md](docs/SPEC.md).
 
 ## Дизайн для разработки
 
-[Полное UX/UI-ТЗ Kasha](docs/design/README.md) объединяет текущий код, выбранные визуальные референсы и канон владельца продукта. Включает спецификации всех экранов и состояний, компоненты, типографику и токены двух тем, графику и motion, доступность, приватность, тексты, приёмку и план внедрения.
+[Полное UX/UI-ТЗ Kasha](docs/design/README.md) объединяет текущий код, визуальный канон и требования продукта. Оно включает экраны и состояния, компоненты, типографику, токены тем, графику/motion, доступность, приватность, тексты, приёмку и план внедрения.
 
-[Анимированный каталог Kasha Icons и SVG](docs/design/icons/README.md) задаёт следующую редакцию существующего собственного набора. [Макрофон гречки](docs/design/assets/README.md) предназначен только для сплеш-экрана. Используются официальные SVG-логотипы проекта.
-
-Это целевой дизайн и материалы для внедрения; наличие документации не означает, что редизайн уже подключён к текущей сборке. [Карта репозитория](docs/design/01-repository-map.md) отдельно описывает `main` и активную production iOS-ветку на проверенных ревизиях.
+[Каталог Kasha Icons](docs/design/icons/README.md) описывает собственную систему иконок. Графический фон с макросъёмкой гречки используется только на splash screen.
