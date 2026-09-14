@@ -15,7 +15,7 @@ import io.ktor.http.*
 import kotlinx.cinterop.addressOf
 import kotlinx.cinterop.usePinned
 import kotlinx.serialization.json.*
-import platform.Foundation.NSData
+import platform.Foundation.NSFileHandle
 import platform.posix.memcpy
 
 /** Единственное место iOS shell с реальными endpoint-ами внешнего inference. */
@@ -201,7 +201,12 @@ internal class IosExternalAiClient(
         .replace("#", "%23")
 
     private fun fileBytes(path: String): ByteArray {
-        val data = NSData.dataWithContentsOfFile(path) ?: error("cloudAudioMissing")
+        val handle = NSFileHandle.fileHandleForReadingAtPath(path) ?: error("cloudAudioMissing")
+        val data = try {
+            handle.readDataToEndOfFile()
+        } finally {
+            handle.closeFile()
+        }
         val size = data.length.toInt()
         if (size == 0) return ByteArray(0)
         return ByteArray(size).also { output ->
