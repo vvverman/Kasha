@@ -2,7 +2,7 @@
 (() => {
   'use strict';
   let recorder=null,stream=null,player=null,playerLoading=false,writes=Promise.resolve(),stopped=null,context=null,analyser=null;
-  let generation=0,openPromise;
+  let generation=0,openPromise,activeSessionId=null,recordingOperation=null,lastCancelledId=null;
   const db=()=>openPromise ||= new Promise((resolve,reject)=>{
     const r=indexedDB.open('kasha-audio-v1',1);
     r.onupgradeneeded=()=>{r.result.createObjectStore('sessions',{keyPath:'id'});r.result.createObjectStore('chunks',{keyPath:['id','index']});};
@@ -25,20 +25,25 @@
     const chunks=(await all('chunks')).filter(x=>x.id===id);
     await new Promise((resolve,reject)=>{const tx=database.transaction(['sessions','chunks'],'readwrite');tx.objectStore('sessions').delete(id);chunks.forEach(x=>tx.objectStore('chunks').delete([x.id,x.index]));tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error||Error('Audio cleanup failed'));});
   };
-  const pendingSession=async()=>{
-    if(recorder&&recorder.state!=='inactive')return null;
+  const pendingSessions=async()=>{
+    const protectedId=activeSessionId;
+    const result=[];
     const sessions=(await all('sessions')).sort((a,b)=>a.created-b.created);
     const chunks=await all('chunks');
     for(const saved of sessions){
-      if(chunks.some(x=>x.id===saved.id&&x.blob?.size>0))return saved;
-      await removeSession(saved.id).catch(()=>{});
+      // A scan started before getUserMedia/IndexedDB completed must not delete the live journal.
+      if(saved.id===protectedId||saved.id===activeSessionId)continue;
+      if(chunks.some(x=>x.id===saved.id&&x.blob?.size>0))result.push(saved);
+      else await removeSession(saved.id);
     }
-    return null;
+    return result;
   };
-  const upload=async base=>{
+  const pendingSession=async()=>(await pendingSessions())[0]||null;
+  const upload=async(base,pendingId)=>{
     await writes;
-    const saved=await pendingSession();
-    if(!saved)throw Error('No pending recording');
+    const sessions=await pendingSessions();
+    const saved=pendingId?sessions.find(s=>s.id===pendingId):(sessions.length===1?sessions[0]:null);
+    if(!saved)throw Error('Expected one matching pending recording');
     const chunks=(await all('chunks')).filter(x=>x.id===saved.id&&x.blob?.size>0).sort((a,b)=>a.index-b.index);
     if(!chunks.length){await removeSession(saved.id);throw Error('No audio samples');}
     const blob=new Blob(chunks.map(x=>x.blob),{type:saved.mime});
@@ -69,7 +74,12 @@
       }catch{return false;}
     },
     pending:async()=>Boolean(await pendingSession()),
-    phase:()=>recorder?.state==='recording'?'recording':recorder?.state==='paused'?'paused':'idle',
+    pendingRecordings:async()=>{try{return JSON.stringify((await pendingSessions()).map(s=>({id:s.id,createdAt:s.created})));}catch(e){return failure(e);}},
+    sessionState:()=>{
+      const phase=recorder?.state==='recording'?'RECORDING':recorder?.state==='paused'?'PAUSED':activeSessionId&&recordingOperation!=='starting'?'FINALIZING':'IDLE';
+      return JSON.stringify({phase,activeSessionId:phase==='IDLE'?null:activeSessionId});
+    },
+    phase:()=>JSON.parse(globalThis.kashaPlatform.sessionState()).phase.toLowerCase(),
     level:()=>{
       if(!analyser||recorder?.state!=='recording')return 0;
       const values=new Float32Array(analyser.fftSize);analyser.getFloatTimeDomainData(values);
@@ -77,16 +87,18 @@
       return Math.max(0,Math.min(1,Math.sqrt(sum/values.length)*5));
     },
     start:async()=>{
+      if(recordingOperation)return failure(Error('Recording operation in progress'));
+      if(recorder&&recorder.state!=='inactive')return 'ok';
+      recordingOperation='starting';
       let sessionId=null;
       try{
-        if(recorder&&recorder.state!=='inactive')return 'ok';
         if(await pendingSession())throw Error('Recover pending audio first');
         if(player&&!player.ended)throw Error('Stop playback first');
         if(!navigator.mediaDevices?.getUserMedia||!globalThis.MediaRecorder)throw Error('Microphone unavailable');
         stream=await navigator.mediaDevices.getUserMedia({audio:true});
         const mime=['audio/webm;codecs=opus','audio/mp4','audio/ogg;codecs=opus'].find(t=>MediaRecorder.isTypeSupported(t));
         const own=new MediaRecorder(stream,mime?{mimeType:mime}:undefined);recorder=own;
-        const id=crypto.randomUUID();sessionId=id;let index=0,total=0,persistError=null;
+        const id=crypto.randomUUID();sessionId=id;activeSessionId=id;let index=0,total=0,persistError=null;
         await put('sessions',{id,mime:own.mimeType||mime||'audio/webm',created:Date.now()});
         context=new (globalThis.AudioContext||globalThis.webkitAudioContext)();
         analyser=context.createAnalyser();analyser.fftSize=1024;context.createMediaStreamSource(stream).connect(analyser);
@@ -98,7 +110,11 @@
           total+=e.data.size;if(total>=60*1024*1024&&own.state!=='inactive')own.stop();
         };
         stopped=new Promise((resolve,reject)=>{
-          own.onstop=async()=>{release();await writes;persistError?reject(persistError):resolve();};
+          own.onstop=async()=>{
+            release();await writes;
+            if(recorder===own){recorder=null;activeSessionId=null;}
+            persistError?reject(persistError):resolve();
+          };
           own.onerror=event=>{
             persistError=event?.error||Error('Recording failed');
             if(own.state!=='inactive'){
@@ -108,26 +124,57 @@
         });stopped.catch(()=>{});own.start(500);
         try{localStorage.setItem('kasha.mic-consent','yes');}catch{}
         return 'ok';
-      }catch(e){release();recorder=null;stopped=null;if(sessionId)await removeSession(sessionId).catch(()=>{});return failure(e);}
+      }catch(e){release();recorder=null;activeSessionId=null;stopped=null;if(sessionId)await removeSession(sessionId).catch(()=>{});return failure(e);}
+      finally{recordingOperation=null;}
     },
     pause:()=>{try{if(recorder?.state!=='recording')throw Error('Not recording');recorder.pause();return 'ok';}catch(e){return failure(e);}},
     resume:()=>{try{if(recorder?.state!=='paused')throw Error('Not paused');recorder.resume();return 'ok';}catch(e){return failure(e);}},
     stop:async base=>{
+      if(recordingOperation)return failure(Error('Recording operation in progress'));
+      const id=activeSessionId;
+      if(!id||!recorder||recorder.state==='inactive')return failure(Error('Not recording'));
+      recordingOperation='finalizing';
       try{
-        if(recorder?.state!=='inactive')recorder?.stop();
+        recorder.stop();
         await stopped;
-        recorder=null;stopped=null;
-        return await upload(base);
-      }catch(e){
-        if(recorder?.state==='inactive')recorder=null;
-        stopped=null;
-        return failure(e);
-      }
+        recorder=null;activeSessionId=null;stopped=null;
+        return await upload(base,id);
+      }catch(e){return failure(e);}
+      finally{recordingOperation=null;}
     },
-    recover:async base=>{try{return await upload(base);}catch(e){return failure(e);}},
+    recover:async(base,id)=>{
+      if(recordingOperation||activeSessionId)return failure(Error('Recording operation in progress'));
+      recordingOperation='recovering';
+      try{return await upload(base,id);}catch(e){return failure(e);}
+      finally{recordingOperation=null;}
+    },
+    cancel:async id=>{
+      if(recordingOperation)return failure(Error('Recording operation in progress'));
+      if(!activeSessionId&&lastCancelledId===id)return 'ok';
+      if(!id||id!==activeSessionId||!recorder||recorder.state==='inactive')return failure(Error('Recording changed'));
+      recordingOperation='cancelling';
+      try{
+        recorder.stop();
+        // Deletion was explicit: a failed chunk write must not prevent deleting this journal.
+        await stopped.catch(()=>{});
+        await removeSession(id);
+        recorder=null;activeSessionId=null;stopped=null;lastCancelledId=id;
+        return 'ok';
+      }catch(e){return failure(e);}
+      finally{recordingOperation=null;}
+    },
+    discardPending:async id=>{
+      if(recordingOperation||activeSessionId)return failure(Error('Recording operation in progress'));
+      recordingOperation='discarding';
+      try{
+        if(!id||(await pendingSessions()).every(s=>s.id!==id))throw Error('Pending recording changed');
+        await removeSession(id);return 'ok';
+      }catch(e){return failure(e);}
+      finally{recordingOperation=null;}
+    },
     play:async(url,from,rate)=>{
       try{
-        if(recorder&&recorder.state!=='inactive')throw Error('Stop recording first');
+        if(activeSessionId||recordingOperation==='starting')throw Error('Stop recording first');
         stopAudio();const ownGeneration=generation;const own=new Audio();player=own;playerLoading=true;own.preservesPitch=true;own.playbackRate=rate;
         await new Promise((resolve,reject)=>{
           const timeout=setTimeout(()=>reject(Error('Audio load timeout')),15000);
@@ -138,7 +185,7 @@
       }catch(e){playerLoading=false;return failure(e);}
     },
     pauseAudio:()=>{player?.pause();return 'ok';},
-    resumeAudio:async()=>{try{if(recorder&&recorder.state!=='inactive')throw Error('Stop recording first');await player?.play();return 'ok';}catch(e){return failure(e);}},
+    resumeAudio:async()=>{try{if(activeSessionId||recordingOperation==='starting')throw Error('Stop recording first');await player?.play();return 'ok';}catch(e){return failure(e);}},
     seekAudio:seconds=>{
       try{
         if(!player||playerLoading||player.ended)throw Error('Playback unavailable');
