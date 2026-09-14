@@ -163,7 +163,11 @@ with sync_playwright() as pw:
 
         first_audio_url = BASE + '/api/captures/' + recovered['id'] + '/audio'
         assert page.evaluate('(url) => kashaPlatform.play(url, 0, 1)', first_audio_url) == 'ok'
+        assert page.evaluate('kashaPlatform.seekAudio(0)') == 'ok'
+        assert page.evaluate('kashaPlatform.audioState().phase') == 'playing'
         assert page.evaluate('kashaPlatform.pauseAudio()') == 'ok'
+        assert page.evaluate('kashaPlatform.audioState().phase') == 'paused'
+        assert page.evaluate('kashaPlatform.seekAudio(0)') == 'ok'
         assert page.evaluate('kashaPlatform.audioState().phase') == 'paused'
         assert page.evaluate('kashaPlatform.start()').startswith('ERROR:')
         page.evaluate('kashaPlatform.stopAudio()')
