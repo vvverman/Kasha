@@ -3,10 +3,8 @@ package brain.runtime.system
 import brain.model.Task
 import brain.studio.ReminderGateway
 import kotlinx.coroutines.*
-import kotlinx.coroutines.test.*
 import kotlin.test.*
 
-@OptIn(ExperimentalCoroutinesApi::class)
 class RuntimeReminderDeliveryTest {
     private val task = Task(id = "t", text = "Напомнить", createdAt = 1, updatedAt = 1, dueAt = 1)
     private class Gateway : ReminderGateway {
@@ -19,7 +17,7 @@ class RuntimeReminderDeliveryTest {
         }
     }
 
-    @Test fun oneOwnerSerializesOverlappingChecks() = runTest {
+    @Test fun oneOwnerSerializesOverlappingChecks() = runBlocking {
         val gateway = Gateway()
         val entered = CompletableDeferred<Unit>()
         val release = CompletableDeferred<Unit>()
@@ -29,13 +27,13 @@ class RuntimeReminderDeliveryTest {
             if (claimed) emptyList() else listOf(task).also { claimed = true }
         }, gateway)
         val first = async { delivery.tick(10, "UTC") }; entered.await()
-        val second = async { delivery.tick(10, "UTC") }; runCurrent()
+        val second = async { delivery.tick(10, "UTC") }; yield()
         release.complete(Unit); awaitAll(first, second)
         assertEquals(listOf("t"), gateway.sent)
         assertFalse(delivery.status().failed)
     }
 
-    @Test fun unavailableServiceDoesNotConsumeDueTasks() = runTest {
+    @Test fun unavailableServiceDoesNotConsumeDueTasks() = runBlocking {
         val gateway = Gateway().apply { available = false }
         var calls = 0
         val delivery = RuntimeReminderDelivery({ _, _ -> calls++; listOf(task) }, gateway)
@@ -44,7 +42,7 @@ class RuntimeReminderDeliveryTest {
         assertFalse(delivery.status().available)
     }
 
-    @Test fun failureRemainsVisibleUntilActualSuccessfulDelivery() = runTest {
+    @Test fun failureRemainsVisibleUntilActualSuccessfulDelivery() = runBlocking {
         val gateway = Gateway().apply { failed = true }
         var due = listOf(task)
         val delivery = RuntimeReminderDelivery({ _, _ -> due }, gateway)
@@ -57,14 +55,14 @@ class RuntimeReminderDeliveryTest {
         assertEquals(listOf("t"), gateway.sent)
     }
 
-    @Test fun processCancellationIsNotReportedAsNotificationFailure() = runTest {
+    @Test fun processCancellationIsNotReportedAsNotificationFailure() = runBlocking {
         val gateway = Gateway()
         val delivery = RuntimeReminderDelivery({ _, _ -> throw CancellationException("shutdown") }, gateway)
         assertFailsWith<CancellationException> { delivery.tick(10, "UTC") }
         assertFalse(delivery.status().failed)
     }
 
-    @Test fun reminderTextIsPassedAsDataNotShellCode() = runTest {
+    @Test fun reminderTextIsPassedAsDataNotShellCode() = runBlocking {
         val commands = mutableListOf<List<String>>()
         val inputs = mutableListOf<String?>()
         val process = object : JvmProcessGateway {

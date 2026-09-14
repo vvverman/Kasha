@@ -9,7 +9,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.datetime.TimeZone
+import java.time.ZoneId
 import kotlin.time.Clock
 
 /** Единственный владелец доставки в локальном процессе. Вкладки не забирают напоминания. */
@@ -37,7 +37,7 @@ class RuntimeReminderDelivery(
 
     suspend fun run() {
         while (currentCoroutineContext().isActive) {
-            tick(Clock.System.now().toEpochMilliseconds(), TimeZone.currentSystemDefault().id)
+            tick(Clock.System.now().toEpochMilliseconds(), ZoneId.systemDefault().id)
             delay(9_750)
         }
     }
