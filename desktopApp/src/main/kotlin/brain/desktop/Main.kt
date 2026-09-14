@@ -17,6 +17,14 @@ fun main(args:Array<String>){
     val demo=Files.exists(resources.resolve("demo-mode.txt"))
     val name=if(demo)"Kasha Test" else "Kasha"
     System.setProperty("apple.awt.application.name",name)
+    if("--install-smoke" in args){
+        try{
+            val env=bundledEnvironment(resources)
+            check(env.values.all{Files.exists(Path.of(it))})
+            println("KASHA DESKTOP INSTALL SMOKE PASSED")
+            return
+        }catch(e:Exception){e.printStackTrace();exitProcess(1)}
+    }
     if("--self-test-demo" in args){
         try{val index=args.indexOf("--self-test-demo");runBlocking{StudioSelfTest.run(resources,Path.of(args[index+1]))};return}
         catch(e:Exception){e.printStackTrace();exitProcess(1)}
@@ -25,7 +33,7 @@ fun main(args:Array<String>){
         try{val index=args.indexOf("--self-test");runBlocking{SelfTest.run(resources,Path.of(args[index+1]),Path.of(args[index+2]))};return}
         catch(e:Exception){e.printStackTrace();exitProcess(1)}
     }
-    val root=System.getenv("KASHA_HOME")?.let(Path::of)?:Path.of(System.getProperty("user.home"),"Library","Application Support",name)
+    val root=DesktopPlatform.dataRoot(name)
     val services=try{DesktopServices(root.toAbsolutePath(),resources)}catch(e:Exception){JOptionPane.showMessageDialog(null,e.message,name,JOptionPane.ERROR_MESSAGE);return}
     val smokeAt=args.indexOf("--ui-smoke")
     val smokeOutput=if(smokeAt>=0)Path.of(args[smokeAt+1])else null
@@ -39,13 +47,31 @@ fun main(args:Array<String>){
         DesktopReminder(),
     )
     Thread.setDefaultUncaughtExceptionHandler{_,error->runCatching{Files.writeString(root.resolve("last-error.log"),error.stackTraceToString())};error.printStackTrace()}
+    val shutdownHook=Thread({runCatching{services.close()}},"Kasha-shutdown")
+    Runtime.getRuntime().addShutdownHook(shutdownHook)
     try{
         application{
-            val scope=rememberCoroutineScope();var closing by remember{mutableStateOf(false)}
-            Window(onCloseRequest={if(!closing){closing=true;scope.launch{
-                try{state.flush();withContext(Dispatchers.IO){services.close()};exitApplication()}
-                catch(_:Exception){state.error="saveFailed";closing=false}
-            }}},title=name,state=rememberWindowState(width=430.dp,height=850.dp,position=WindowPosition(Alignment.Center)),resizable=true){
+            val scope=rememberCoroutineScope()
+            var closing by remember{mutableStateOf(false)}
+            val requestClose:()->Unit={
+                if(!closing){
+                    closing=true
+                    scope.launch{
+                        try{
+                            state.flush()
+                            withContext(Dispatchers.IO){services.close()}
+                            exitApplication()
+                        }catch(e:CancellationException){throw e}
+                        catch(_:Exception){state.error="saveFailed";closing=false}
+                    }
+                }
+            }
+            val currentCloseRequest by rememberUpdatedState(requestClose)
+            DisposableEffect(Unit){
+                val systemQuit=installDesktopQuitHandler{currentCloseRequest()}
+                onDispose{systemQuit.close()}
+            }
+            Window(onCloseRequest=requestClose,title=name,state=rememberWindowState(width=430.dp,height=850.dp,position=WindowPosition(Alignment.Center)),resizable=true){
                 LaunchedEffect(Unit){
                     window.minimumSize=Dimension(390,680)
                     if(smokeOutput!=null){
@@ -60,11 +86,14 @@ fun main(args:Array<String>){
                         val image=java.awt.Robot().createScreenCapture(java.awt.Rectangle(window.locationOnScreen,window.size))
                         javax.imageio.ImageIO.write(image,"png",smokeOutput.resolve("$screen.png").toFile())
                         Files.writeString(smokeOutput.resolve("$screen-ready.txt"),"visible=${window.isShowing}; ${window.width}x${window.height}; Java=${System.getProperty("java.home")}; simulated=${services.simulated}")
-                        delay(200);state.flush();services.close();exitApplication()
+                        delay(200);requestClose()
                     }
                 }
                 StudioApp(state)
             }
         }
-    }finally{runCatching{services.close()}}
+    }finally{
+        runCatching{services.close()}
+        runCatching{Runtime.getRuntime().removeShutdownHook(shutdownHook)}
+    }
 }

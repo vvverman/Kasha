@@ -1,4 +1,6 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
+import org.jetbrains.compose.desktop.application.tasks.AbstractJPackageTask
+
 plugins {
     alias(libs.plugins.kotlinJvm)
     alias(libs.plugins.kotlinSerialization)
@@ -18,9 +20,9 @@ compose.desktop {
         mainClass = "brain.desktop.MainKt"
         jvmArgs += listOf("-Xmx768m", "-Dfile.encoding=UTF-8", "-Dapple.awt.application.name=Kasha")
         nativeDistributions {
-            targetFormats(TargetFormat.Dmg)
+            targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Exe, TargetFormat.Deb, TargetFormat.Rpm)
             packageName = if(demoBuild) "Kasha Test" else "Kasha"
-            packageVersion = "1.1.4"
+            packageVersion = "1.2.0"
             vendor = "Vyacheslav Verman"
             description = if(demoBuild) "Тест интерфейса, ИИ имитируется" else "Локальные голосовые заметки"
             includeAllModules = true
@@ -40,6 +42,26 @@ compose.desktop {
                     """.trimIndent()
                 }
             }
+            windows {
+                menuGroup = "Kasha"
+                dirChooser = true
+                perUserInstall = true
+            }
+            linux {
+                menuGroup = "Utility"
+                appCategory = "Utility"
+                shortcut = true
+            }
         }
+    }
+}
+
+// These commands are used by DesktopReminder and LinuxSecretServiceStore.
+// Keep distro package names in packaging, not in Core or shared UI.
+tasks.withType<AbstractJPackageTask>().configureEach {
+    when (targetFormat) {
+        TargetFormat.Deb -> freeArgs.addAll("--linux-package-deps", "libnotify-bin,libsecret-tools")
+        TargetFormat.Rpm -> freeArgs.addAll("--linux-package-deps", "libnotify,libsecret")
+        else -> Unit
     }
 }
