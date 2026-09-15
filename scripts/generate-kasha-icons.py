@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "docs/design/icons/registry.json"
-OUTPUT = ROOT / "composeApp/src/commonMain/kotlin/brain/studio/ui/GeneratedKashaIcons.kt"
+OUTPUT = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else ROOT / "composeApp/build/generated/kashaIcons/commonMain/brain/studio/GeneratedKashaIcons.kt"
 
 
 def kotlin_string(value: str | None) -> str:
