@@ -46,30 +46,39 @@ internal class AndroidStudioRepository(
         encodeDefaults = true
         prettyPrint = false
     }
-    private val storage = AndroidStorage(root)
+    private val storage by lazy { AndroidStorage(root) }
     private val mutex = Mutex()
     private val workflow = CaptureWorkflow(intelligence)
 
-    private var data: BrainData
-    private var prefs: Preferences
+    private data class LoadedState(var data: BrainData, var preferences: Preferences)
 
-    init {
+    // Чтение выполняется внутри команды Core, а не при создании оболочки.
+    // Неуспешный lazy-load не кешируется: существующий «Повтор» может перечитать файл.
+    private val loadedState by lazy {
         val loaded = storage.read(storage.stateFile)
-            ?.let { runCatching { json.decodeFromString<BrainData>(it) }.getOrNull() }
+            ?.let { json.decodeFromString<BrainData>(it) }
             ?: BrainData()
+        val preferences = storage.read(storage.preferencesFile)
+            ?.let { json.decodeFromString<Preferences>(it).validated() }
+            ?: defaultPreferences
+        // До успешного чтения ОБОИХ файлов запрещены reconcile и миграционные записи.
         val migrated = loaded.migrated()
         storage.reconcile(migrated.captures)
-        data = migrated.copy(captures = migrated.captures.map { capture ->
+        val recovered = migrated.copy(captures = migrated.captures.map { capture ->
             if (capture.status.isWorking) {
                 capture.copy(status = CaptureStatus.FAILED, message = "Обработка прервана; запись сохранена")
             } else capture
         })
-        if (data != loaded) persistData()
-
-        prefs = storage.read(storage.preferencesFile)
-            ?.let { runCatching { json.decodeFromString<Preferences>(it).validated() }.getOrNull() }
-            ?: defaultPreferences
+        if (recovered != loaded) storage.write(storage.stateFile, json.encodeToString(recovered))
+        LoadedState(recovered, preferences)
     }
+
+    private var data: BrainData
+        get() = loadedState.data
+        set(value) { loadedState.data = value }
+    private var prefs: Preferences
+        get() = loadedState.preferences
+        set(value) { loadedState.preferences = value }
 
     override suspend fun snapshot(): AppSnapshot = mutex.withLock {
         AppSnapshot(
@@ -84,6 +93,7 @@ internal class AndroidStudioRepository(
     override suspend fun preferences(): Preferences = mutex.withLock { prefs }
 
     override suspend fun savePreferences(value: Preferences) = mutex.withLock {
+        loadedState // Не перезаписывать настройки до успешного чтения исходного состояния.
         val next = value.validated()
         storage.write(storage.preferencesFile, json.encodeToString(next))
         prefs = next
@@ -244,8 +254,8 @@ internal class AndroidStudioRepository(
 
     override suspend fun createDemo(): Capture = error("Demo mode is disabled in production Android")
 
-    fun newPendingFile(): File = storage.newPendingFile()
-    fun pendingFiles(): List<File> = storage.pendingFiles()
+    fun newPendingFile(): File = loadedState.let { storage.newPendingFile() }
+    fun pendingFiles(): List<File> = loadedState.let { storage.pendingFiles() }
 
     suspend fun acceptPending(source: File, durationSeconds: Double, waveform: List<Float>): Capture = mutex.withLock {
         require(data.captures.none { it.isInbox }) { "Сначала сохраните или удалите текущую запись" }
@@ -288,7 +298,6 @@ internal class AndroidStudioRepository(
         data = next
     }
 
-    private fun persistData() = storage.write(storage.stateFile, json.encodeToString(data))
     private fun id(): String = UUID.randomUUID().toString()
     private fun now(): Long = Clock.System.now().toEpochMilliseconds()
 }

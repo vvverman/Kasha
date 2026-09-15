@@ -5,6 +5,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
+import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
 import java.util.UUID
@@ -29,7 +30,12 @@ internal class AndroidStorage(root: File) {
         require(!Files.isSymbolicLink(pendingDir.toPath()))
     }
 
-    fun read(file: File): String? = file.takeIf { it.isFile }?.readText(Charsets.UTF_8)
+    fun read(file: File): String? {
+        val path = file.toPath()
+        if (Files.notExists(path, NOFOLLOW_LINKS)) return null
+        check(Files.isRegularFile(path, NOFOLLOW_LINKS)) { "Не удалось прочитать локальные данные Kasha" }
+        return file.readText(Charsets.UTF_8)
+    }
 
     /** Атомарная замена небольших JSON-файлов состояния с fsync временного файла. */
     fun write(file: File, value: String) {

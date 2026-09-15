@@ -41,7 +41,13 @@ fun MainViewController() = ComposeUIViewController {
     }
 
     LaunchedEffect(repository) {
-        repository.reconcileReminders()
+        try {
+            repository.reconcileReminders()
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            // Ошибку чтения показывает общий запуск Core; notification resync не завершает UI.
+        }
     }
 
     DisposableEffect(repository, scope) {

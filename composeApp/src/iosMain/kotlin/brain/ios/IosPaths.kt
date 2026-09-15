@@ -40,8 +40,12 @@ internal object IosPaths {
 
     fun exists(path: String): Boolean = files.fileExistsAtPath(path)
 
-    fun read(path: String): String? = if (!exists(path)) null else
-        NSString.stringWithContentsOfFile(path, NSUTF8StringEncoding, null)
+    fun read(path: String): String? {
+        if (!exists(path)) return null
+        return checkNotNull(NSString.stringWithContentsOfFile(path, NSUTF8StringEncoding, null)) {
+            "Не удалось прочитать локальные данные Kasha"
+        }
+    }
 
     fun write(path: String, text: String) {
         val ok = NSString.create(string = text).writeToFile(
