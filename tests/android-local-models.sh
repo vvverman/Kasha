@@ -9,8 +9,10 @@ TEST=$(find test-apks -type f -name '*androidTest*.apk' | head -n 1)
 test -n "$APP" && test -n "$TEST"
 adb root
 adb wait-for-device
-adb install -r "$APP"
-adb install -r "$TEST"
+trap 'adb logcat -d > "$OUT/logcat.txt" 2>&1 || true' EXIT
+# ABI-targeted debug-сборка помечается testOnly; разрешение относится только к эмуляторной установке.
+adb install -r -t "$APP"
+adb install -r -t "$TEST"
 DEST=/sdcard/Android/data/ru.vrmn.kasha/files/ai-fixtures
 adb shell mkdir -p "$DEST"
 adb push desktopApp/bundle/common/models/ggml-small.bin "$DEST/ggml-small.bin"
@@ -23,7 +25,6 @@ adb shell 'iptables -I OUTPUT 1 ! -o lo -j REJECT'
 adb shell 'ip6tables -I OUTPUT 1 ! -o lo -j REJECT'
 adb shell iptables -S OUTPUT > "$OUT/ipv4-policy.txt"
 adb shell ip6tables -S OUTPUT > "$OUT/ipv6-policy.txt"
-trap 'adb logcat -d > "$OUT/logcat.txt" 2>&1 || true' EXIT
 timeout 1500 adb shell am instrument -w -r \
   -e class ru.vrmn.kasha.android.AndroidLocalModelsExecutionTest \
   ru.vrmn.kasha.test/androidx.test.runner.AndroidJUnitRunner | tee "$OUT/instrumentation.txt"

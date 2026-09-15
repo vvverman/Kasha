@@ -38,7 +38,8 @@ class DesktopServices(val root: Path, val resources: Path, cpuOnly: Boolean = fa
             val intelligence: Intelligence = if(simulated) DemoIntelligence() else RoutedStudioIntelligence(prefs,env,root,packages,cloud,runner)
             studioProcessor = StudioProcessor(store,prefs,intelligence,env.getValue("KASHA_FFMPEG"),runner)
             val baseRepository = StudioDiskRepository(store,studioProcessor,prefs,scope)
-            repository = AiStudioRepository(baseRepository, packages, cloud, JvmAiRuntimeProbe(env)::available)
+            // Probe и inference обязаны использовать одну конфигурацию устройства исполнения.
+            repository = AiStudioRepository(baseRepository, packages, cloud, JvmAiRuntimeProbe(env, runner)::available)
             recorder = DesktopRecorder(root,store){studioProcessor.enqueue(it,scope)}
             audio = DesktopAudio(store,env.getValue("KASHA_FFMPEG"),root,scope)
         } catch(e: Exception) { instanceLock.close();scope.cancel();throw e }

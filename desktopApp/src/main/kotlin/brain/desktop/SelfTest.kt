@@ -42,25 +42,40 @@ object SelfTest {
             check(hash(Path.of(env.getValue("KASHA_WHISPER_MODEL"))) == speechModel.sha256)
             val qwen = Path.of(env.getValue("KASHA_LLAMA_MODEL"))
             // Windows содержит штатные GGUF shards, полученные из проверенного pinned-файла.
-            // Исполнение ниже проверяет загрузку всего набора, а не только первого shard.
             if (qwen.fileName.toString() == textModel.fileName) check(hash(qwen) == textModel.sha256)
             else check(qwen.fileName.toString().startsWith(textModel.fileName.removeSuffix(".gguf") + "-00001-of-"))
             val repo = services.repository
             repo.savePreferences(Preferences(autoRecord = false, language = "ru", ai = selection))
             val capabilities = (repo as AiPlatformServices).aiExecution.roles(selection)
-            check(capabilities.size == 3 && capabilities.all { it.executable && it.selectedEngineId == selection.engineId(it.role) })
+            val readyToRun = capabilities.size == 3 && capabilities.all { it.executable && it.selectedEngineId == selection.engineId(it.role) }
+            if (!readyToRun) {
+                println("Самопроверка: simulated=${services.simulated}, capabilities=$capabilities")
+                // Только помощь инструментов, без модели, аудио, текста или секретов.
+                for ((key, args) in listOf(
+                    "KASHA_WHISPER_CLI" to listOf("--help", "--no-gpu"),
+                    "KASHA_LLAMA_CLI" to listOf("--help", "--n-gpu-layers", "0", "--device", "none"),
+                    "KASHA_FFMPEG" to listOf("-version"),
+                )) {
+                    val log = output.resolve("probe-$key.log")
+                    val process = ProcessBuilder(listOf(env.getValue(key)) + args)
+                        .redirectErrorStream(true).redirectOutput(log.toFile()).start()
+                    if (!process.waitFor(10, java.util.concurrent.TimeUnit.SECONDS)) {
+                        process.destroyForcibly(); process.waitFor()
+                        println("Самопроверка: $key — timeout")
+                    } else println("Самопроверка: $key — exit=${process.exitValue()}")
+                }
+            }
+            check(readyToRun) { "Фактическая готовность ролей не подтверждена: $capabilities" }
             val work = repo.createProject(ProjectDraft("Разработка приложения", instruction = "Запись голоса, интерфейс и сохранение заметок."))
             val pin = repo.createProject(ProjectDraft("Закреплённый"))
             repo.pinProject(pin.id, true)
             val projectsBefore = repo.snapshot().projects
             val capture = services.store.createCapture("fixture.wav", Files.readAllBytes(fixture))
-            // Именно StudioProcessor/RoutedStudioIntelligence, используемые приложением,
-            // а не сохранённый для совместимости прежний LocalProcessing.
             val transcribed = services.studioProcessor.process(capture.id)
             check(transcribed.status == CaptureStatus.READY) { "${transcribed.status}: ${transcribed.message}" }
             check(!transcribed.simulated && transcribed.transcript.any { it in 'А'..'я' })
             check(transcribed.inputSha256 == sourceHash)
-            check(!transcribed.llmApplied) // «Привести в порядок» выполняется отдельно, как в UI.
+            check(!transcribed.llmApplied)
             val tidied = repo.tidy(capture.id)
             check(tidied.llmApplied)
             LocalModelText.requirePreserved(transcribed.textToSave, tidied.textToSave)
