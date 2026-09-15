@@ -27,21 +27,20 @@ internal class AndroidExternalAiClient(
         val boundary = "Kasha-${UUID.randomUUID()}"
         val (name, type) = ExternalAiProtocol.audioType(file)
         fun field(name: String, value: String) = "--$boundary\r\nContent-Disposition: form-data; name=\"$name\"\r\n\r\n$value\r\n"
-        val prefix = (field("model", connection.modelFor(AiRole.SPEECH_TO_TEXT)!!) +
-            if (language.isNotBlank() && language != "system") field("language", language) else "") +
+        val prefix = field("model", connection.modelFor(AiRole.SPEECH_TO_TEXT)!!) +
+            (if (language.isNotBlank() && language != "system") field("language", language) else "") +
             "--$boundary\r\nContent-Disposition: form-data; name=\"file\"; filename=\"$name\"\r\nContent-Type: $type\r\n\r\n"
-        val response = send(request, upload = source,
-            prefix = prefix.toByteArray(), suffix = "\r\n--$boundary--\r\n".toByteArray(),
-            contentType = "multipart/form-data; boundary=$boundary")
+        val response = send(request, upload = source, prefix = prefix.toByteArray(),
+            suffix = "\r\n--$boundary--\r\n".toByteArray(), contentType = "multipart/form-data; boundary=$boundary")
         return ExternalAiProtocol.transcription(response.second)
     }
 
     private suspend fun send(request: ExternalRequest, testOnly: Boolean = false, upload: File? = null,
         prefix: ByteArray = byteArrayOf(), suffix: ByteArray = byteArrayOf(),
-        contentType: String = "application/json"): Pair<Int, String> = withContext(Dispatchers.IO) {
-        currentCoroutineContext().ensureActive()
+        contentType: String = "application/json"): Pair<Int, String> = coroutineScope {
+        ensureActive()
         val connection = open(URL(request.url))
-        try {
+        val operation = async(Dispatchers.IO) {
             connection.instanceFollowRedirects = false
             connection.useCaches = false
             connection.connectTimeout = 20_000
@@ -52,14 +51,14 @@ internal class AndroidExternalAiClient(
                 connection.requestMethod = "POST"; connection.doOutput = true
                 connection.setRequestProperty("Content-Type", contentType)
                 connection.setFixedLengthStreamingMode(body?.size?.toLong() ?: (prefix.size + upload!!.length() + suffix.size))
-                currentCoroutineContext().ensureActive()
+                ensureActive()
                 connection.outputStream.use { output ->
                     if (body != null) output.write(body) else {
                         output.write(prefix)
                         upload!!.inputStream().use { input ->
                             val buffer = ByteArray(65536)
                             while (true) {
-                                currentCoroutineContext().ensureActive()
+                                ensureActive()
                                 val count = input.read(buffer); if (count < 0) break
                                 output.write(buffer, 0, count)
                             }
@@ -68,21 +67,27 @@ internal class AndroidExternalAiClient(
                     }
                 }
             }
-            currentCoroutineContext().ensureActive()
+            ensureActive()
             val status = connection.responseCode
-            if (testOnly) return@withContext status to ""
+            if (testOnly) return@async status to ""
             check(status in 200..299) { "cloudHttp$status" }
             val result = ByteArrayOutputStream()
             connection.inputStream.use { input ->
                 val buffer = ByteArray(8192)
                 while (true) {
-                    currentCoroutineContext().ensureActive()
+                    ensureActive()
                     val count = input.read(buffer); if (count < 0) break
                     check(result.size() + count <= ExternalAiProtocol.MAX_RESPONSE_BYTES) { "cloudResponseTooLarge" }
                     result.write(buffer, 0, count)
                 }
             }
             status to result.toString("UTF-8")
-        } finally { connection.disconnect() }
+        }
+        try { operation.await() }
+        finally {
+            // Отмена ожидания закрывает сокет и освобождает заблокированный IO worker.
+            connection.disconnect()
+            operation.cancel()
+        }
     }
 }

@@ -1,7 +1,6 @@
 package brain.ai.external
 
 import brain.ai.CloudConnectionPolicy
-
 import brain.studio.*
 import kotlinx.serialization.json.*
 
@@ -36,7 +35,7 @@ object ExternalAiProtocol {
                 "gemini" -> putJsonArray("contents") {
                     add(buildJsonObject { putJsonArray("parts") { add(buildJsonObject { put("text", prompt) }) } })
                 }
-                "openai" -> { put("model", model); put("input", prompt) }
+                "openai" -> { put("model", model); put("input", prompt); put("store", false) }
                 else -> {
                     put("model", model)
                     if (connection.providerId == "anthropic") put("max_tokens", 4096)
@@ -58,6 +57,11 @@ object ExternalAiProtocol {
 
     fun text(providerId: String, body: String): String {
         val root = Json.parseToJsonElement(body).jsonObject
+        check(root["error"] == null || root["error"] == JsonNull) { "cloudResponseFailed" }
+        if (providerId == "openai") {
+            val status = root["status"]?.jsonPrimitive?.contentOrNull
+            check(status == null || status == "completed") { "cloudResponseIncomplete" }
+        }
         return nonempty(when (providerId) {
             "openai" -> root["output_text"]?.jsonPrimitive?.contentOrNull?.takeIf(String::isNotBlank)
                 ?: root["output"]?.jsonArray.orEmpty().flatMap { it.jsonObject["content"]?.jsonArray.orEmpty() }
