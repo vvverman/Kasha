@@ -53,11 +53,16 @@ internal class IosRepository(
             IosPaths.write(preferencesFile, json.encodeToString(value))
             state.preferences = value
         }
-    private val intelligence = IosRoutedIntelligence(localIntelligence, cloudAi) { prefs }
+    private val nativeModels by lazy { IosNativeModels() }
+    val aiPackages: IosModelPackages by lazy {
+        IosModelPackages(IosPaths.child(storageRoot ?: IosPaths.root, "models"), selected = { prefs.ai })
+    }
+    private val models by lazy { IosLocalModels(aiPackages, nativeModels) }
+    private val intelligence by lazy { IosRoutedIntelligence(localIntelligence, cloudAi, models) { prefs } }
     val aiExecution: AiExecutionCapabilityGateway = object : AiExecutionCapabilityGateway {
         override suspend fun roles(selection: AiSelection) = intelligence.capabilities(selection, language())
     }
-    private val workflow = CaptureWorkflow(intelligence)
+    private val workflow by lazy { CaptureWorkflow(intelligence) }
 
     private fun id(): String = NSUUID().UUIDString.lowercase()
     private fun now(): Long = Clock.System.now().toEpochMilliseconds()
@@ -69,7 +74,9 @@ internal class IosRepository(
         }
         val externalStt = AiRole.SPEECH_TO_TEXT in externalRoles
         val externalText = externalRoles.any { it == AiRole.TEXT || it == AiRole.ROUTING }
-        val localSpeechReady = prefs.ai.speechToText == BuiltInAi.APPLE_SPEECH && localIntelligence.supportsOnDevice(language())
+        val localSpeechReady = if (prefs.ai.speechToText == BuiltInAi.APPLE_SPEECH)
+            localIntelligence.supportsOnDevice(language())
+        else models.capability(AiRole.SPEECH_TO_TEXT, prefs.ai.speechToText, language()).executable
         return AppSnapshot(
             projects = data.projects,
             notes = data.notes,
@@ -77,13 +84,13 @@ internal class IosRepository(
             tasks = data.tasks,
             runtime = RuntimeStatus(
                 whisperConfigured = externalStt || localSpeechReady,
-                llmConfigured = externalText,
+                llmConfigured = externalText || models.capability(AiRole.TEXT, prefs.ai.text, language()).executable,
                 localOnly = externalRoles.isEmpty(),
                 simulated = false,
                 message = when {
                     externalRoles.isNotEmpty() -> "iOS · внешний AI включён для ${externalRoles.joinToString()}"
                     localSpeechReady -> "iOS · распознавание речи строго на устройстве"
-                    else -> "iOS · для выбранного языка нет системного on-device STT"
+                    else -> "iOS · выбранное локальное распознавание недоступно"
                 },
             ),
         )
@@ -208,8 +215,8 @@ internal class IosRepository(
         } catch (cancelled: kotlinx.coroutines.CancellationException) {
             throw cancelled
         } catch (e: Throwable) {
-            val unavailable = e.message == "aiUnavailable" || e.message?.contains("onDeviceSpeechUnavailable") == true ||
-                e.message?.contains("speechPermissionDenied") == true
+            val unavailable = e.message in setOf("aiUnavailable", "runtimeUnavailable", "modelNotInstalled") ||
+                e.message?.contains("onDeviceSpeechUnavailable") == true || e.message?.contains("speechPermissionDenied") == true
             fail(
                 id,
                 if (unavailable) CaptureStatus.NEEDS_MODEL else CaptureStatus.FAILED,
@@ -269,7 +276,6 @@ internal class IosRepository(
     private fun readState(): LoadedState {
         val storedData = IosPaths.read(stateFile)
         val storedPreferences = IosPaths.read(preferencesFile)
-        // Старое хранилище используется только при отсутствии нового файла, не при его ошибке.
         val legacyData = if (storedData == null) defaults.stringForKey("kasha.test.brain.v1") else null
         val legacyPreferences = if (storedPreferences == null) defaults.stringForKey("kasha.test.preferences.v1") else null
         val data = (storedData ?: legacyData)?.let { json.decodeFromString<BrainData>(it) } ?: BrainData()

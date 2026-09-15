@@ -4,7 +4,6 @@ import brain.model.*
 import brain.studio.AiPackageGateway
 import brain.studio.AiPlatformServices
 import brain.studio.DeviceCapabilityGateway
-import brain.studio.NoopAiPackageGateway
 import brain.studio.StudioRepository
 import kotlinx.datetime.TimeZone
 import kotlin.time.Clock
@@ -19,7 +18,7 @@ internal class IosReminderRepository(
     override val deviceCapabilities: DeviceCapabilityGateway,
     override val cloudAi: IosCloudAiGateway,
 ) : StudioRepository by delegate, AiPlatformServices {
-    override val aiPackages: AiPackageGateway = NoopAiPackageGateway
+    override val aiPackages: AiPackageGateway get() = delegate.aiPackages
     override val aiExecution get() = delegate.aiExecution
 
     suspend fun syncReminders() {

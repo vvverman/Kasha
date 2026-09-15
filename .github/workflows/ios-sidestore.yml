@@ -44,7 +44,7 @@ env:
 jobs:
   build-ipa:
     runs-on: macos-15
-    timeout-minutes: 35
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
@@ -57,6 +57,18 @@ jobs:
         with:
           gradle-version: '9.3.1'
           cache-read-only: false
+
+      - uses: actions/cache@v4
+        id: native
+        with:
+          path: iosApp/build/native/iphoneos
+          key: kasha-ios-native-device-v1-${{ hashFiles('iosApp/native/**') }}
+
+      - name: Build bundled iPhone model runtimes
+        if: steps.native.outputs.cache-hit != 'true'
+        run: |
+          set -o pipefail
+          bash iosApp/native/build.sh iphoneos 2>&1 | tee ios-native-device.log
 
       - name: Prepare Kasha resources and boundaries
         run: |
@@ -116,6 +128,12 @@ jobs:
           set -euo pipefail
           APP="build/ios/Kasha.xcarchive/Products/Applications/$IOS_PRODUCT_NAME.app"
           test -d "$APP"
+          for engine in Whisper Llama; do
+            LIB="$APP/Frameworks/Kasha$engine.framework/Kasha$engine"
+            test -f "$LIB"
+            lipo -verify_arch arm64 "$LIB"
+            nm -gU "$LIB" | grep -q "_kasha_$(echo "$engine" | tr '[:upper:]' '[:lower:]')_run$"
+          done
           rm -rf build/ios/Payload
           rm -f build/ios/Kasha.ipa
           mkdir -p build/ios/Payload
@@ -141,6 +159,7 @@ jobs:
             build/ios/Kasha-icon.png
             ios-framework.log
             ios-app.log
+            ios-native-device.log
 
       - name: Publish rolling SideStore release
         if: success() && github.event_name != 'pull_request'
