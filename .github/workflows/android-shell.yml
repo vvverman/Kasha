@@ -57,16 +57,29 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           from zipfile import ZipFile
-          packages = list(Path('androidApp/build/outputs/apk').rglob('*.apk'))
-          assert packages, 'No APK produced'
-          for package in packages:
-              with ZipFile(package) as archive:
-                  files = set(archive.namelist())
-                  abis = {p.split('/')[1] for p in files if p.startswith('lib/') and p.endswith('/libkasha_whisper.so')}
-                  assert abis, f'Whisper missing: {package}'
-                  for abi in abis:
-                      assert f'lib/{abi}/libkasha_llama.so' in files, f'llama.cpp missing: {package} / {abi}'
-                      print(package, abi, 'Whisper + llama.cpp packaged')
+          import struct
+
+          outputs = Path('androidApp/build/outputs')
+          groups = {
+              'Debug APK': list((outputs / 'apk/debug').glob('*.apk')),
+              'Release APK': list((outputs / 'apk/release').glob('*.apk')),
+              'Release AAB': list((outputs / 'bundle/release').glob('*.aab')),
+          }
+          machines = {'armeabi-v7a': 40, 'arm64-v8a': 183, 'x86': 3, 'x86_64': 62}
+          for kind, packages in groups.items():
+              assert packages, f'{kind} was not produced'
+              for package in packages:
+                  prefix = 'base/lib' if package.suffix == '.aab' else 'lib'
+                  with ZipFile(package) as archive:
+                      files = set(archive.namelist())
+                      for abi, machine in machines.items():
+                          for library in ('libkasha_whisper.so', 'libkasha_llama.so', 'libc++_shared.so'):
+                              entry = f'{prefix}/{abi}/{library}'
+                              assert entry in files, f'Missing native dependency: {package} / {entry}'
+                              data = archive.read(entry)
+                              assert data[:4] == b'\x7fELF' and data[5] == 1, f'Invalid ELF: {entry}'
+                              assert struct.unpack_from('<H', data, 18)[0] == machine, f'Wrong ABI: {entry}'
+                          print(package, abi, 'Whisper + llama.cpp + C++ runtime packaged')
           PY
       - uses: actions/upload-artifact@v4
         if: always()

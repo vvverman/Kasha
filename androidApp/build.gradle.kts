@@ -28,6 +28,10 @@ android {
         targetSdk = 37
         versionCode = 1
         versionName = "1.1.4"
+        // Одна STL для обоих JNI-движков; Gradle упаковывает её вместе с APK/AAB.
+        externalNativeBuild {
+            cmake { arguments.add("-DANDROID_STL=c++_shared") }
+        }
     }
 
     compileOptions {
