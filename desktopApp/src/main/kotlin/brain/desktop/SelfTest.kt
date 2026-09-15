@@ -41,7 +41,6 @@ object SelfTest {
             val textModel = ModelArtifacts.packages.getValue(selection.text)
             check(hash(Path.of(env.getValue("KASHA_WHISPER_MODEL"))) == speechModel.sha256)
             val qwen = Path.of(env.getValue("KASHA_LLAMA_MODEL"))
-            // Windows содержит штатные GGUF shards, полученные из проверенного pinned-файла.
             if (qwen.fileName.toString() == textModel.fileName) check(hash(qwen) == textModel.sha256)
             else check(qwen.fileName.toString().startsWith(textModel.fileName.removeSuffix(".gguf") + "-00001-of-"))
             val repo = services.repository
@@ -50,16 +49,22 @@ object SelfTest {
             val readyToRun = capabilities.size == 3 && capabilities.all { it.executable && it.selectedEngineId == selection.engineId(it.role) }
             if (!readyToRun) {
                 println("Самопроверка: simulated=${services.simulated}, capabilities=$capabilities")
-                // Только помощь инструментов, без модели, аудио, текста или секретов.
                 for ((key, args) in listOf(
-                    "KASHA_WHISPER_CLI" to listOf("--help", "--no-gpu"),
-                    "KASHA_LLAMA_CLI" to listOf("--help", "--n-gpu-layers", "0", "--device", "none"),
+                    "KASHA_WHISPER_CLI" to listOf("--version", "--no-gpu"),
+                    "KASHA_LLAMA_CLI" to listOf("--version", "--n-gpu-layers", "0", "--device", "none"),
                     "KASHA_FFMPEG" to listOf("-version"),
                 )) {
                     val log = output.resolve("probe-$key.log")
                     val process = ProcessBuilder(listOf(env.getValue(key)) + args)
                         .redirectErrorStream(true).redirectOutput(log.toFile()).start()
+                    process.outputStream.close()
                     if (!process.waitFor(10, java.util.concurrent.TimeUnit.SECONDS)) {
+                        if (System.getProperty("os.name").lowercase().contains("mac")) runCatching {
+                            val sample = ProcessBuilder("/usr/bin/sample", process.pid().toString(), "1", "1",
+                                "-file", output.resolve("probe-$key-stack.log").toString())
+                                .redirectErrorStream(true).redirectOutput(output.resolve("sample-$key.log").toFile()).start()
+                            if (!sample.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)) { sample.destroyForcibly(); sample.waitFor() }
+                        }
                         process.destroyForcibly(); process.waitFor()
                         println("Самопроверка: $key — timeout")
                     } else println("Самопроверка: $key — exit=${process.exitValue()}")

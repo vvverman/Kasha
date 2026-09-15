@@ -14,7 +14,6 @@ adb install -r -t "$APP"
 adb install -r -t "$TEST"
 PACKAGE=ru.vrmn.kasha
 DEST="/data/user/0/$PACKAGE/files/ai-fixtures"
-# Данные fixture размещаются в app-private storage, без scoped-storage разрешений.
 adb shell run-as "$PACKAGE" mkdir -p files/ai-fixtures
 APP_UID=$(adb shell run-as "$PACKAGE" id -u | tr -d '\r')
 [[ "$APP_UID" =~ ^[0-9]+$ ]]
@@ -24,11 +23,11 @@ adb push test-output/real-models/russian-with-pauses.wav "$DEST/russian-with-pau
 adb shell chown -R "$APP_UID:$APP_UID" "$DEST"
 adb shell restorecon -RF "$DEST"
 for file in ggml-small.bin Qwen3-4B-Q4_K_M.gguf russian-with-pauses.wav; do
-    adb shell run-as "$PACKAGE" test -r "files/ai-fixtures/$file"
+    # test — команда shell; отдельный exec test недоступен под run-as на API26.
+    adb shell "run-as $PACKAGE sh -c 'test -r files/ai-fixtures/$file'"
 done
 adb shell run-as "$PACKAGE" ls -ln files/ai-fixtures
 adb shell rm -f "$DEST/android-local-models.json"
-# Запрет исходящего IP-трафика только эмулятора; localhost оставлен для системных IPC.
 adb shell 'iptables -I OUTPUT 1 ! -o lo -j REJECT'
 adb shell 'ip6tables -I OUTPUT 1 ! -o lo -j REJECT'
 adb shell iptables -S OUTPUT > "$OUT/ipv4-policy.txt"
