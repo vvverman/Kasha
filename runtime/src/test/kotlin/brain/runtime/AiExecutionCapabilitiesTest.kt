@@ -32,9 +32,10 @@ class AiExecutionCapabilitiesTest {
         val probe = JvmAiRuntimeProbe(mapOf("KASHA_LLAMA_CLI" to "broken"), CommandRunner { _, _ -> error("missing dependency") })
         assertFalse(probe.available(AiRole.TEXT))
     }
-    @Test fun cancelledProbeRemainsCancelled() = runBlocking {
+    @Test fun cancelledProbeRemainsCancelled(): Unit = runBlocking {
         val probe = JvmAiRuntimeProbe(mapOf("KASHA_LLAMA_CLI" to "cancelled"), CommandRunner { _, _ -> throw CancellationException("cancel") })
         assertFailsWith<CancellationException> { probe.available(AiRole.TEXT) }
+        Unit
     }
     @Test fun cloudReadsKeyPresenceWithoutReturningIt() = runBlocking {
         val root = Files.createTempDirectory("kasha-ready-")

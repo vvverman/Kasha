@@ -74,13 +74,23 @@ try:
             raise AssertionError('Не дождались: ' + label)
 
         def click_button(label):
-            box = wait_for(lambda: visible(page.get_by_role('button', name=label, exact=True)), label)
-            page.mouse.click(box['x'] + box['width']/2, box['y'] + box['height']/2)
+            locator = page.get_by_role('button', name=label, exact=True)
+            wait_for(lambda: visible(locator), label)
+            # Семантика Canvas может появиться раньше завершения первого кадра.
+            # Ждём отрисовку и передаём раздельные pointer-down/up, как при обычном нажатии.
+            page.evaluate('() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))')
+            box = wait_for(lambda: visible(locator), label)
+            x, y = box['x'] + box['width']/2, box['y'] + box['height']/2
+            page.mouse.move(x, y)
+            page.wait_for_timeout(150)
+            page.mouse.click(x, y, delay=100)
+            page.wait_for_timeout(250)
 
         try:
             page.goto(BASE, wait_until='networkidle', timeout=60000)
             page.locator('canvas').first.wait_for(state='visible')
             click_button('Настройки')
+            wait_for(lambda: len(requests) > 0, 'открытие настроек и вызов контракта готовности')
             wait_for(lambda: 'Движок не запускается' in page.locator('body').aria_snapshot(), 'причина runtime')
             before = page.locator('body').aria_snapshot()
             assert 'Модель не установлена' in before, before
@@ -106,6 +116,7 @@ try:
         except Exception:
             page.screenshot(path=str(OUT / 'failure.png'))
             (OUT / 'failure-semantics.txt').write_text(page.locator('body').aria_snapshot())
+            (OUT / 'failure-events.json').write_text(json.dumps({'errors': errors, 'external': external, 'requests': requests}, ensure_ascii=False, indent=2))
             raise
         finally:
             browser.close()
