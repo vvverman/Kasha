@@ -86,7 +86,7 @@ cp desktopApp/packaging/Установка.txt "$STAGE/Установка.txt"
 # Обычное сжатие контейнера без изменения весов нейросетей.
 hdiutil create -volname 'Kasha' -srcfolder "$STAGE" -ov -format UDZO -imagekey zlib-level=1 "$DMG"
 phase 'Проверка готового DMG'
-hdiutil verify "$DMG"
+bash desktopApp/packaging/verify-dmg.sh "$DMG" "$OUT"
 (cd "$OUT" && shasum -a 256 "$DMG_NAME" > SHA256SUMS.txt)
 MOUNT="$OUT/mounted"
 mkdir -p "$MOUNT"

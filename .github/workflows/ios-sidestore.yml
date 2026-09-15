@@ -44,20 +44,27 @@ env:
 jobs:
   build-ipa:
     runs-on: macos-15
-    timeout-minutes: 35
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
-
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.3.1'
           cache-read-only: false
-
+      - uses: actions/cache@v4
+        id: native
+        with:
+          path: iosApp/build/native/iphoneos
+          key: kasha-ios-native-device-v1-${{ hashFiles('iosApp/native/**') }}
+      - name: Build bundled iPhone model runtimes
+        if: steps.native.outputs.cache-hit != 'true'
+        run: |
+          set -o pipefail
+          bash iosApp/native/build.sh iphoneos 2>&1 | tee ios-native-device.log
       - name: Prepare Kasha resources and boundaries
         run: |
           python -m pip install fonttools==4.59.2
@@ -65,18 +72,15 @@ jobs:
           python scripts/check-ui-boundary.py
           python scripts/check-local-only.py
           python scripts/check-ai-boundary.py
-
       - name: Build shared Kasha framework for iPhone
         run: |
           set -o pipefail
           gradle :composeApp:linkReleaseFrameworkIosArm64 2>&1 | tee ios-framework.log
           test -d composeApp/build/bin/iosArm64/releaseFramework/KashaShared.framework
-
       - name: Install deterministic project/icon tools
         run: |
           command -v xcodegen >/dev/null || brew install xcodegen
           command -v rsvg-convert >/dev/null || brew install librsvg
-
       - name: Generate Kasha app icons
         run: |
           set -euo pipefail
@@ -87,10 +91,8 @@ jobs:
           done
           cp "$ICON_DIR/icon-120.png" "$ICON_DIR/icon-120-60.png"
           cp "$ICON_DIR/icon-1024.png" build/ios/Kasha-icon.png
-
       - name: Generate Xcode project
         run: xcodegen generate --spec iosApp/project.yml
-
       - name: Archive unsigned iPhone app
         run: |
           set -o pipefail
@@ -110,18 +112,24 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             SKIP_INSTALL=NO \
             clean archive 2>&1 | tee ios-app.log
-
       - name: Package unsigned IPA for SideStore
         run: |
           set -euo pipefail
           APP="build/ios/Kasha.xcarchive/Products/Applications/$IOS_PRODUCT_NAME.app"
           test -d "$APP"
+          for engine in Whisper Llama; do
+            LIB="$APP/Frameworks/Kasha$engine.framework/Kasha$engine"
+            test -f "$LIB" || { echo "Missing model framework: $LIB" >&2; exit 1; }
+            lipo "$LIB" -verify_arch arm64
+            SYMBOLS="$(nm -gU "$LIB")"
+            SYMBOL="_kasha_$(echo "$engine" | tr '[:upper:]' '[:lower:]')_run"
+            grep -q "${SYMBOL}$" <<< "$SYMBOLS" || { echo "Missing exported model entry: $SYMBOL" >&2; exit 1; }
+          done
           rm -rf build/ios/Payload
           rm -f build/ios/Kasha.ipa
           mkdir -p build/ios/Payload
           ditto "$APP" "build/ios/Payload/$IOS_PRODUCT_NAME.app"
           (cd build/ios && zip -qry Kasha.ipa Payload)
-
       - name: Generate SideStore source
         run: |
           python scripts/make-sidestore-source.py \
@@ -129,7 +137,6 @@ jobs:
             --version "$IOS_VERSION" \
             --build "${GITHUB_RUN_NUMBER}" \
             --output build/ios/source.json
-
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -141,7 +148,7 @@ jobs:
             build/ios/Kasha-icon.png
             ios-framework.log
             ios-app.log
-
+            ios-native-device.log
       - name: Publish rolling SideStore release
         if: success() && github.event_name != 'pull_request'
         env:
@@ -159,7 +166,6 @@ jobs:
             build/ios/source.json#source.json \
             build/ios/Kasha-icon.png#Kasha-icon.png \
             --clobber
-
       - name: Print install links
         if: success() && github.event_name != 'pull_request'
         run: |

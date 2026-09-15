@@ -2,6 +2,10 @@ name: Автономный установщик macOS
 on:
   push:
     branches: [macos-installer]
+  pull_request:
+    paths:
+      - 'desktopApp/packaging/**'
+      - '.github/workflows/macos.yml'
   workflow_dispatch:
 permissions:
   contents: read
@@ -10,6 +14,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   macos:
+    if: github.event_name != 'pull_request' || github.head_ref == 'integration/platform-parity'
     runs-on: macos-15
     timeout-minutes: 60
     steps:

@@ -54,3 +54,7 @@ targets:
     dependencies:
       - framework: ../composeApp/build/bin/iosArm64/releaseFramework/KashaShared.framework
         embed: false
+      - framework: build/native/iphoneos/KashaWhisper.framework
+        embed: true
+      - framework: build/native/iphoneos/KashaLlama.framework
+        embed: true

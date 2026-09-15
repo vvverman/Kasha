@@ -1,0 +1,5 @@
+# Файлы с закреплёнными контрольными суммами не меняют байты при checkout на Windows.
+docs/design/assets/fonts/OFL.txt text eol=lf
+composeApp/src/commonMain/composeResources/files/licenses/Geologica-OFL.txt text eol=lf
+*.ttf binary
+*.otf binary

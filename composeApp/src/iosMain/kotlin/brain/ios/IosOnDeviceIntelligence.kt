@@ -2,9 +2,9 @@
 
 package brain.ios
 
-import brain.domain.NoteText
+import brain.ai.BuiltInAi
 import brain.model.Project
-import brain.studio.Intelligence
+import brain.studio.*
 import kotlinx.coroutines.suspendCancellableCoroutine
 import platform.Foundation.NSLocale
 import platform.Foundation.NSURL
@@ -15,21 +15,28 @@ import kotlin.coroutines.resumeWithException
 
 internal class IosOnDeviceIntelligence : Intelligence {
     override val simulated: Boolean = false
-
     fun supportsOnDevice(language: String): Boolean = recognizer(language)?.supportsOnDeviceRecognition == true
+
+    /** Только чтение статуса: системный запрос разрешения здесь запрещён. */
+    fun capability(language: String): AiRoleCapability {
+        val speech = recognizer(language)
+        return iosSpeechCapability(
+            speech?.supportsOnDeviceRecognition == true,
+            speech?.available == true,
+            SFSpeechRecognizer.authorizationStatus().value,
+        )
+    }
 
     override suspend fun transcribe(file: String, language: String, example: String): String {
         checkSpeechPermission()
         val recognizer = recognizer(language) ?: error("onDeviceSpeechUnavailable")
         check(recognizer.supportsOnDeviceRecognition) { "onDeviceSpeechUnavailable" }
         check(recognizer.available) { "onDeviceSpeechUnavailable" }
-
         val request = SFSpeechURLRecognitionRequest(NSURL.fileURLWithPath(file)).apply {
             requiresOnDeviceRecognition = true
             shouldReportPartialResults = false
             addsPunctuation = true
         }
-
         return suspendCancellableCoroutine { continuation ->
             val task = recognizer.recognitionTaskWithRequest(request) { result, error ->
                 when {
@@ -46,41 +53,10 @@ internal class IosOnDeviceIntelligence : Intelligence {
         }
     }
 
-    override suspend fun title(text: String, language: String): String = NoteText.title(text)
-
-    override suspend fun tidy(text: String, language: String): String {
-        var result = text.trim()
-            .replace(Regex("[ \\t]{2,}"), " ")
-            .replace(Regex("\\n{3,}"), "\n\n")
-        val replacements = mapOf(
-            "какая-то фигня" to "проблема",
-            "эта хрень" to "эта функция",
-            "фигня" to "проблема",
-            "хрень" to "проблема",
-            "пиздец" to "серьёзная проблема",
-            "crap" to "problem",
-        )
-        replacements.forEach { (from, to) ->
-            result = result.replace(
-                Regex("(?i)(?<![\\p{L}])${Regex.escape(from)}(?![\\p{L}])"),
-                to,
-            )
-        }
-        return result
-    }
-
-    override suspend fun rank(text: String, projects: List<Project>, language: String): Map<String, Int> {
-        fun words(value: String): Set<String> = Regex("[\\p{L}\\p{N}]{3,}")
-            .findAll(value.lowercase())
-            .map { it.value.take(7) }
-            .toSet()
-        val source = words(text)
-        return projects.associate { project ->
-            val titleHits = words(project.title).count { it in source }
-            val detailHits = words(project.description + " " + project.instruction).count { it in source }
-            project.id to (titleHits * 3 + detailHits).coerceIn(0, 4)
-        }
-    }
+    override suspend fun title(text: String, language: String) = brain.ai.BuiltInText.title(text, language)
+    override suspend fun tidy(text: String, language: String) = brain.ai.BuiltInText.tidy(text, language)
+    override suspend fun rank(text: String, projects: List<Project>, language: String) =
+        brain.ai.BuiltInText.rank(text, projects, language)
 
     private fun recognizer(language: String): SFSpeechRecognizer? {
         val localeId = when (language.substringBefore('-').substringBefore('_').lowercase()) {
@@ -96,18 +72,17 @@ internal class IosOnDeviceIntelligence : Intelligence {
         }
         return SFSpeechRecognizer(NSLocale(localeIdentifier = localeId))
     }
-
     private suspend fun checkSpeechPermission() {
-        if (SFSpeechRecognizer.authorizationStatus().value == SPEECH_AUTHORIZED) return
+        if (SFSpeechRecognizer.authorizationStatus().value == 3L) return
         val granted = suspendCancellableCoroutine { continuation ->
             SFSpeechRecognizer.requestAuthorization { status ->
-                if (continuation.isActive) continuation.resume(status.value == SPEECH_AUTHORIZED)
+                if (continuation.isActive) continuation.resume(status.value == 3L)
             }
         }
         check(granted) { "speechPermissionDenied" }
     }
-
-    private companion object {
-        const val SPEECH_AUTHORIZED = 3L
-    }
 }
+
+internal fun iosSpeechCapability(languageSupported: Boolean, available: Boolean, authorization: Long): AiRoleCapability =
+    AiReadiness.native(AiRole.SPEECH_TO_TEXT, BuiltInAi.APPLE_SPEECH, true, languageSupported,
+        IosDeviceCapabilities.mapSpeechStatus(authorization), DevicePermissionKind.SPEECH_RECOGNITION, available)

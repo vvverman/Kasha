@@ -57,7 +57,9 @@ fun StudioApp(state: StudioState) {
             contentColor = colors.onSurface,
         ) {
             if (!state.initialized) {
-                KashaSplash()
+                InitializationContent(state) {
+                    scope.launch { state.error = null; state.launch() }
+                }
                 return@Surface
             }
             BoxWithConstraints(
@@ -200,42 +202,34 @@ private fun AppContent(state: StudioState) {
 
 @Composable
 private fun ModalHost(state: StudioState, scope: CoroutineScope) {
+    val deletion = state.deleteConfirmation
     when {
         state.error != null -> KashaModal(onDismiss = { state.error = null }) {
             Text(state.tr(state.error!!), style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(24.dp))
             Action(state.tr("ok"), { state.error = null }, primary = true, modifier = Modifier.fillMaxWidth())
         }
-        state.confirmDelete && state.recording -> KashaModal(onDismiss = { state.confirmDelete = false }) {
-            ConfirmationContent(
-                state.tr("deleteTitle"), state.tr("deleteBody"), state.tr("delete"), state.tr("cancel"),
-                {
-                    scope.launch {
-                        if (state.cancelActiveRecording()) state.confirmDelete = false
-                    }
-                },
-                { state.confirmDelete = false },
-            )
-        }
-        state.confirmDelete && state.selectedTaskId != null -> {
-            val taskId = state.selectedTaskId!!
-            KashaModal(onDismiss = { state.confirmDelete = false }) {
+        deletion != null -> KashaModal(onDismiss = { state.dismissDeletion(deletion) }) {
+            if (deletion is DeleteConfirmation.Task) {
                 Text(KashaCopy.text(state.language, "deleteTask") ?: state.tr("delete"), style = MaterialTheme.typography.headlineMedium)
                 Spacer(Modifier.height(28.dp))
                 Action(
                     state.tr("delete"),
-                    { scope.launch { if (state.deleteTask(taskId)) state.confirmDelete = false } },
+                    { scope.launch { state.confirmDeletion(deletion) } },
                     primary = true,
+                    enabled = !state.busy,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                QuietAction(state.tr("cancel"), { state.confirmDelete = false }, Modifier.align(Alignment.CenterHorizontally))
+                QuietAction(state.tr("cancel"), { state.dismissDeletion(deletion) }, Modifier.align(Alignment.CenterHorizontally))
+            } else {
+                ConfirmationContent(
+                    state.tr("deleteTitle"), state.tr("deleteBody"), state.tr("delete"),
+                    state.tr(if (deletion is DeleteConfirmation.Recording && deletion.resumeOnKeep) "resume" else "cancel"),
+                    { scope.launch { state.confirmDeletion(deletion) } },
+                    { scope.launch { state.keepDeletionTarget(deletion) } },
+                    enabled = !state.busy && !state.controlBusy,
+                )
             }
-        }
-        state.confirmDelete -> KashaModal(onDismiss = { state.confirmDelete = false }) {
-            ConfirmationContent(
-                state.tr("deleteTitle"), state.tr("deleteBody"), state.tr("delete"), state.tr("cancel"),
-                { scope.launch { state.discard() } }, { state.confirmDelete = false },
-            )
         }
         state.confirmListenId != null -> KashaModal(onDismiss = { state.confirmListenId = null }) {
             ConfirmationContent(
@@ -266,11 +260,11 @@ internal fun Heading(title: String, back: (() -> Unit)? = null, backLabel: Strin
 }
 
 @Composable
-private fun ColumnScope.ConfirmationContent(title: String, body: String, confirm: String, cancel: String, onConfirm: () -> Unit, onCancel: () -> Unit) {
+private fun ColumnScope.ConfirmationContent(title: String, body: String, confirm: String, cancel: String, onConfirm: () -> Unit, onCancel: () -> Unit, enabled: Boolean = true) {
     Text(title, style = MaterialTheme.typography.headlineMedium)
     Spacer(Modifier.height(18.dp))
     Text(body, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     Spacer(Modifier.height(28.dp))
-    Action(confirm, onConfirm, primary = true, modifier = Modifier.fillMaxWidth())
+    Action(confirm, onConfirm, primary = true, enabled = enabled, modifier = Modifier.fillMaxWidth())
     QuietAction(cancel, onCancel, Modifier.align(Alignment.CenterHorizontally))
 }

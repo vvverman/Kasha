@@ -1,69 +1,128 @@
 package brain.desktop
 
+import brain.ai.ModelArtifacts
+import brain.domain.LocalModelText
 import brain.domain.ProjectOrder
 import brain.model.*
+import brain.studio.*
 import kotlinx.coroutines.*
 import kotlinx.serialization.json.*
+import java.net.InetSocketAddress
+import java.net.Socket
 import java.nio.file.*
 import java.security.MessageDigest
 import kotlin.time.TimeSource
 
-/** Явный диагностический режим, не запускается при обычном открытии приложения. */
+/** Явная проверка настоящего приложения, не запускается при обычном открытии. */
 object SelfTest {
     suspend fun run(resources: Path, output: Path, fixture: Path) {
-        println("Самопроверка: resources=$resources; Java=${System.getProperty("java.home")}")
         Files.createDirectories(output)
+        Files.deleteIfExists(output.resolve("self-test.json"))
+        val networkReachable = try {
+            Socket().use { it.connect(InetSocketAddress("1.1.1.1", 443), 1500) }; true
+        } catch (_: java.io.IOException) { false } catch (_: SecurityException) { false }
+        check(!networkReachable) { "Для проверки локального AI внешняя сеть должна быть запрещена" }
         val started = TimeSource.Monotonic.markNow()
         val services = DesktopServices(output.resolve("data"), resources, cpuOnly = true)
+        val selection = AiSelection()
+        var savedNote: Note? = null
         try {
             fun hash(path: Path): String {
                 val digest = MessageDigest.getInstance("SHA-256")
-                Files.newInputStream(path).use { input -> val buffer = ByteArray(1024 * 1024); while (true) { val size = input.read(buffer); if (size < 0) break; digest.update(buffer, 0, size) } }
-                return digest.digest().joinToString("") { "%02x".format(it) }
+                Files.newInputStream(path).use { input ->
+                    val buffer = ByteArray(1024 * 1024)
+                    while (true) { val size = input.read(buffer); if (size < 0) break; digest.update(buffer, 0, size) }
+                }
+                return digest.digest().joinToString("") { "%02x".format(it.toInt() and 255) }
             }
-            println("Самопроверка: контрольные суммы исходных моделей")
-            check(hash(resources.resolve("models/ggml-small.bin")) == "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b")
-            check(hash(resources.resolve("models/Qwen3-4B-Q4_K_M.gguf")) == "7485fe6f11af29433bc51cab58009521f205840f5b4ae3a32fa7f92e8534fdf5")
-            val work = services.repository.createProject(ProjectDraft("Разработка приложения", instruction = "Разработка программ, запись звука, интерфейс, кнопки и сохранение заметок."))
-            val cooking = services.repository.createProject(ProjectDraft("Кулинария", instruction = "Рецепты и приготовление еды. Не складывать сюда разработку программ."))
-            val pin = services.repository.createProject(ProjectDraft("Закреплённый"))
-            services.repository.pinProject(pin.id, true)
+            val sourceHash = hash(fixture)
+            val env = bundledEnvironment(resources)
+            val speechModel = ModelArtifacts.packages.getValue(selection.speechToText)
+            val textModel = ModelArtifacts.packages.getValue(selection.text)
+            check(hash(Path.of(env.getValue("KASHA_WHISPER_MODEL"))) == speechModel.sha256)
+            val qwen = Path.of(env.getValue("KASHA_LLAMA_MODEL"))
+            if (qwen.fileName.toString() == textModel.fileName) check(hash(qwen) == textModel.sha256)
+            else check(qwen.fileName.toString().startsWith(textModel.fileName.removeSuffix(".gguf") + "-00001-of-"))
+            val repo = services.repository
+            repo.savePreferences(Preferences(autoRecord = false, language = "ru", ai = selection))
+            val capabilities = (repo as AiPlatformServices).aiExecution.roles(selection)
+            val readyToRun = capabilities.size == 3 && capabilities.all { it.executable && it.selectedEngineId == selection.engineId(it.role) }
+            if (!readyToRun) {
+                println("Самопроверка: simulated=${services.simulated}, capabilities=$capabilities")
+                for ((key, args) in listOf(
+                    "KASHA_WHISPER_CLI" to listOf("--version", "--no-gpu"),
+                    "KASHA_LLAMA_CLI" to listOf("--version", "--n-gpu-layers", "0", "--device", "none"),
+                    "KASHA_FFMPEG" to listOf("-version"),
+                )) {
+                    val log = output.resolve("probe-$key.log")
+                    val process = ProcessBuilder(listOf(env.getValue(key)) + args)
+                        .redirectErrorStream(true).redirectOutput(log.toFile()).start()
+                    process.outputStream.close()
+                    if (!process.waitFor(10, java.util.concurrent.TimeUnit.SECONDS)) {
+                        if (System.getProperty("os.name").lowercase().contains("mac")) runCatching {
+                            val sample = ProcessBuilder("/usr/bin/sample", process.pid().toString(), "1", "1",
+                                "-file", output.resolve("probe-$key-stack.log").toString())
+                                .redirectErrorStream(true).redirectOutput(output.resolve("sample-$key.log").toFile()).start()
+                            if (!sample.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)) { sample.destroyForcibly(); sample.waitFor() }
+                        }
+                        process.destroyForcibly(); process.waitFor()
+                        println("Самопроверка: $key — timeout")
+                    } else println("Самопроверка: $key — exit=${process.exitValue()}")
+                }
+            }
+            check(readyToRun) { "Фактическая готовность ролей не подтверждена: $capabilities" }
+            val work = repo.createProject(ProjectDraft("Разработка приложения", instruction = "Запись голоса, интерфейс и сохранение заметок."))
+            val pin = repo.createProject(ProjectDraft("Закреплённый"))
+            repo.pinProject(pin.id, true)
+            val projectsBefore = repo.snapshot().projects
             val capture = services.store.createCapture("fixture.wav", Files.readAllBytes(fixture))
-            println("Самопроверка: полный русский сценарий")
-            val ready = services.processing.process(capture.id)
-            check(ready.status == CaptureStatus.READY) { "Обработка: ${ready.status}: ${ready.message}" }
-            check(ready.llmApplied && ready.rankingApplied) { "ИИ не завершился: ${ready.message}" }
-            check(ready.transcript.contains("нельзя", ignoreCase = true) && ready.preparedText.contains("нельзя", ignoreCase = true))
-            check((ready.relevance[work.id] ?: -1) > (ready.relevance[cooking.id] ?: -1)) { "Неправильный порядок проектов: ${ready.relevance}" }
-            check(ready.compactAudioFileName != null && ready.compactDurationSeconds > 0 && ready.compactDurationSeconds < ready.durationSeconds)
-            check(hash(services.store.resolveAudio(ready)) == hash(fixture))
-            val ordered = ProjectOrder.sorted(services.store.snapshot().projects, ready.relevance)
-            check(ordered.first().id == pin.id)
-            val note = services.repository.distribute(ready.id, DistributionRequest(work.id))
-            check(services.repository.distribute(ready.id, DistributionRequest(work.id)).id == note.id)
-            println("Самопроверка: восстановление записи и добавление в заметку")
+            val transcribed = services.studioProcessor.process(capture.id)
+            check(transcribed.status == CaptureStatus.READY) { "${transcribed.status}: ${transcribed.message}" }
+            check(!transcribed.simulated && transcribed.transcript.any { it in 'А'..'я' })
+            check(transcribed.inputSha256 == sourceHash)
+            check(!transcribed.llmApplied)
+            val tidied = repo.tidy(capture.id)
+            check(tidied.llmApplied)
+            LocalModelText.requirePreserved(transcribed.textToSave, tidied.textToSave)
+            val ready = repo.rank(capture.id)
+            check(ready.rankingApplied && ready.relevance.keys == projectsBefore.map { it.id }.toSet())
+            check(ready.relevance.values.all { it in 0..4 })
+            check(repo.snapshot().projects == projectsBefore)
+            check(ProjectOrder.sorted(projectsBefore, ready.relevance).first().id == pin.id)
+            check(ready.audioFinalized && ready.durationSeconds > 0 && Files.size(services.store.resolveAudio(ready)) > 0)
+            check(hash(fixture) == sourceHash)
+            check(repo.preferences().ai == selection)
+            val note = repo.distribute(ready.id, DistributionRequest(work.id))
+            check(repo.distribute(ready.id, DistributionRequest(work.id)).id == note.id)
+            println("Самопроверка: восстановление и добавление в заметку")
             val id = java.util.UUID.randomUUID().toString()
             val journal = output.resolve("data/pending/$id.wav")
             WavJournal(journal).use { it.append(ByteArray(3200), 3200) }
             val source2 = services.recorder.recoverPending()
             services.scope.cancel(); services.scope.coroutineContext[Job]?.join()
             services.store.updateCapture(source2.id) { it.copy(status = CaptureStatus.NEEDS_MODEL) }
-            services.repository.updateCaptureDraft(source2.id, CaptureDraftUpdate("Добавление", "Вторая мысль."))
-            val appended = services.repository.distribute(source2.id, DistributionRequest(work.id, note.id))
+            repo.updateCaptureDraft(source2.id, CaptureDraftUpdate("Добавление", "Вторая мысль."))
+            val appended = repo.distribute(source2.id, DistributionRequest(work.id, note.id))
             check(appended.body == note.body + "\n\nВторая мысль.")
             check(services.store.snapshot().captures.count { it.noteId == note.id } == 2)
+            savedNote = appended
             val report = buildJsonObject {
                 put("passed", true); put("os", System.getProperty("os.name")); put("arch", System.getProperty("os.arch"))
                 put("javaHome", System.getProperty("java.home")); put("resources", resources.toString()); put("inferenceDevice", "CPU")
                 put("transcript", ready.transcript); put("preparedText", ready.preparedText); put("title", ready.title)
                 put("llmApplied", ready.llmApplied); put("rankingApplied", ready.rankingApplied)
-                put("relevantScore", ready.relevance[work.id]!!); put("unrelatedScore", ready.relevance[cooking.id]!!)
-                put("originalSeconds", ready.durationSeconds); put("compactSeconds", ready.compactDurationSeconds)
-                put("originalSha256", hash(fixture)); put("seconds", started.elapsedNow().inWholeMilliseconds / 1000.0)
-                put("diskRecovery", true); put("sourcesPreserved", true)
+                put("selectedSpeech", selection.speechToText); put("selectedText", selection.text); put("selectedRouting", selection.routing)
+                put("applicationRouter", true); put("externalNetworkReachable", false)
+                put("originalSha256", sourceHash); put("savedSeconds", ready.durationSeconds)
+                put("seconds", started.elapsedNow().inWholeMilliseconds / 1000.0)
+                put("diskRecovery", true); put("sourcesPreserved", true); put("fixtureUnchanged", true)
             }
             Files.writeString(output.resolve("self-test.json"), Json { prettyPrint = true }.encodeToString(JsonObject.serializer(), report))
-            println("MACOS BUNDLED SELF TEST PASSED")
         } finally { services.close() }
+        DesktopServices(output.resolve("data"), resources, cpuOnly = true).use { reopened ->
+            check(reopened.repository.snapshot().notes.single() == savedNote)
+            check(reopened.repository.preferences().ai == selection)
+        }
+        println("DESKTOP BUNDLED AI SELF TEST PASSED")
     }
 }

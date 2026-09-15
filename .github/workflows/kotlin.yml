@@ -15,6 +15,13 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+      - name: Исходники проверяемой ревизии
+        run: git archive --format=zip --output=verification-source.zip HEAD
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kasha-verification-source-${{ github.sha }}
+          retention-days: 3
+          path: verification-source.zip
       - name: Проверка бренда, local-first и AI privacy границ
         run: |
           python3 scripts/check-brand-boundary.py
@@ -53,10 +60,12 @@ jobs:
           bash runtime/build/install/runtime/bin/runtime > runtime.log 2>&1 &
           PID=$!
           trap 'kill "$PID" 2>/dev/null || true' EXIT
+          python tests/web_recorder_identity_browser.py
           python tests/web_adapter_browser.py
           python tests/studio_browser.py
           python tests/sorting_browser.py
           python tests/responsive_accessibility_browser.py
+          python tests/ai_readiness_browser.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -68,6 +77,7 @@ jobs:
             test-output/studio
             test-output/sorting
             test-output/responsive
+            test-output/ai-readiness
             kashaCore/build/test-results
             aiCatalog/build/test-results
             composeApp/build/test-results

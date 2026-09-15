@@ -1,6 +1,8 @@
 package brain.desktop
 
 import brain.runtime.CommandRunner
+import brain.runtime.ai.JvmAiRuntimeProbe
+import brain.studio.AiRole
 import kotlinx.coroutines.runBlocking
 import kotlin.test.*
 
@@ -23,5 +25,16 @@ class InferenceRunnerTest {
     @Test fun audioConversionIsUnchanged() = runBlocking {
         val output = mutableListOf<String>(); val command = listOf("/bundle/bin/ffmpeg", "-version")
         DesktopInferenceRunner(true, capture(output)).run(command, 2); assertEquals(command, output)
+    }
+    @Test fun readinessProbeUsesTheSameCpuConfigurationWithoutLoadingModel() = runBlocking {
+        val calls = mutableListOf<List<String>>()
+        val runner = DesktopInferenceRunner(true, CommandRunner { command, _ -> calls += command; "version" })
+        val probe = JvmAiRuntimeProbe(mapOf("KASHA_WHISPER_CLI" to "/bundle/whisper-cli", "KASHA_LLAMA_CLI" to "/bundle/llama-completion", "KASHA_FFMPEG" to "/bundle/ffmpeg"), runner)
+        assertTrue(probe.available(AiRole.SPEECH_TO_TEXT))
+        assertTrue(probe.available(AiRole.TEXT))
+        assertEquals(listOf("/bundle/whisper-cli", "--version", "--no-gpu"), calls[0])
+        assertEquals(listOf("/bundle/ffmpeg", "-version"), calls[1])
+        assertEquals(listOf("/bundle/llama-completion", "--version", "--n-gpu-layers", "0", "--device", "none"), calls[2])
+        assertTrue(calls.none { "-m" in it || "--model" in it })
     }
 }

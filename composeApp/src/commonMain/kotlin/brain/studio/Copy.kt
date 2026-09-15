@@ -9,6 +9,7 @@ submitRecording|Отправить|Send|Enviar|Envoyer|Senden|Надіслати
 home|Главная|Home|Inicio|Accueil|Start|Головна|Галоўная|Басты
 projects|Проекты|Projects|Proyectos|Projets|Projekte|Проєкти|Праекты|Жобалар
 settings|Настройки|Settings|Ajustes|Réglages|Einstellungen|Налаштування|Налады|Баптаулар
+about|О приложении|About|Acerca de|À propos|Über die App|Про застосунок|Пра праграму|Қолданба туралы
 appLanguage|Язык приложения|App language|Idioma|Langue|App-Sprache|Мова застосунку|Мова праграмы|Қолданба тілі
 system|Системная|System|Sistema|Système|System|Системна|Сістэмная|Жүйелік
 systemLanguage|Язык системы|System language|Idioma del sistema|Langue du système|Systemsprache|Мова системи|Мова сістэмы|Жүйе тілі

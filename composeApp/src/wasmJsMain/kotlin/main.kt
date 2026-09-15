@@ -6,6 +6,6 @@ import brain.web.*
 @OptIn(ExperimentalComposeUiApi::class)
 fun main(){
     val base=runtimeBaseUrl()
-    val state=StudioState(WebBrainRepository(base),BrowserRecorder(base),WebAudioGateway(base),browserLanguage())
+    val state=StudioState(WebBrainRepository(base),BrowserRecorder(base),WebAudioGateway(base),browserLanguage(),WebRuntimeReminders(base))
     ComposeViewport(viewportContainerId="webApp"){StudioApp(state)}
 }

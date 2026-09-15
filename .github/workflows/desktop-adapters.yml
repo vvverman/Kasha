@@ -1,0 +1,80 @@
+name: Kasha Desktop Adapters
+
+on:
+  pull_request:
+    paths:
+      - 'runtime/**'
+      - 'desktopApp/**'
+      - 'kashaCore/**'
+      - 'composeApp/**'
+      - 'aiCatalog/**'
+      - 'gradle/**'
+      - 'scripts/prepare-fonts.py'
+      - 'docs/design/assets/fonts/**'
+      - '.github/workflows/desktop-adapters.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'runtime/**'
+      - 'desktopApp/**'
+      - 'kashaCore/**'
+      - 'composeApp/**'
+      - 'aiCatalog/**'
+      - 'gradle/**'
+      - 'scripts/prepare-fonts.py'
+      - 'docs/design/assets/fonts/**'
+      - '.github/workflows/desktop-adapters.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: desktop-adapters-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  adapters:
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux
+            os: ubuntu-24.04
+          - name: windows
+            os: windows-2025
+          - name: macos
+            os: macos-15
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+          cache-read-only: false
+      - name: Проверить общие границы
+        run: |
+          python scripts/check-brand-boundary.py
+          python scripts/check-local-only.py
+          python scripts/check-ai-boundary.py
+      - name: Подготовить канонические шрифты
+        run: |
+          python -m pip install fonttools==4.59.2
+          python scripts/prepare-fonts.py
+      - name: Общие тесты и desktop-адаптеры
+        run: gradle :kashaCore:jvmTest :desktopApp:test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: desktop-adapters-${{ matrix.name }}-${{ github.sha }}
+          retention-days: 14
+          path: |
+            kashaCore/build/test-results/
+            desktopApp/build/test-results/

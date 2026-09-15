@@ -15,7 +15,7 @@ def api(path, data=None, method=None):
     body = None if data is None else json.dumps(data, ensure_ascii=False).encode()
     req = urllib.request.Request(BASE + path, body, method=method, headers={
         'X-Kasha-Client': 'web', 'Content-Type': 'application/json'})
-    with urllib.request.urlopen(req, timeout=30) as response: return json.load(response)
+    with urllib.request.urlopen(req, timeout=1200) as response: return json.load(response)
 
 def capture(cid):
     return next(c for c in api('snapshot')['captures'] if c['id'] == cid)
@@ -44,8 +44,12 @@ for _ in range(90):
     except Exception: time.sleep(1)
 else: raise AssertionError('Сервис не запустился')
 
-assert api('snapshot')['runtime']['whisperConfigured']
-assert api('snapshot')['runtime']['llmConfigured']
+preferences = api('preferences')
+selection = preferences['ai']
+assert selection == {'speechToText': 'local.default.stt', 'text': 'local.default.text', 'routing': 'local.default.text'}
+api('preferences', dict(preferences, language='ru', autoRecord=False), method='PUT')
+capabilities = api('ai/capabilities', selection)
+assert len(capabilities) == 3 and all(value['executable'] for value in capabilities), capabilities
 projects = [
     api('projects', {'title':'Разработка приложения','instruction':'Идеи про интерфейс, запись голоса, кнопки и сохранение заметок.'}),
     api('projects', {'title':'Кулинария','instruction':'Только рецепты, приготовление еды и продукты. Не разработка программ.'}),
@@ -59,6 +63,10 @@ cid = upload(voice)
 c = processed(cid)
 print(json.dumps(c, ensure_ascii=False, indent=2), flush=True)
 assert c['status'] == 'READY', c['message']
+assert not c['simulated'] and not c['llmApplied']
+# Применяется существующая команда UI, а не прежний автоматический LocalProcessing.
+c = api('captures/' + cid + '/tidy', {})
+c = api('captures/' + cid + '/rank', {})
 assert c['llmApplied'], c['message']
 assert c['rankingApplied'], c['message']
 for stem in ('проект','приложен','запис','пауз','замет'):
@@ -67,12 +75,12 @@ for stem in ('проект','приложен','запис','пауз','заме
 assert 'нельзя' in c['transcript'].lower() and 'нельзя' in c['preparedText'].lower()
 assert any(stem in c['title'].lower() for stem in ('приложен','запис','голос','пауз','замет')), c['title']
 assert c['relevance'][projects[0]['id']] > c['relevance'][projects[1]['id']], c['relevance']
-assert c['compactAudioFileName'] and c['compactDurationSeconds'] < c['durationSeconds'] - 2
-with urllib.request.urlopen(BASE + 'captures/' + cid + '/audio') as response: original = response.read()
-assert hashlib.sha256(original).digest() == hashlib.sha256(voice.read_bytes()).digest()
-with urllib.request.urlopen(BASE + 'captures/' + cid + '/audio?compact=true') as response:
-    compact = OUT / 'compact.m4a'; compact.write_bytes(response.read())
-subprocess.run(['ffmpeg','-v','error','-i',str(compact),'-f','null','-'],check=True)
+assert c['audioFinalized'] and c['durationSeconds'] > 0
+with urllib.request.urlopen(BASE + 'captures/' + cid + '/audio') as response:
+    saved = OUT / 'saved.m4a'; saved.write_bytes(response.read())
+assert c['inputSha256'] == hashlib.sha256(voice.read_bytes()).hexdigest()
+subprocess.run(['ffmpeg','-v','error','-i',str(saved),'-f','null','-'],check=True)
+assert api('preferences')['ai'] == selection
 note = api('captures/' + cid + '/distribute', {'projectId':projects[0]['id']})
 assert note == api('captures/' + cid + '/distribute', {'projectId':projects[0]['id']})
 result = {'passed':True, 'speech':'Piper ru_RU-irina-medium, синтезированная речь, не живой микрофон',
@@ -80,7 +88,7 @@ result = {'passed':True, 'speech':'Piper ru_RU-irina-medium, синтезиро�
           'elapsedSeconds':round(time.monotonic()-started,2), 'transcript':c['transcript'],
           'preparedText':c['preparedText'],'title':c['title'], 'relevance':c['relevance'],
           'projectScores':{p['title']:c['relevance'][p['id']] for p in projects if not p['id']==projects[2]['id']},
-          'durationSeconds':c['durationSeconds'],'compactDurationSeconds':c['compactDurationSeconds'],
-          'originalSha256':hashlib.sha256(original).hexdigest()}
+          'durationSeconds':c['durationSeconds'], 'applicationRouter': True, 'externalNetworkReachable': False,
+          'originalSha256':hashlib.sha256(voice.read_bytes()).hexdigest()}
 (OUT/'result.json').write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8')
 print('REAL MODELS PASSED', flush=True)

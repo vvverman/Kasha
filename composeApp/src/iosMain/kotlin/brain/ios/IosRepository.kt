@@ -1,5 +1,7 @@
 package brain.ios
 
+import brain.ai.BuiltInAi
+import brain.domain.CaptureAiResult
 import brain.domain.BrainData
 import brain.domain.CaptureWorkflow
 import brain.domain.NoteText
@@ -20,6 +22,8 @@ import kotlin.time.Clock
 internal class IosRepository(
     private val localIntelligence: IosOnDeviceIntelligence,
     cloudAi: IosCloudAiGateway? = null,
+    private val systemLanguage: String = iosSystemLanguage(),
+    private val storageRoot: String? = null,
 ) : StudioRepository {
     override val simulated: Boolean = false
 
@@ -29,17 +33,41 @@ internal class IosRepository(
         prettyPrint = false
     }
     private val defaults = NSUserDefaults.standardUserDefaults
+    private val stateFile: String get() = storageRoot?.let { IosPaths.child(it, "state.json") } ?: IosPaths.stateFile
+    private val preferencesFile: String get() = storageRoot?.let { IosPaths.child(it, "preferences.json") } ?: IosPaths.preferencesFile
 
-    private var data: BrainData = readData()
-    private var prefs: Preferences = readPreferences()
-    private val intelligence: Intelligence = cloudAi
-        ?.let { IosRoutedIntelligence(localIntelligence, it) { prefs } }
-        ?: localIntelligence
-    private val workflow = CaptureWorkflow(intelligence)
+    private data class LoadedState(var data: BrainData, var preferences: Preferences)
+    private val loadedState by lazy { readState() }
+    private var data: BrainData
+        get() = loadedState.data
+        set(value) {
+            val state = loadedState
+            if (value == state.data) return
+            IosPaths.write(stateFile, json.encodeToString(value))
+            state.data = value
+        }
+    private var prefs: Preferences
+        get() = loadedState.preferences
+        set(value) {
+            val state = loadedState
+            if (value == state.preferences) return
+            IosPaths.write(preferencesFile, json.encodeToString(value))
+            state.preferences = value
+        }
+    private val nativeModels by lazy { IosNativeModels() }
+    val aiPackages: IosModelPackages by lazy {
+        IosModelPackages(IosPaths.child(storageRoot ?: IosPaths.root, "models"), selected = { prefs.ai })
+    }
+    private val models by lazy { IosLocalModels(aiPackages, nativeModels) }
+    private val intelligence by lazy { IosRoutedIntelligence(localIntelligence, cloudAi, models) { prefs } }
+    val aiExecution: AiExecutionCapabilityGateway = object : AiExecutionCapabilityGateway {
+        override suspend fun roles(selection: AiSelection) = intelligence.capabilities(selection, language())
+    }
+    private val workflow by lazy { CaptureWorkflow(intelligence) }
 
     private fun id(): String = NSUUID().UUIDString.lowercase()
     private fun now(): Long = Clock.System.now().toEpochMilliseconds()
-    private fun language(): String = Languages.resolve(prefs.language, "ru-RU")
+    private fun language(): String = Languages.resolve(prefs.language, systemLanguage)
 
     override suspend fun snapshot(): AppSnapshot {
         val externalRoles = AiRole.entries.filter { role ->
@@ -47,7 +75,9 @@ internal class IosRepository(
         }
         val externalStt = AiRole.SPEECH_TO_TEXT in externalRoles
         val externalText = externalRoles.any { it == AiRole.TEXT || it == AiRole.ROUTING }
-        val localSpeechReady = localIntelligence.supportsOnDevice(language())
+        val localSpeechReady = if (prefs.ai.speechToText == BuiltInAi.APPLE_SPEECH)
+            localIntelligence.supportsOnDevice(language())
+        else models.capability(AiRole.SPEECH_TO_TEXT, prefs.ai.speechToText, language()).executable
         return AppSnapshot(
             projects = data.projects,
             notes = data.notes,
@@ -55,13 +85,13 @@ internal class IosRepository(
             tasks = data.tasks,
             runtime = RuntimeStatus(
                 whisperConfigured = externalStt || localSpeechReady,
-                llmConfigured = externalText,
+                llmConfigured = externalText || models.capability(AiRole.TEXT, prefs.ai.text, language()).executable,
                 localOnly = externalRoles.isEmpty(),
                 simulated = false,
                 message = when {
                     externalRoles.isNotEmpty() -> "iOS · внешний AI включён для ${externalRoles.joinToString()}"
                     localSpeechReady -> "iOS · распознавание речи строго на устройстве"
-                    else -> "iOS · для выбранного языка нет системного on-device STT"
+                    else -> "iOS · выбранное локальное распознавание недоступно"
                 },
             ),
         )
@@ -73,112 +103,93 @@ internal class IosRepository(
         val validated = value.validated()
         AiCatalog.validateSelection(validated.ai)
         prefs = validated
-        persistPreferences()
     }
 
     override suspend fun createProject(draft: ProjectDraft): Project {
         val projectId = id()
         data = data.addProject(projectId, now(), draft)
-        persistData()
         return data.projects.first { it.id == projectId }
     }
 
     override suspend fun updateProject(id: String, update: ProjectUpdate): Project {
         data = data.updateProject(id, update, now())
-        persistData()
         return data.projects.first { it.id == id }
     }
 
     override suspend fun pinProject(id: String, pinned: Boolean): Project {
         data = data.pinProject(id, pinned)
-        persistData()
         return data.projects.first { it.id == id }
     }
 
     override suspend fun orderPins(ids: List<String>) {
         data = data.orderPins(ids)
-        persistData()
     }
 
     override suspend fun orderProjects(ids: List<String>) {
         data = data.orderProjects(ids)
-        persistData()
     }
 
     override suspend fun updateCaptureDraft(id: String, update: CaptureDraftUpdate): Capture {
         data = data.updateDraft(id, update)
-        persistData()
         return capture(id)
     }
 
     override suspend fun distribute(id: String, request: DistributionRequest): Note {
         val result = data.distribute(id, request, this.id(), now())
         data = result.first
-        persistData()
         return result.second
     }
 
     override suspend fun distributeTask(id: String, request: TaskDistributionRequest): Task {
         val result = data.distributeTask(id, request, this.id(), now())
         data = result.first
-        persistData()
         return result.second
     }
 
     override suspend fun updateNote(id: String, update: NoteUpdate): Note {
         data = data.updateNote(id, update, now())
-        persistData()
         return data.notes.first { it.id == id }
     }
 
     override suspend fun pinNote(id: String, pinned: Boolean): Note {
         data = data.pinNote(id, pinned)
-        persistData()
         return data.notes.first { it.id == id }
     }
 
     override suspend fun orderNotePins(projectId: String, ids: List<String>) {
         data = data.orderNotePins(projectId, ids)
-        persistData()
     }
 
     override suspend fun orderNotes(projectId: String, ids: List<String>) {
         data = data.orderNotes(projectId, ids)
-        persistData()
     }
 
     override suspend fun updateTask(id: String, update: TaskUpdate): Task {
         data = data.updateTask(id, update, now())
-        persistData()
         return data.tasks.first { it.id == id }
     }
 
     override suspend fun rescheduleTask(id: String, update: TaskScheduleUpdate): Task {
         data = data.rescheduleTask(id, update, now())
-        persistData()
         return data.tasks.first { it.id == id }
     }
 
     override suspend fun completeTask(id: String): Task {
         data = data.completeTask(id, now())
-        persistData()
         return data.tasks.first { it.id == id }
     }
 
     override suspend fun deleteTask(id: String) {
         data = data.deleteTask(id)
-        persistData()
     }
 
     override suspend fun orderTasks(ids: List<String>) {
         data = data.orderTasks(ids)
-        persistData()
     }
 
     override suspend fun claimTaskReminders(now: Long, zoneId: String): List<Task> {
         val result = data.claimDueReminders(now, zoneId)
         data = result.first
-        if (result.second.isNotEmpty()) persistData()
         return result.second
     }
 
@@ -191,20 +202,25 @@ internal class IosRepository(
         return try {
             val text = intelligence.transcribe(path, language(), prefs.demoExample)
             require(text.isNotBlank()) { "emptyTranscription" }
-            updateCapture(id) {
+            val transcribed = updateCapture(id) {
                 it.copy(
-                    title = NoteText.title(text),
+                    title = NoteText.title(if (it.draftEdited) it.preparedText else text),
                     transcript = text,
-                    preparedText = text,
-                    status = CaptureStatus.READY,
+                    preparedText = if (it.draftEdited) it.preparedText else text,
+                    status = CaptureStatus.POLISHING,
                     message = "",
                     simulated = false,
                     audioFinalized = true,
                 )
             }
+            val finished = workflow.finish(transcribed, data.projects, language())
+            updateCapture(id) { CaptureAiResult.apply(transcribed, it, finished) }
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            fail(id, CaptureStatus.FAILED, "Обработка прервана; запись сохранена")
+            throw cancelled
         } catch (e: Throwable) {
-            val unavailable = e.message?.contains("onDeviceSpeechUnavailable") == true ||
-                e.message?.contains("speechPermissionDenied") == true
+            val unavailable = e.message in setOf("aiUnavailable", "runtimeUnavailable", "modelNotInstalled") ||
+                e.message?.contains("onDeviceSpeechUnavailable") == true || e.message?.contains("speechPermissionDenied") == true
             fail(
                 id,
                 if (unavailable) CaptureStatus.NEEDS_MODEL else CaptureStatus.FAILED,
@@ -214,21 +230,22 @@ internal class IosRepository(
     }
 
     override suspend fun tidy(id: String): Capture {
-        val changed = workflow.tidy(capture(id), language())
-        return updateCapture(id) { changed }
+        val before = capture(id)
+        val changed = workflow.tidy(before, language())
+        return updateCapture(id) { CaptureAiResult.apply(before, it, changed) }
     }
 
     override suspend fun rank(id: String): Capture {
-        val changed = workflow.rank(capture(id), data.projects, language())
-        return updateCapture(id) { changed }
+        val before = capture(id)
+        val changed = workflow.rank(before, data.projects, language())
+        return updateCapture(id) { CaptureAiResult.apply(before, it, changed) }
     }
 
     override suspend fun discard(id: String) {
         val current = capture(id)
+        data = data.copy(captures = data.captures.filterNot { it.id == id })
         current.audioFileName?.let(IosPaths::remove)
         current.compactAudioFileName?.let(IosPaths::remove)
-        data = data.copy(captures = data.captures.filterNot { it.id == id })
-        persistData()
     }
 
     override suspend fun createDemo(): Capture = error("Demo mode is disabled in production iOS")
@@ -245,7 +262,6 @@ internal class IosRepository(
             audioFinalized = true,
         )
         data = data.addCapture(capture)
-        persistData()
         return capture
     }
 
@@ -257,39 +273,24 @@ internal class IosRepository(
 
     private fun updateCapture(id: String, transform: (Capture) -> Capture): Capture {
         data = data.updateCapture(id, transform)
-        persistData()
         return capture(id)
     }
 
     private fun fail(id: String, status: CaptureStatus, message: String): Capture =
         updateCapture(id) { it.copy(status = status, message = message, audioFinalized = true) }
 
-    private fun persistData() = IosPaths.write(IosPaths.stateFile, json.encodeToString(data))
-    private fun persistPreferences() = IosPaths.write(IosPaths.preferencesFile, json.encodeToString(prefs))
-
-    private fun readData(): BrainData {
-        IosPaths.read(IosPaths.stateFile)?.let { stored ->
-            runCatching { json.decodeFromString<BrainData>(stored) }.getOrNull()?.let { return it }
-        }
-        defaults.stringForKey("kasha.test.brain.v1")?.let { stored ->
-            runCatching { json.decodeFromString<BrainData>(stored) }.getOrNull()?.let {
-                IosPaths.write(IosPaths.stateFile, json.encodeToString(it))
-                return it
-            }
-        }
-        return BrainData()
-    }
-
-    private fun readPreferences(): Preferences {
-        IosPaths.read(IosPaths.preferencesFile)?.let { stored ->
-            runCatching { json.decodeFromString<Preferences>(stored).validated() }.getOrNull()?.let { return it }
-        }
-        defaults.stringForKey("kasha.test.preferences.v1")?.let { stored ->
-            runCatching { json.decodeFromString<Preferences>(stored).validated() }.getOrNull()?.let {
-                IosPaths.write(IosPaths.preferencesFile, json.encodeToString(it))
-                return it
-            }
-        }
-        return Preferences()
+    private fun readState(): LoadedState {
+        val storedData = IosPaths.read(stateFile)
+        val storedPreferences = IosPaths.read(preferencesFile)
+        val legacyData = if (storedData == null) defaults.stringForKey("kasha.test.brain.v1") else null
+        val legacyPreferences = if (storedPreferences == null) defaults.stringForKey("kasha.test.preferences.v1") else null
+        val data = (storedData ?: legacyData)?.let { json.decodeFromString<BrainData>(it) } ?: BrainData()
+        val preferences = (storedPreferences ?: legacyPreferences)
+            ?.let { json.decodeFromString<Preferences>(it).validated() }
+            ?: Preferences(ai = BuiltInAi.appleSelection())
+        // Миграция разрешена только после успешного чтения и разбора обоих документов.
+        if (legacyData != null) IosPaths.write(stateFile, json.encodeToString(data))
+        if (legacyPreferences != null) IosPaths.write(preferencesFile, json.encodeToString(preferences))
+        return LoadedState(data, preferences)
     }
 }

@@ -6,13 +6,11 @@ import brain.runtime.*
 import brain.runtime.ai.*
 import brain.studio.*
 import kotlinx.coroutines.*
-import java.nio.channels.FileChannel
 import java.nio.file.*
 import java.util.concurrent.atomic.AtomicBoolean
 
 class DesktopServices(val root: Path, val resources: Path, cpuOnly: Boolean = false) : AutoCloseable {
-    private val lockChannel: FileChannel
-    private val lock: java.nio.channels.FileLock
+    private val instanceLock: DesktopInstanceLock
     private val closed = AtomicBoolean(false)
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     val store: FileBrainStore
@@ -23,9 +21,7 @@ class DesktopServices(val root: Path, val resources: Path, cpuOnly: Boolean = fa
     val repository: StudioRepository
     val simulated = Files.exists(resources.resolve("demo-mode.txt"))
     init {
-        Files.createDirectories(root)
-        lockChannel = FileChannel.open(root.resolve(".desktop.lock"), StandardOpenOption.CREATE, StandardOpenOption.WRITE)
-        lock = try { lockChannel.tryLock() ?: error("Kasha уже запущен") } catch(e: Exception) { lockChannel.close(); throw e }
+        instanceLock = DesktopInstanceLock.acquire(root)
         try {
             val env = if (simulated) mapOf("KASHA_FFMPEG" to bundledExecutable(resources,"ffmpeg")) else bundledEnvironment(resources)
             store = FileBrainStore(root, runtimeStatus = { RuntimeStatus(localOnly=true, simulated=simulated) }, singleCurrent=true)
@@ -41,24 +37,52 @@ class DesktopServices(val root: Path, val resources: Path, cpuOnly: Boolean = fa
             val intelligence: Intelligence = if(simulated) DemoIntelligence() else RoutedStudioIntelligence(prefs,env,root,packages,cloud,runner)
             studioProcessor = StudioProcessor(store,prefs,intelligence,env.getValue("KASHA_FFMPEG"),runner)
             val baseRepository = StudioDiskRepository(store,studioProcessor,prefs,scope)
-            repository = AiStudioRepository(baseRepository, packages, cloud)
+            // Probe запускает тот же файл, но не компилирует GPU-ядра и не загружает модель.
+            repository = AiStudioRepository(baseRepository, packages, cloud, JvmAiRuntimeProbe(env)::available)
             recorder = DesktopRecorder(root,store){studioProcessor.enqueue(it,scope)}
             audio = DesktopAudio(store,env.getValue("KASHA_FFMPEG"),root,scope)
-        } catch(e: Exception) { lock.release();lockChannel.close();scope.cancel();throw e }
+        } catch(e: Exception) { instanceLock.close();scope.cancel();throw e }
     }
     override fun close() {
         if(!closed.compareAndSet(false,true))return
-        recorder.close();audio.stop();scope.cancel()
+        try { recorder.close() } catch (e: Exception) { closed.set(false); throw e }
+        audio.stop();scope.cancel()
         runBlocking { withTimeoutOrNull(5000){scope.coroutineContext[Job]?.join()} }
-        lock.release();lockChannel.close()
+        instanceLock.close()
     }
 }
-private fun bundledExecutable(resources:Path,name:String):String = resources.resolve("bin/$name").toAbsolutePath().toString().also{
-    require(Files.isRegularFile(Path.of(it))&&Files.isExecutable(Path.of(it))){"В пакете отсутствует $name. Переустановите приложение целиком."}
+
+internal fun bundledExecutable(resources: Path, name: String, os: DesktopOs = DesktopPlatform.os): String {
+    val file = DesktopPlatform.executableCandidates(name, os).asSequence()
+        .map { resources.resolve("bin").resolve(it).toAbsolutePath() }.firstOrNull(Files::isRegularFile)
+        ?: error("В пакете отсутствует $name. Переустановите приложение целиком.")
+    if (os != DesktopOs.WINDOWS) {
+        require(Files.isExecutable(file)) { "Файл $name не имеет права запуска. Переустановите приложение целиком." }
+    }
+    return file.toString()
 }
-fun bundledEnvironment(resources:Path):Map<String,String> {
-    fun model(name:String)=resources.resolve("models/$name").toAbsolutePath().toString().also{require(Files.isRegularFile(Path.of(it))&&Files.size(Path.of(it))>1_000_000){"В пакете отсутствует модель $name"}}
-    return mapOf("KASHA_WHISPER_CLI" to bundledExecutable(resources,"whisper-cli"),"KASHA_WHISPER_MODEL" to model("ggml-small.bin"),
-        "KASHA_LLAMA_CLI" to bundledExecutable(resources,"llama-completion"),"KASHA_LLAMA_MODEL" to model("Qwen3-4B-Q4_K_M.gguf"),
-        "KASHA_FFMPEG" to bundledExecutable(resources,"ffmpeg"))
+
+internal fun bundledModel(resources: Path, name: String): String {
+    val models = resources.resolve("models")
+    val direct = models.resolve(name).toAbsolutePath()
+    if (Files.isRegularFile(direct) && Files.size(direct) > 1_000_000) return direct.toString()
+    if (name.endsWith(".gguf") && Files.isDirectory(models)) {
+        val prefix = "${name.removeSuffix(".gguf")}-00001-of-"
+        val firstShard = Files.list(models).use { files ->
+            files.filter { path ->
+                val fileName = path.fileName.toString()
+                Files.isRegularFile(path) && fileName.startsWith(prefix) && fileName.endsWith(".gguf")
+            }.sorted().findFirst().orElse(null)
+        }
+        if (firstShard != null && Files.size(firstShard) > 1_000_000) return firstShard.toAbsolutePath().toString()
+    }
+    error("В пакете отсутствует модель $name")
 }
+
+fun bundledEnvironment(resources:Path):Map<String,String> = mapOf(
+    "KASHA_WHISPER_CLI" to bundledExecutable(resources,"whisper-cli"),
+    "KASHA_WHISPER_MODEL" to bundledModel(resources,"ggml-small.bin"),
+    "KASHA_LLAMA_CLI" to bundledExecutable(resources,"llama-completion"),
+    "KASHA_LLAMA_MODEL" to bundledModel(resources,"Qwen3-4B-Q4_K_M.gguf"),
+    "KASHA_FFMPEG" to bundledExecutable(resources,"ffmpeg"),
+)

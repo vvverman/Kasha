@@ -14,7 +14,7 @@ concurrency:
 jobs:
   ios-shared:
     runs-on: macos-15
-    timeout-minutes: 25
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v5
@@ -25,24 +25,59 @@ jobs:
         with:
           gradle-version: '9.3.1'
           cache-read-only: false
+      - uses: actions/cache@v4
+        id: native
+        with:
+          path: iosApp/build/native/iphonesimulator
+          key: kasha-ios-native-simulator-v1-${{ hashFiles('iosApp/native/**') }}
+      - name: Build pinned iOS native model runtimes
+        if: steps.native.outputs.cache-hit != 'true'
+        run: |
+          set -o pipefail
+          bash iosApp/native/build.sh iphonesimulator 2>&1 | tee ios-native.log
+      - uses: actions/cache@v4
+        with:
+          path: desktopApp/bundle/common/models
+          key: kasha-ios-model-fixtures-v1-${{ hashFiles('desktopApp/packaging/prepare-models.sh') }}
+      - name: Prepare pinned models and actual speech fixture
+        run: |
+          set -euo pipefail
+          bash desktopApp/packaging/prepare-models.sh
+          command -v ffmpeg >/dev/null || brew install ffmpeg
+          python3 -m venv .ios-test-python
+          .ios-test-python/bin/pip install fonttools==4.59.2 piper-tts==1.4.2
+          .ios-test-python/bin/python tests/make-russian-fixture.py
+          ffmpeg -nostdin -v error -y -i test-output/real-models/russian-with-pauses.wav -ar 48000 -ac 1 test-output/real-models/russian-48k.m4a
+          .ios-test-python/bin/python scripts/prepare-fonts.py
       - name: Compile and test Kasha shared iOS layer
         run: |
           set -o pipefail
-          python -m pip install fonttools==4.59.2
-          python scripts/prepare-fonts.py
+          export SIMCTL_CHILD_KASHA_IOS_NATIVE_FRAMEWORKS="$PWD/iosApp/build/native/iphonesimulator"
+          export SIMCTL_CHILD_KASHA_IOS_MODEL_FIXTURES="$PWD/desktopApp/bundle/common/models"
+          export SIMCTL_CHILD_KASHA_IOS_AUDIO_FIXTURE="$PWD/test-output/real-models/russian-with-pauses.wav"
+          export SIMCTL_CHILD_KASHA_IOS_AI_EVIDENCE="$PWD/test-output/ios-local-models"
           gradle \
             :kashaCore:compileKotlinIosArm64 \
             :kashaCore:compileKotlinIosSimulatorArm64 \
+            :kashaCore:iosSimulatorArm64Test \
             :aiCatalog:compileKotlinIosArm64 \
             :aiCatalog:compileKotlinIosSimulatorArm64 \
+            :aiCatalog:iosSimulatorArm64Test \
             :composeApp:compileKotlinIosArm64 \
             :composeApp:compileKotlinIosSimulatorArm64 \
             :composeApp:compileTestKotlinIosArm64 \
             :composeApp:iosSimulatorArm64Test \
             2>&1 | tee ios-shared.log
+          test -s test-output/ios-local-models/ios-local-models.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: kasha-ios-shared-${{ github.sha }}
           retention-days: 14
-          path: ios-shared.log
+          path: |
+            ios-shared.log
+            ios-native.log
+            test-output/ios-local-models/
+            kashaCore/build/test-results/
+            aiCatalog/build/test-results/
+            composeApp/build/test-results/
