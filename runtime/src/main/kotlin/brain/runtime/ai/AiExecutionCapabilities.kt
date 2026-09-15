@@ -48,7 +48,7 @@ class JvmAiExecutionCapabilities(
     }
 }
 
-/** Проверяет запуск именно настроенных программ, не загружает модель и не читает заметки. */
+/** Проверяет запуск программы и её зависимостей, не обрабатывает модель или пользовательские данные. */
 class JvmAiRuntimeProbe(
     private val environment: Map<String, String>,
     private val runner: CommandRunner = JvmCommandRunner(),
@@ -57,7 +57,9 @@ class JvmAiRuntimeProbe(
         val executable = environment[if (role == AiRole.SPEECH_TO_TEXT) "KASHA_WHISPER_CLI" else "KASHA_LLAMA_CLI"]
             ?.takeIf(String::isNotBlank) ?: return false
         return try {
-            runner.run(listOf(executable, "--help"), 5)
+            // У закреплённого llama.cpp --version завершает parser сразу;
+            // --help проходит обработчики моделей и не подходит для лёгкого probe.
+            runner.run(listOf(executable, "--version"), 5)
             if (role == AiRole.SPEECH_TO_TEXT)
                 runner.run(listOf(environment["KASHA_FFMPEG"] ?: "ffmpeg", "-version"), 5)
             true

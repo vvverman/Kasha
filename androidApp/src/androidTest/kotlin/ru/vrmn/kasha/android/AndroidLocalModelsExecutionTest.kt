@@ -17,7 +17,7 @@ import java.security.MessageDigest
 class AndroidLocalModelsExecutionTest {
     @Test fun voiceBecomesNoteUsingSelectedNativeModelsWithoutNetwork() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val input = File(context.getExternalFilesDir(null), "ai-fixtures")
+        val input = File(context.filesDir, "ai-fixtures")
         val evidence = File(input, "android-local-models.json")
         evidence.delete()
         var networkReachable = false
@@ -32,7 +32,7 @@ class AndroidLocalModelsExecutionTest {
         for (id in setOf(selection.speechToText, selection.text)) {
             val artifact = ModelArtifacts.packages.getValue(id)
             val file = File(input, artifact.fileName)
-            check(file.isFile) { "Missing pinned model fixture" }
+            check(file.isFile && file.canRead()) { "Missing pinned model fixture: ${file.absolutePath}; visible=${input.list()?.joinToString()}" }
             file.copyTo(File(models, artifact.fileName), overwrite = true)
         }
         val audio = File(input, "russian-with-pauses.wav")

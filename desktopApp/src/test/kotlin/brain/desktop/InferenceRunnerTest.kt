@@ -28,13 +28,13 @@ class InferenceRunnerTest {
     }
     @Test fun readinessProbeUsesTheSameCpuConfigurationWithoutLoadingModel() = runBlocking {
         val calls = mutableListOf<List<String>>()
-        val runner = DesktopInferenceRunner(true, CommandRunner { command, _ -> calls += command; "help" })
+        val runner = DesktopInferenceRunner(true, CommandRunner { command, _ -> calls += command; "version" })
         val probe = JvmAiRuntimeProbe(mapOf("KASHA_WHISPER_CLI" to "/bundle/whisper-cli", "KASHA_LLAMA_CLI" to "/bundle/llama-completion", "KASHA_FFMPEG" to "/bundle/ffmpeg"), runner)
         assertTrue(probe.available(AiRole.SPEECH_TO_TEXT))
         assertTrue(probe.available(AiRole.TEXT))
-        assertEquals(listOf("/bundle/whisper-cli", "--help", "--no-gpu"), calls[0])
+        assertEquals(listOf("/bundle/whisper-cli", "--version", "--no-gpu"), calls[0])
         assertEquals(listOf("/bundle/ffmpeg", "-version"), calls[1])
-        assertEquals(listOf("/bundle/llama-completion", "--help", "--n-gpu-layers", "0", "--device", "none"), calls[2])
+        assertEquals(listOf("/bundle/llama-completion", "--version", "--n-gpu-layers", "0", "--device", "none"), calls[2])
         assertTrue(calls.none { "-m" in it || "--model" in it })
     }
 }

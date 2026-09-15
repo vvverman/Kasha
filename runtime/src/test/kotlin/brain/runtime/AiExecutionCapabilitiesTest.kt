@@ -23,10 +23,10 @@ class AiExecutionCapabilitiesTest {
     @Test fun runtimeProbeStartsOnlyToolsWithoutModelOrUserData() = runBlocking {
         val calls = mutableListOf<List<String>>()
         val probe = JvmAiRuntimeProbe(mapOf("KASHA_WHISPER_CLI" to "stt", "KASHA_LLAMA_CLI" to "llm", "KASHA_FFMPEG" to "codec"),
-            CommandRunner { command, _ -> calls += command; "help" })
+            CommandRunner { command, _ -> calls += command; "version" })
         assertTrue(probe.available(AiRole.SPEECH_TO_TEXT))
         assertTrue(probe.available(AiRole.TEXT))
-        assertEquals(listOf(listOf("stt", "--help"), listOf("codec", "-version"), listOf("llm", "--help")), calls)
+        assertEquals(listOf(listOf("stt", "--version"), listOf("codec", "-version"), listOf("llm", "--version")), calls)
     }
     @Test fun runtimeFailureDoesNotClaimReady() = runBlocking {
         val probe = JvmAiRuntimeProbe(mapOf("KASHA_LLAMA_CLI" to "broken"), CommandRunner { _, _ -> error("missing dependency") })

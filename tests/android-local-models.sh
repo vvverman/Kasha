@@ -10,17 +10,25 @@ test -n "$APP" && test -n "$TEST"
 adb root
 adb wait-for-device
 trap 'adb logcat -d > "$OUT/logcat.txt" 2>&1 || true' EXIT
-# ABI-targeted debug-сборка помечается testOnly; разрешение относится только к эмуляторной установке.
 adb install -r -t "$APP"
 adb install -r -t "$TEST"
-DEST=/sdcard/Android/data/ru.vrmn.kasha/files/ai-fixtures
-adb shell mkdir -p "$DEST"
+PACKAGE=ru.vrmn.kasha
+DEST="/data/user/0/$PACKAGE/files/ai-fixtures"
+# Данные fixture размещаются в app-private storage, без scoped-storage разрешений.
+adb shell run-as "$PACKAGE" mkdir -p files/ai-fixtures
+APP_UID=$(adb shell run-as "$PACKAGE" id -u | tr -d '\r')
+[[ "$APP_UID" =~ ^[0-9]+$ ]]
 adb push desktopApp/bundle/common/models/ggml-small.bin "$DEST/ggml-small.bin"
 adb push desktopApp/bundle/common/models/Qwen3-4B-Q4_K_M.gguf "$DEST/Qwen3-4B-Q4_K_M.gguf"
 adb push test-output/real-models/russian-with-pauses.wav "$DEST/russian-with-pauses.wav"
+adb shell chown -R "$APP_UID:$APP_UID" "$DEST"
+adb shell restorecon -RF "$DEST"
+for file in ggml-small.bin Qwen3-4B-Q4_K_M.gguf russian-with-pauses.wav; do
+    adb shell run-as "$PACKAGE" test -r "files/ai-fixtures/$file"
+done
+adb shell run-as "$PACKAGE" ls -ln files/ai-fixtures
 adb shell rm -f "$DEST/android-local-models.json"
-# Запрет исходящего IP-трафика эмулятора, не подмена транспорта тестовым fake.
-# Канал adb не использует этот IP-интерфейс; localhost оставлен для системных IPC.
+# Запрет исходящего IP-трафика только эмулятора; localhost оставлен для системных IPC.
 adb shell 'iptables -I OUTPUT 1 ! -o lo -j REJECT'
 adb shell 'ip6tables -I OUTPUT 1 ! -o lo -j REJECT'
 adb shell iptables -S OUTPUT > "$OUT/ipv4-policy.txt"
