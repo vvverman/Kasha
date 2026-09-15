@@ -38,19 +38,14 @@ class DesktopServices(val root: Path, val resources: Path, cpuOnly: Boolean = fa
             val intelligence: Intelligence = if(simulated) DemoIntelligence() else RoutedStudioIntelligence(prefs,env,root,packages,cloud,runner)
             studioProcessor = StudioProcessor(store,prefs,intelligence,env.getValue("KASHA_FFMPEG"),runner)
             val baseRepository = StudioDiskRepository(store,studioProcessor,prefs,scope)
-            repository = AiStudioRepository(baseRepository, packages, cloud)
+            repository = AiStudioRepository(baseRepository, packages, cloud, JvmAiRuntimeProbe(env)::available)
             recorder = DesktopRecorder(root,store){studioProcessor.enqueue(it,scope)}
             audio = DesktopAudio(store,env.getValue("KASHA_FFMPEG"),root,scope)
         } catch(e: Exception) { instanceLock.close();scope.cancel();throw e }
     }
     override fun close() {
         if(!closed.compareAndSet(false,true))return
-        try {
-            recorder.close()
-        } catch (e: Exception) {
-            closed.set(false)
-            throw e
-        }
+        try { recorder.close() } catch (e: Exception) { closed.set(false); throw e }
         audio.stop();scope.cancel()
         runBlocking { withTimeoutOrNull(5000){scope.coroutineContext[Job]?.join()} }
         instanceLock.close()
@@ -58,10 +53,8 @@ class DesktopServices(val root: Path, val resources: Path, cpuOnly: Boolean = fa
 }
 
 internal fun bundledExecutable(resources: Path, name: String, os: DesktopOs = DesktopPlatform.os): String {
-    val file = DesktopPlatform.executableCandidates(name, os)
-        .asSequence()
-        .map { resources.resolve("bin").resolve(it).toAbsolutePath() }
-        .firstOrNull(Files::isRegularFile)
+    val file = DesktopPlatform.executableCandidates(name, os).asSequence()
+        .map { resources.resolve("bin").resolve(it).toAbsolutePath() }.firstOrNull(Files::isRegularFile)
         ?: error("В пакете отсутствует $name. Переустановите приложение целиком.")
     if (os != DesktopOs.WINDOWS) {
         require(Files.isExecutable(file)) { "Файл $name не имеет права запуска. Переустановите приложение целиком." }

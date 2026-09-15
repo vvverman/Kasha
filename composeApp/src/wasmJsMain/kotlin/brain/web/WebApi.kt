@@ -22,15 +22,19 @@ class WebBrainRepository(private val baseUrl: String) : StudioRepository, AiPlat
         install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true; encodeDefaults = true }) }
     }
 
+    override val aiExecution: AiExecutionCapabilityGateway = object : AiExecutionCapabilityGateway {
+        override suspend fun roles(selection: AiSelection): List<AiRoleCapability> =
+            client.post("$baseUrl/api/ai/capabilities") {
+                contentType(ContentType.Application.Json)
+                setBody(selection)
+            }.body()
+    }
+
     override val aiPackages: AiPackageGateway = object : AiPackageGateway {
         override val available = true
         override suspend fun states(): List<AiPackageState> = client.get("$baseUrl/api/ai/models").body()
-        override suspend fun install(engineId: String) {
-            client.post("$baseUrl/api/ai/models/$engineId/install")
-        }
-        override suspend fun remove(engineId: String) {
-            client.delete("$baseUrl/api/ai/models/$engineId")
-        }
+        override suspend fun install(engineId: String) { client.post("$baseUrl/api/ai/models/$engineId/install") }
+        override suspend fun remove(engineId: String) { client.delete("$baseUrl/api/ai/models/$engineId") }
     }
 
     override val cloudAi: CloudAiGateway = object : CloudAiGateway {
@@ -42,9 +46,7 @@ class WebBrainRepository(private val baseUrl: String) : StudioRepository, AiPlat
                 setBody(CloudAiConnectionRequest(connection, apiKey))
             }
         }
-        override suspend fun remove(providerId: String) {
-            client.delete("$baseUrl/api/ai/cloud/$providerId")
-        }
+        override suspend fun remove(providerId: String) { client.delete("$baseUrl/api/ai/cloud/$providerId") }
         override suspend fun test(connection: CloudAiConnection, apiKey: String?): Boolean =
             client.post("$baseUrl/api/ai/cloud/${connection.providerId}/test") {
                 contentType(ContentType.Application.Json)
@@ -73,7 +75,6 @@ class WebBrainRepository(private val baseUrl: String) : StudioRepository, AiPlat
     override suspend fun completeTask(id: String): Task = client.post("$baseUrl/api/tasks/$id/complete").body()
     override suspend fun deleteTask(id: String) { client.delete("$baseUrl/api/tasks/$id") }
     override suspend fun orderTasks(ids: List<String>) { client.post("$baseUrl/api/tasks/order") { contentType(ContentType.Application.Json); setBody(OrderRequest(ids)) } }
-    // Доставкой владеет RuntimeReminderDelivery. Случайный второй consumer не получает фиктивный успех.
     override suspend fun claimTaskReminders(now: Long, zoneId: String): List<Task> =
         throw UnsupportedOperationException("Reminder scheduling belongs to the local runtime")
     override suspend fun reprocess(id: String): Capture = client.post("$baseUrl/api/captures/$id/process").body()

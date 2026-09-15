@@ -51,12 +51,9 @@ internal class AndroidPermissions(context: Context) : DeviceCapabilityGateway {
             systemRequest = restoredRequest?.let { name -> DevicePermissionKind.entries.firstOrNull { it.name == name } }
         }
     }
-
     fun onResume(activity: ComponentActivity) {
         if (host.get() === activity && requested != null && systemRequest == null) showExplanation()
-        // Только ранее запрошенное объяснение; ни start(), ни resume() отсюда не вызываются.
     }
-
     fun detach(activity: ComponentActivity) {
         if (host.get() !== activity) return
         dialog?.dismiss()
@@ -65,14 +62,12 @@ internal class AndroidPermissions(context: Context) : DeviceCapabilityGateway {
         host.clear()
         if (!activity.isChangingConfigurations) finish(DevicePermissionState.DENIED)
     }
-
     fun onResult(granted: Boolean) {
         val kind = systemRequest ?: return
         systemRequest = null
         history.edit().putBoolean(kind.name, true).apply()
         finish(if (granted) status(kind) else DevicePermissionState.DENIED)
     }
-
     fun status(kind: DevicePermissionKind): DevicePermissionState {
         if (kind == DevicePermissionKind.SPEECH_RECOGNITION) return DevicePermissionState.UNAVAILABLE
         if (kind == DevicePermissionKind.MICROPHONE && !app.packageManager.hasSystemFeature(PackageManager.FEATURE_MICROPHONE)) {
@@ -88,19 +83,16 @@ internal class AndroidPermissions(context: Context) : DeviceCapabilityGateway {
         }
         return if (history.getBoolean(kind.name, false)) DevicePermissionState.DENIED else DevicePermissionState.NOT_DETERMINED
     }
-
     fun recorderPermission(): RecorderPermission = when (status(DevicePermissionKind.MICROPHONE)) {
         DevicePermissionState.GRANTED -> RecorderPermission.GRANTED
         DevicePermissionState.DENIED -> RecorderPermission.DENIED
         DevicePermissionState.NOT_DETERMINED -> RecorderPermission.NOT_DETERMINED
         DevicePermissionState.UNAVAILABLE -> RecorderPermission.UNAVAILABLE
     }
-
     override suspend fun snapshot() = DeviceCapabilitySnapshot(
         permissions = DevicePermissionKind.entries.associateWith(::status),
         canOpenSettings = host.get() != null,
     )
-
     override suspend fun openSettings(): Boolean = withContext(Dispatchers.Main.immediate) {
         val activity = host.get() ?: return@withContext false
         runCatching {
@@ -108,9 +100,8 @@ internal class AndroidPermissions(context: Context) : DeviceCapabilityGateway {
             true
         }.getOrDefault(false)
     }
-
     /** Вызывается из системного действия, не из snapshot/foreground. */
-    suspend fun request(kind: DevicePermissionKind): DevicePermissionState = withContext(Dispatchers.Main.immediate) {
+    override suspend fun request(kind: DevicePermissionKind): DevicePermissionState = withContext(Dispatchers.Main.immediate) {
         val current = status(kind)
         if (current == DevicePermissionState.GRANTED || current == DevicePermissionState.UNAVAILABLE) return@withContext current
         waiter?.let { return@withContext if (requested == kind) it.await() else current }
@@ -119,20 +110,15 @@ internal class AndroidPermissions(context: Context) : DeviceCapabilityGateway {
         waiter = result
         requested = kind
         showExplanation()
-        try {
-            result.await()
-        } finally {
+        try { result.await() } finally {
             if (waiter === result) {
                 waiter = null
                 requested = null
                 dialog?.dismiss()
                 dialog = null
-                // Callback OS prompt всё ещё обновит history, но отменённый start не возобновится.
             }
         }
     }
-
-    /** Только продолжение конкретного grant-result; уход в background отменяет ожидание. */
     suspend fun awaitPermissionReturn(): Boolean = withContext(Dispatchers.Main.immediate) {
         val activity = host.get() ?: return@withContext false
         val lifecycle = activity.lifecycle
@@ -153,13 +139,10 @@ internal class AndroidPermissions(context: Context) : DeviceCapabilityGateway {
                     }
                 }
                 lifecycle.addObserver(observer)
-                continuation.invokeOnCancellation {
-                    activity.runOnUiThread { lifecycle.removeObserver(observer) }
-                }
+                continuation.invokeOnCancellation { activity.runOnUiThread { lifecycle.removeObserver(observer) } }
             }
         } ?: false
     }
-
     private fun showExplanation() {
         val activity = host.get() ?: return
         val kind = requested ?: return
@@ -186,7 +169,6 @@ internal class AndroidPermissions(context: Context) : DeviceCapabilityGateway {
             .create()
         dialog?.show()
     }
-
     private fun finish(value: DevicePermissionState) {
         val result = waiter
         waiter = null
@@ -195,7 +177,6 @@ internal class AndroidPermissions(context: Context) : DeviceCapabilityGateway {
         dialog = null
         result?.complete(value)
     }
-
     private fun androidPermission(kind: DevicePermissionKind): String? = when (kind) {
         DevicePermissionKind.MICROPHONE -> Manifest.permission.RECORD_AUDIO
         DevicePermissionKind.NOTIFICATIONS -> if (Build.VERSION.SDK_INT >= 33) Manifest.permission.POST_NOTIFICATIONS else null
@@ -212,7 +193,6 @@ internal class AndroidPermissionRecorder(
 ) : RecorderSessionGateway by delegate {
     override suspend fun permission() = permissions.recorderPermission()
     override suspend fun hasConsent() = permission() == RecorderPermission.GRANTED
-
     override suspend fun start() {
         check(permissions.request(DevicePermissionKind.MICROPHONE) == DevicePermissionState.GRANTED) { "microphonePermissionDenied" }
         check(permissions.awaitPermissionReturn()) { "microphoneRequiresForeground" }

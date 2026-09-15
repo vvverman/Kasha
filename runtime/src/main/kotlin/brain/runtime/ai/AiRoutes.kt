@@ -10,6 +10,10 @@ import io.ktor.server.routing.*
 fun Route.aiRoutes(studio: StudioRepository?) {
     val services = studio as? AiPlatformServices
 
+    post("/api/ai/capabilities") {
+        check(services != null)
+        call.respond(services.aiExecution.roles(call.receive<AiSelection>()))
+    }
     get("/api/ai/models") {
         check(services != null)
         call.respond(services.aiPackages.states())
@@ -26,7 +30,6 @@ fun Route.aiRoutes(studio: StudioRepository?) {
         services.aiPackages.remove(id)
         call.respond(services.aiPackages.states())
     }
-
     get("/api/ai/cloud") {
         check(services != null)
         call.respond(services.cloudAi.connections())

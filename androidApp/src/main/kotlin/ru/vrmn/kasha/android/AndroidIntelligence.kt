@@ -19,13 +19,7 @@ internal class AndroidIntelligence(
     val packages = AndroidWhisperPackages(
         File(context.filesDir, "Kasha/models"),
         artifacts = ModelArtifacts.packages,
-        engineAvailable = { id ->
-            when (id) {
-                in ModelArtifacts.speech -> AndroidWhisperNative.available
-                in ModelArtifacts.text -> AndroidLlamaNative.available
-                else -> false
-            }
-        },
+        engineAvailable = ::runtimeReady,
     )
     private val whisper = AndroidWhisper(context.applicationContext, packages)
     private val llama = AndroidLlama(packages)
@@ -72,24 +66,14 @@ internal class AndroidIntelligence(
         }
     }
 
+    private fun runtimeReady(id: String): Boolean = when (id) {
+        in ModelArtifacts.speech -> AndroidWhisperNative.available
+        in ModelArtifacts.text -> AndroidLlamaNative.available
+        else -> false
+    }
+
     override suspend fun roles(selection: AiSelection): List<AiRoleCapability> {
         val language = Languages.resolve(preferences().language, Locale.getDefault().toLanguageTag())
-        val installed = packages.states().filter { it.installed }.map { it.engineId }.toSet()
-        val nativeReady = selection.speechToText == BuiltInAi.ANDROID_SPEECH && speech.supports(language)
-        return AiRole.entries.map { role ->
-            val id = selection.engineId(role)
-            val model = if (role == AiRole.SPEECH_TO_TEXT) id in ModelArtifacts.speech else id in ModelArtifacts.text
-            val supported = model || BuiltInAi.supportsAndroid(role, id)
-            val ready = supported && when {
-                model -> id in installed
-                role == AiRole.SPEECH_TO_TEXT -> nativeReady
-                else -> true
-            }
-            AiRoleCapability(role, id, ready, when {
-                ready -> null
-                supported -> "androidAiNotConfigured"
-                else -> "platformUnavailable"
-            })
-        }
+        return androidRoleCapabilities(selection, language, packages::states, ::runtimeReady) { speech.capability(language) }
     }
 }

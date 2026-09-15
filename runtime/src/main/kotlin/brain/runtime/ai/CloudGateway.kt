@@ -10,6 +10,7 @@ import kotlinx.serialization.json.Json
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
+import java.util.Locale
 
 class JvmCloudAiGateway(
     private val root: Path,
@@ -23,6 +24,9 @@ class JvmCloudAiGateway(
 
     override suspend fun connections(): List<CloudAiConnection> = mutex.withLock { readUnsafe() }
 
+    suspend fun capability(role: AiRole, engineId: String, providerId: String): AiRoleCapability =
+        AiReadiness.cloud(role, engineId, providerId, this) { !secrets.get(providerId).isNullOrBlank() }
+
     override suspend fun save(connection: CloudAiConnection, apiKey: String?) {
         require(available) { "Системное защищённое хранилище недоступно" }
         validate(connection)
@@ -35,9 +39,7 @@ class JvmCloudAiGateway(
         }
     }
 
-    override suspend fun remove(providerId: String) {
-        disconnect(providerId)
-    }
+    override suspend fun remove(providerId: String) { disconnect(providerId) }
 
     override suspend fun disconnect(providerId: String): CloudAiDisconnectResult {
         val metadataRemoved = mutex.withLock {
@@ -50,11 +52,10 @@ class JvmCloudAiGateway(
             SecureSecretDeletion.UNAVAILABLE
         } else {
             val existed = runCatching { !secrets.get(providerId).isNullOrBlank() }.getOrDefault(false)
-            runCatching { secrets.remove(providerId) }
-                .fold(
-                    onSuccess = { if (existed) SecureSecretDeletion.DELETED else SecureSecretDeletion.NOT_FOUND },
-                    onFailure = { SecureSecretDeletion.FAILED },
-                )
+            runCatching { secrets.remove(providerId) }.fold(
+                onSuccess = { if (existed) SecureSecretDeletion.DELETED else SecureSecretDeletion.NOT_FOUND },
+                onFailure = { SecureSecretDeletion.FAILED },
+            )
         }
         return CloudAiDisconnectResult(metadataRemoved = metadataRemoved, secretDeletion = deletion)
     }
@@ -101,18 +102,15 @@ class JvmCloudAiGateway(
 
     private fun readUnsafe(): List<CloudAiConnection> {
         if (!Files.isRegularFile(file)) return emptyList()
-        return runCatching { json.decodeFromString<List<CloudAiConnection>>(Files.readString(file)) }.getOrDefault(emptyList())
+        return json.decodeFromString<List<CloudAiConnection>>(Files.readString(file))
     }
 
     private fun writeUnsafe(value: List<CloudAiConnection>) {
         Files.createDirectories(file.parent)
         val temp = file.resolveSibling(".${file.fileName}.tmp")
         Files.writeString(temp, json.encodeToString(value))
-        try {
-            Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
-        } catch (_: Exception) {
-            Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING)
-        }
+        try { Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE) }
+        catch (_: Exception) { Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING) }
     }
 }
 
@@ -120,35 +118,12 @@ class AiStudioRepository(
     private val delegate: StudioRepository,
     override val aiPackages: AiPackageGateway,
     override val cloudAi: CloudAiGateway,
+    runtimeReady: suspend (AiRole) -> Boolean = JvmAiRuntimeProbe(System.getenv())::available,
 ) : StudioRepository by delegate, AiPlatformServices {
-    override val aiExecution: AiExecutionCapabilityGateway = object : AiExecutionCapabilityGateway {
-        override suspend fun roles(selection: AiSelection): List<AiRoleCapability> {
-            val packageStates = runCatching { aiPackages.states() }.getOrDefault(emptyList()).associateBy { it.engineId }
-            val connections = runCatching { cloudAi.connections() }.getOrDefault(emptyList())
-            return AiRole.entries.map { role ->
-                val selectedId = selection.engineId(role)
-                val descriptor = AiCatalog.selectedDescriptor(selectedId)
-                when {
-                    descriptor == null -> AiRoleCapability(role, selectedId, false, "unknownEngine")
-                    !descriptor.supports(role) -> AiRoleCapability(role, selectedId, false, "unsupportedRole")
-                    descriptor.locality == AiLocality.LOCAL -> {
-                        val installed = aiPackages.available && packageStates[selectedId]?.installed == true
-                        AiRoleCapability(role, selectedId, installed, if (installed) null else "modelNotInstalled")
-                    }
-                    descriptor.locality == AiLocality.CLOUD -> {
-                        val providerId = AiCatalog.cloudProviderId(selectedId)
-                        val connection = connections.firstOrNull {
-                            providerId != null && it.providerId == providerId && it.enabled &&
-                                AiPrivacy.hasCurrentConsent(it) && it.modelFor(role) != null
-                        }
-                        val executable = cloudAi.available && connection != null
-                        AiRoleCapability(role, selectedId, executable, if (executable) null else "cloudUnavailable")
-                    }
-                    else -> AiRoleCapability(role, selectedId, false, "nativeUnavailable")
-                }
-            }
-        }
-    }
+    override val aiExecution: AiExecutionCapabilityGateway = JvmAiExecutionCapabilities(
+        aiPackages, cloudAi, runtimeReady,
+        language = { Languages.resolve(delegate.preferences().language, Locale.getDefault().toLanguageTag()) },
+    )
 
     override suspend fun savePreferences(value: Preferences) {
         AiCatalog.validateSelection(value.ai)

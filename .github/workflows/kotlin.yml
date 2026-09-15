@@ -58,6 +58,7 @@ jobs:
           python tests/studio_browser.py
           python tests/sorting_browser.py
           python tests/responsive_accessibility_browser.py
+          python tests/ai_readiness_browser.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -69,6 +70,7 @@ jobs:
             test-output/studio
             test-output/sorting
             test-output/responsive
+            test-output/ai-readiness
             kashaCore/build/test-results
             aiCatalog/build/test-results
             composeApp/build/test-results

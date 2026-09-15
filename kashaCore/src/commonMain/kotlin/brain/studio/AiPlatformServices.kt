@@ -17,6 +17,9 @@ data class DeviceCapabilitySnapshot(
 interface DeviceCapabilityGateway {
     suspend fun snapshot(): DeviceCapabilitySnapshot
     suspend fun openSettings(): Boolean
+    /** Только по явному действию пользователя, не при проверке готовности. */
+    suspend fun request(kind: DevicePermissionKind): DevicePermissionState =
+        snapshot().permissions[kind] ?: DevicePermissionState.UNAVAILABLE
 }
 
 object NoopDeviceCapabilityGateway : DeviceCapabilityGateway {
@@ -30,6 +33,7 @@ data class AiRoleCapability(
     val selectedEngineId: String,
     val executable: Boolean,
     val reason: String? = null,
+    val permission: DevicePermissionKind? = null,
 )
 
 interface AiExecutionCapabilityGateway {
@@ -42,10 +46,7 @@ object NoopAiExecutionCapabilityGateway : AiExecutionCapabilityGateway {
     }
 }
 
-/**
- * Опциональный набор сервисов конкретного platform shell.
- * StudioRepository может реализовать этот интерфейс, не расширяя основной Core-контракт.
- */
+/** Опциональные системные сервисы; основной контракт данных остаётся независимым. */
 interface AiPlatformServices {
     val aiPackages: AiPackageGateway
     val cloudAi: CloudAiGateway

@@ -11,6 +11,8 @@ import android.speech.RecognitionSupport
 import android.speech.RecognitionSupportCallback
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
+import brain.ai.BuiltInAi
+import brain.studio.*
 import kotlinx.coroutines.*
 import java.io.File
 import kotlin.coroutines.resume
@@ -19,22 +21,32 @@ import kotlin.coroutines.resumeWithException
 /** Только on-device service с подтверждённым файловым/сегментированным вводом. */
 internal class AndroidOnDeviceSpeech(context: Context) {
     private val context = context.applicationContext
+    private val permissions = AndroidPermissions(this.context)
 
     fun available(): Boolean = Build.VERSION.SDK_INT >= 33 &&
         SpeechRecognizer.isOnDeviceRecognitionAvailable(context)
 
-    suspend fun supports(language: String): Boolean {
-        if (!available()) return false
+    suspend fun supports(language: String): Boolean = capability(language).executable
+
+    /** Проверка не вызывает startListening, сеть или системный permission-dialog. */
+    suspend fun capability(language: String): AiRoleCapability {
+        val role = AiRole.SPEECH_TO_TEXT
+        val id = BuiltInAi.ANDROID_SPEECH
+        if (!available()) return AiReadiness.blocked(role, id, "platformUnavailable")
+        val permission = permissions.status(DevicePermissionKind.MICROPHONE)
+        if (permission != DevicePermissionState.GRANTED)
+            return AiReadiness.native(role, id, true, true, permission, DevicePermissionKind.MICROPHONE, true)
         return withContext(Dispatchers.Main.immediate) {
             val recognizer = SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
             val pipe = ParcelFileDescriptor.createPipe()
             try {
                 recognizer.setRecognitionListener(Events())
-                checkSupport(recognizer, request(language, pipe[0], 16000, 1), language)
-                true
+                checkSupport(recognizer, request(language, pipe[0], 16000, 1), language, detailed = true)
+                AiRoleCapability(role, id, true)
             } catch (cancelled: CancellationException) { throw cancelled }
-            catch (_: Exception) { false }
-            finally {
+            catch (error: Exception) {
+                AiReadiness.blocked(role, id, if (error.message == "languageUnsupported") "languageUnsupported" else "capabilityCheckFailed")
+            } finally {
                 pipe.forEach { runCatching { it.close() } }
                 recognizer.destroy()
             }
@@ -77,7 +89,6 @@ internal class AndroidOnDeviceSpeech(context: Context) {
                             }
                         })
                         val intent = request(language, pipe[0], pcm.sampleRate, pcm.channels)
-                        // Неизвестная поддержка — отказ, а не запуск стандартного microphone/cloud recognizer.
                         checkSupport(recognizer, intent, language)
                         recognizer.startListening(intent)
                         writer = launch(Dispatchers.IO) {
@@ -87,7 +98,6 @@ internal class AndroidOnDeviceSpeech(context: Context) {
                         }
                         result.await()
                     } finally {
-                        // Закрытие pipe освобождает и заблокированный writer; все системные команды на Main.
                         pipe.forEach { runCatching { it.close() } }
                         writer?.cancel()
                         runCatching { recognizer.cancel() }
@@ -111,7 +121,7 @@ internal class AndroidOnDeviceSpeech(context: Context) {
             putExtra(RecognizerIntent.EXTRA_SEGMENTED_SESSION, RecognizerIntent.EXTRA_AUDIO_SOURCE)
         }
 
-    private suspend fun checkSupport(recognizer: SpeechRecognizer, request: Intent, language: String) =
+    private suspend fun checkSupport(recognizer: SpeechRecognizer, request: Intent, language: String, detailed: Boolean = false) =
         withTimeoutOrNull(5_000) {
             suspendCancellableCoroutine<Unit> { continuation ->
                 recognizer.checkRecognitionSupport(request, context.mainExecutor, object : RecognitionSupportCallback {
@@ -122,10 +132,12 @@ internal class AndroidOnDeviceSpeech(context: Context) {
                             it.replace('_', '-').substringBefore('-').lowercase() == wanted
                         }
                         if (installed) continuation.resume(Unit)
-                        else continuation.resumeWithException(IllegalStateException("androidAiNotConfigured"))
+                        else continuation.resumeWithException(IllegalStateException(if (detailed) "languageUnsupported" else "androidAiNotConfigured"))
                     }
                     override fun onError(error: Int) {
-                        if (continuation.isActive) continuation.resumeWithException(IllegalStateException("androidAiNotConfigured"))
+                        if (continuation.isActive) continuation.resumeWithException(IllegalStateException(
+                            if (detailed && error in listOf(SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED, SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE))
+                                "languageUnsupported" else "androidAiNotConfigured"))
                     }
                 })
             }
