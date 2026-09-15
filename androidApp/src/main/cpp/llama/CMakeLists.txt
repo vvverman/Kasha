@@ -1,0 +1,27 @@
+cmake_minimum_required(VERSION 3.22.1)
+project(kasha_llama LANGUAGES C CXX ASM)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(LLAMA_BUILD_COMMON OFF CACHE BOOL "" FORCE)
+set(LLAMA_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(LLAMA_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(LLAMA_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
+set(LLAMA_BUILD_SERVER OFF CACHE BOOL "" FORCE)
+set(LLAMA_OPENSSL OFF CACHE BOOL "" FORCE)
+set(LLAMA_CURL OFF CACHE BOOL "" FORCE)
+set(LLAMA_SUBPROCESS OFF CACHE BOOL "" FORCE)
+set(GGML_NATIVE OFF CACHE BOOL "" FORCE)
+set(GGML_OPENMP OFF CACHE BOOL "" FORCE)
+set(GGML_CPU_KLEIDIAI OFF CACHE BOOL "" FORCE)
+set(GGML_BACKEND_DL OFF CACHE BOOL "" FORCE)
+include(FetchContent)
+# Та же версия llama.cpp, которая уже поставляется в Desktop.
+FetchContent_Declare(llama
+    GIT_REPOSITORY https://github.com/ggml-org/llama.cpp.git
+    GIT_TAG 5266f24da75dc449bd56cbed7addb9c8e4a6a73e)
+FetchContent_MakeAvailable(llama)
+add_library(kasha_llama SHARED ../kasha_llama.cpp)
+target_link_libraries(kasha_llama PRIVATE llama)
+# Отдельный ELF не экспортирует ggml-символы в уже существующий Whisper.
+target_link_options(kasha_llama PRIVATE "-Wl,--exclude-libs,ALL" "-Wl,-z,max-page-size=16384")

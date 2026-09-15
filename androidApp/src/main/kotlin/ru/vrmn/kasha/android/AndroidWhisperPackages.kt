@@ -17,21 +17,22 @@ import java.nio.file.AtomicMoveNotSupportedException
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 
-/** Скачивает только выбранную модель. Исходные записи и текст этому адаптеру не передаются. */
+/** Один файловый менеджер пакетов для Whisper и llama.cpp; пользовательские данные не передаются. */
 internal class AndroidWhisperPackages(
     private val directory: File,
     private val artifacts: Map<String, ModelArtifact> = ModelArtifacts.speech,
     private val nativeAvailable: () -> Boolean = { AndroidWhisperNative.available },
     private val open: (URL) -> HttpURLConnection = ::openModelHttps,
+    private val engineAvailable: (String) -> Boolean = { nativeAvailable() },
 ) : AiPackageGateway {
-    override val available get() = nativeAvailable()
+    override val available get() = artifacts.keys.any(engineAvailable)
     private val locks = ConcurrentHashMap<String, Mutex>()
     private val live = ConcurrentHashMap<String, AiPackageState>()
     private val verified = ConcurrentHashMap<String, Pair<Long, Long>>()
 
-    fun hasVerifiedModel(): Boolean = verified.any { (id, fingerprint) ->
+    fun hasVerifiedModel(ids: Set<String> = artifacts.keys): Boolean = verified.any { (id, fingerprint) ->
         val file = File(directory, spec(id).fileName)
-        file.isFile && (file.length() to file.lastModified()) == fingerprint
+        id in ids && engineAvailable(id) && file.isFile && (file.length() to file.lastModified()) == fingerprint
     }
 
     private fun lock(id: String) = locks.computeIfAbsent(id) { Mutex() }
@@ -39,7 +40,7 @@ internal class AndroidWhisperPackages(
 
     override suspend fun states(): List<AiPackageState> = withContext(Dispatchers.IO) {
         if (!available) return@withContext emptyList()
-        artifacts.keys.map { id ->
+        artifacts.keys.filter(engineAvailable).map { id ->
             live[id]?.takeIf { it.downloading } ?: lock(id).withLock {
                 AiPackageState(id, installed = model(id) != null, error = live[id]?.error)
             }
@@ -70,12 +71,13 @@ internal class AndroidWhisperPackages(
     }
 
     suspend fun <T> withModel(id: String, action: suspend (File) -> T): T = lock(id).withLock {
+        check(engineAvailable(id)) { "androidAiNotConfigured" }
         withContext(Dispatchers.IO) { action(model(id) ?: error("androidAiNotConfigured")) }
     }
 
     override suspend fun install(engineId: String) = lock(engineId).withLock {
         withContext(Dispatchers.IO) {
-            check(available) { "platformUnavailable" }
+            check(engineAvailable(engineId)) { "platformUnavailable" }
             val artifact = spec(engineId)
             if (model(engineId) != null) return@withContext
             check(directory.isDirectory || directory.mkdirs()) { "saveFailed" }

@@ -6,6 +6,7 @@ on:
       - 'androidApp/**'
       - 'composeApp/**'
       - 'kashaCore/**'
+      - 'aiCatalog/**'
       - 'gradle/**'
       - 'build.gradle.kts'
       - 'settings.gradle.kts'
@@ -15,6 +16,7 @@ on:
       - 'androidApp/**'
       - 'composeApp/**'
       - 'kashaCore/**'
+      - 'aiCatalog/**'
       - 'gradle/**'
       - 'build.gradle.kts'
       - 'settings.gradle.kts'
@@ -50,6 +52,22 @@ jobs:
           set -o pipefail
           gradle :androidApp:testDebugUnitTest :androidApp:assembleDebug :androidApp:assembleRelease :androidApp:bundleRelease 2>&1 | tee android-build.log
           printf 'Commit: %s\nRelease signing: unsigned in CI\n' "$GITHUB_SHA" > android-artifact-info.txt
+      - name: Verify packaged local AI libraries
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile
+          packages = list(Path('androidApp/build/outputs/apk').rglob('*.apk'))
+          assert packages, 'No APK produced'
+          for package in packages:
+              with ZipFile(package) as archive:
+                  files = set(archive.namelist())
+                  abis = {p.split('/')[1] for p in files if p.startswith('lib/') and p.endswith('/libkasha_whisper.so')}
+                  assert abis, f'Whisper missing: {package}'
+                  for abi in abis:
+                      assert f'lib/{abi}/libkasha_llama.so' in files, f'llama.cpp missing: {package} / {abi}'
+                      print(package, abi, 'Whisper + llama.cpp packaged')
+          PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:

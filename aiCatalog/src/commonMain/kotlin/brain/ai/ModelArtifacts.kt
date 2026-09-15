@@ -26,4 +26,7 @@ object ModelArtifacts {
     val speech: Map<String, ModelArtifact> = packages.filterKeys {
         it == AiSelection.DEFAULT_STT || it == "local.whisper.medium" || it == "local.whisper.large-v3"
     }
+    val text: Map<String, ModelArtifact> = packages.filterKeys {
+        it == AiSelection.DEFAULT_TEXT || it == "local.qwen.8b"
+    }
 }
