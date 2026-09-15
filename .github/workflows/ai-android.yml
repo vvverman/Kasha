@@ -37,6 +37,26 @@ jobs:
           python -m pip install fonttools==4.59.2
           python scripts/prepare-fonts.py
           gradle -Pandroid.injected.build.abi=x86_64 :androidApp:assembleDebug :androidApp:assembleDebugAndroidTest 2>&1 | tee android-ai-build.log
+      - name: Prepare exact APK files for the emulator jobs
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from shutil import copyfile
+          from zipfile import ZipFile
+          files = sorted(Path('androidApp/build').rglob('*.apk'))
+          print('Produced APK files:', *files, sep='\n')
+          app = [p for p in files if 'androidtest' not in p.as_posix().lower()]
+          tests = [p for p in files if 'androidtest' in p.as_posix().lower()]
+          assert len(app) == 1, f'Expected one application APK, found {app}'
+          assert len(tests) == 1, f'Expected one instrumentation APK, found {tests}'
+          output = Path('android-ai-apks')
+          output.mkdir(exist_ok=True)
+          copyfile(app[0], output / 'Kasha-debug.apk')
+          copyfile(tests[0], output / 'Kasha-debug-androidTest.apk')
+          with ZipFile(output / 'Kasha-debug.apk') as archive:
+              for name in ('libkasha_whisper.so', 'libkasha_llama.so', 'libc++_shared.so'):
+                  assert f'lib/x86_64/{name}' in archive.namelist(), name
+          PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -46,7 +66,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: android-ai-apks-${{ github.sha }}
-          path: androidApp/build/outputs/apk/**/*.apk
+          path: android-ai-apks/*.apk
           if-no-files-found: error
           retention-days: 7
 

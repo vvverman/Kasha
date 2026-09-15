@@ -9,6 +9,9 @@ on:
       - 'runtime/**'
       - 'desktopApp/**'
       - 'scripts/check-*.py'
+      - 'tests/linux-local-models.sh'
+      - 'tests/windows-local-models.ps1'
+      - 'tests/real_models.py'
       - '.github/workflows/desktop-platforms.yml'
   push:
     branches: [main]
@@ -19,6 +22,9 @@ on:
       - 'runtime/**'
       - 'desktopApp/**'
       - 'scripts/check-*.py'
+      - 'tests/linux-local-models.sh'
+      - 'tests/windows-local-models.ps1'
+      - 'tests/real_models.py'
       - '.github/workflows/desktop-platforms.yml'
   workflow_dispatch:
 
@@ -72,7 +78,7 @@ jobs:
           python3 -m pip install fonttools==4.59.2
           python3 scripts/prepare-fonts.py
           gradle :kashaCore:jvmTest :aiCatalog:jvmTest :composeApp:jvmTest :runtime:test :desktopApp:test 2>&1 | tee linux-tests.log
-          gradle :desktopApp:packageDistributionForCurrentOS 2>&1 | tee linux-package.log
+          gradle :runtime:installDist :desktopApp:createDistributable :desktopApp:packageDistributionForCurrentOS 2>&1 | tee linux-package.log
       - name: Verify packaged native resources
         run: |
           test -x desktopApp/bundle/linux/bin/whisper-cli
@@ -82,6 +88,13 @@ jobs:
           test -s desktopApp/bundle/common/models/Qwen3-4B-Q4_K_M.gguf
           find desktopApp/build/compose/binaries/main -type f \( -name '*.deb' -o -name '*.rpm' \) -print | tee linux-packages.txt
           test "$(wc -l < linux-packages.txt)" -ge 2
+      - name: Real Linux and Web AI without external network
+        run: |
+          set -euo pipefail
+          export PATH="$PWD/desktopApp/bundle/linux/bin:$PATH"
+          python3 -m pip install piper-tts==1.4.2
+          python3 tests/make-russian-fixture.py
+          sudo -E unshare --net bash tests/linux-local-models.sh
       - name: Upload Linux diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -93,6 +106,8 @@ jobs:
             linux-tests.log
             linux-package.log
             linux-packages.txt
+            test-output/desktop-ai/
+            test-output/real-models/*.json
             desktopApp/build/compose/logs/**
             desktopApp/build/test-results/**
             runtime/build/test-results/**
@@ -189,6 +204,16 @@ jobs:
           if (!(Test-Path "$dist/windows-install-smoke.log")) { throw 'Windows install smoke log missing' }
           Get-Content "$dist/windows-install-smoke.log"
           Get-Content "$dist/SHA256SUMS.txt"
+      - name: Real Windows model execution with blocked external network
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:Path = "$pwd\desktopApp\bundle\windows\bin;$env:Path"
+          python -m pip install piper-tts==1.4.2
+          if ($LASTEXITCODE -ne 0) { throw 'Speech fixture dependency failed' }
+          python tests/make-russian-fixture.py
+          if ($LASTEXITCODE -ne 0) { throw 'Speech fixture preparation failed' }
+          ./tests/windows-local-models.ps1
       - name: Upload Windows diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -199,6 +224,7 @@ jobs:
           path: |
             windows-tests.log
             windows-package.log
+            test-output/desktop-ai/
             desktopApp/build/windows-dist/windows-install-smoke.log
             desktopApp/build/compose/logs/**
             desktopApp/build/test-results/**
