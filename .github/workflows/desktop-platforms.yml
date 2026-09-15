@@ -33,7 +33,7 @@ permissions:
 
 concurrency:
   group: desktop-packages-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   linux:
@@ -69,7 +69,7 @@ jobs:
       - name: Native AI engines and models
         if: steps.linux-native.outputs.cache-hit != 'true'
         run: bash desktopApp/packaging/build-native-linux.sh
-      - name: Tests and Linux packages
+      - name: Tests and Linux app
         run: |
           set -euo pipefail
           export PATH="$PWD/desktopApp/bundle/linux/bin:$PATH"
@@ -78,7 +78,18 @@ jobs:
           python3 -m pip install fonttools==4.59.2
           python3 scripts/prepare-fonts.py
           gradle :kashaCore:jvmTest :aiCatalog:jvmTest :composeApp:jvmTest :runtime:test :desktopApp:test 2>&1 | tee linux-tests.log
-          gradle :runtime:installDist :desktopApp:createDistributable :desktopApp:packageDistributionForCurrentOS 2>&1 | tee linux-package.log
+          gradle :runtime:installDist :desktopApp:createDistributable 2>&1 | tee linux-package.log
+      - name: Real Linux and Web AI without external network
+        run: |
+          set -euo pipefail
+          export PATH="$PWD/desktopApp/bundle/linux/bin:$PATH"
+          python3 -m pip install piper-tts==1.4.2
+          python3 tests/make-russian-fixture.py
+          sudo -E unshare --net bash tests/linux-local-models.sh
+      - name: Linux installer packages
+        run: |
+          set -euo pipefail
+          gradle :desktopApp:packageDistributionForCurrentOS 2>&1 | tee -a linux-package.log
       - name: Verify packaged native resources
         run: |
           test -x desktopApp/bundle/linux/bin/whisper-cli
@@ -88,13 +99,6 @@ jobs:
           test -s desktopApp/bundle/common/models/Qwen3-4B-Q4_K_M.gguf
           find desktopApp/build/compose/binaries/main -type f \( -name '*.deb' -o -name '*.rpm' \) -print | tee linux-packages.txt
           test "$(wc -l < linux-packages.txt)" -ge 2
-      - name: Real Linux and Web AI without external network
-        run: |
-          set -euo pipefail
-          export PATH="$PWD/desktopApp/bundle/linux/bin:$PATH"
-          python3 -m pip install piper-tts==1.4.2
-          python3 tests/make-russian-fixture.py
-          sudo -E unshare --net bash tests/linux-local-models.sh
       - name: Upload Linux diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -171,6 +175,14 @@ jobs:
         if: steps.windows-native.outputs.cache-hit != 'true'
         shell: msys2 {0}
         run: bash desktopApp/packaging/build-native-windows.sh
+      - name: Retain verified Windows native build before runtime checks
+        if: steps.windows-native.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            desktopApp/bundle/common
+            desktopApp/bundle/windows
+          key: kasha-windows-x64-native-${{ hashFiles('desktopApp/packaging/prepare-models.sh', 'desktopApp/packaging/build-native-windows.sh') }}
       - name: Tests
         shell: pwsh
         run: |

@@ -16,7 +16,7 @@ permissions:
 
 concurrency:
   group: android-ai-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   test-apks:

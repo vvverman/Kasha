@@ -2,11 +2,14 @@
 # Запускается в отдельном network namespace; сеть сборочного runner не меняется.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-ip link set lo up
 OUT="$PWD/test-output/desktop-ai/linux"
 mkdir -p "$OUT"
+exec > >(tee "$OUT/execution.log") 2>&1
+trap 'echo "Сбой Linux AI: строка $LINENO, команда $BASH_COMMAND" >&2' ERR
+ip link set lo up
 APP="$PWD/desktopApp/build/compose/binaries/main/app/Kasha"
 RES="$APP/lib/app/resources"
+ls -l "$APP/bin" "$RES/bin"
 test -x "$APP/bin/Kasha"
 test -x "$RES/bin/whisper-cli"
 test -x "$RES/bin/llama-completion"

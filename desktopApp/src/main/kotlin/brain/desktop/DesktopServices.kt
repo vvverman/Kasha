@@ -33,13 +33,12 @@ class DesktopServices(val root: Path, val resources: Path, cpuOnly: Boolean = fa
                 AiCatalog.DEFAULT_TEXT to Path.of(env.getValue("KASHA_LLAMA_MODEL")),
             )
             val packages = JvmAiPackageGateway(root, bundledModels)
-            // Desktop и локальный Web runtime используют один адаптер защищённого хранилища.
             val cloud = JvmCloudAiGateway(root)
             val intelligence: Intelligence = if(simulated) DemoIntelligence() else RoutedStudioIntelligence(prefs,env,root,packages,cloud,runner)
             studioProcessor = StudioProcessor(store,prefs,intelligence,env.getValue("KASHA_FFMPEG"),runner)
             val baseRepository = StudioDiskRepository(store,studioProcessor,prefs,scope)
-            // Probe и inference обязаны использовать одну конфигурацию устройства исполнения.
-            repository = AiStudioRepository(baseRepository, packages, cloud, JvmAiRuntimeProbe(env, runner)::available)
+            // Probe запускает тот же файл, но не компилирует GPU-ядра и не загружает модель.
+            repository = AiStudioRepository(baseRepository, packages, cloud, JvmAiRuntimeProbe(env)::available)
             recorder = DesktopRecorder(root,store){studioProcessor.enqueue(it,scope)}
             audio = DesktopAudio(store,env.getValue("KASHA_FFMPEG"),root,scope)
         } catch(e: Exception) { instanceLock.close();scope.cancel();throw e }

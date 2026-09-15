@@ -48,17 +48,17 @@ class JvmAiExecutionCapabilities(
     }
 }
 
-/** Проверяет запуск программы и её зависимостей, не обрабатывает модель или пользовательские данные. */
+/** Проверяет запуск и зависимости; не загружает модель и не компилирует GPU-ядра. */
 class JvmAiRuntimeProbe(
     private val environment: Map<String, String>,
-    private val runner: CommandRunner = JvmCommandRunner(),
+    private val runner: CommandRunner = JvmCommandRunner(mapOf("GGML_METAL_DEVICES" to "0")),
 ) {
     suspend fun available(role: AiRole): Boolean {
         val executable = environment[if (role == AiRole.SPEECH_TO_TEXT) "KASHA_WHISPER_CLI" else "KASHA_LLAMA_CLI"]
             ?.takeIf(String::isNotBlank) ?: return false
         return try {
-            // У закреплённого llama.cpp --version завершает parser сразу;
-            // --help проходит обработчики моделей и не подходит для лёгкого probe.
+            // Закреплённый llama.cpp перечисляет Metal до разбора CLI; окружение
+            // выше отключает только это перечисление в отдельном процессе probe.
             runner.run(listOf(executable, "--version"), 5)
             if (role == AiRole.SPEECH_TO_TEXT)
                 runner.run(listOf(environment["KASHA_FFMPEG"] ?: "ffmpeg", "-version"), 5)
