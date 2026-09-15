@@ -53,7 +53,7 @@ class AiExecutionCapabilitiesTest {
             assertTrue(cloud.capability(AiRole.TEXT, "cloud:openai:TEXT", "openai").executable)
             key = null
             val unavailable = cloud.capability(AiRole.TEXT, "cloud:openai:TEXT", "openai")
-            assertEquals("apiKeyMissing", unavailable.reason)
+            assertEquals("credentialMissing", unavailable.reason)
             assertFalse(unavailable.toString().contains("test-secret"))
             Files.writeString(root.resolve("ai/connections.json"), "broken")
             assertEquals("capabilityCheckFailed", cloud.capability(AiRole.TEXT, "cloud:openai:TEXT", "openai").reason)

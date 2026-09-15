@@ -10,7 +10,7 @@ val AiRoleCapability.action: AiCapabilityAction get() = if (executable) AiCapabi
     "platformUnavailable", "unknownEngine", "unsupportedRole", "languageUnsupported" -> AiCapabilityAction.CHOOSE_ENGINE
     "permissionRequired" -> AiCapabilityAction.REQUEST_PERMISSION
     "permissionDenied" -> AiCapabilityAction.OPEN_SETTINGS
-    "cloudConnectionDisabled", "cloudConsentRequired", "cloudModelRequired", "apiKeyMissing" -> AiCapabilityAction.EDIT_CONNECTION
+    "cloudConnectionDisabled", "cloudConsentRequired", "cloudModelRequired", "credentialMissing" -> AiCapabilityAction.EDIT_CONNECTION
     "modelDownloading", "capabilityChecking" -> AiCapabilityAction.NONE
     else -> AiCapabilityAction.RETRY
 }
@@ -74,13 +74,13 @@ object AiReadiness {
             connection == null || !connection.enabled -> "cloudConnectionDisabled"
             connection.modelFor(role) == null -> "cloudModelRequired"
             !AiPrivacy.hasCurrentConsent(connection) -> "cloudConsentRequired"
-            !keyPresent -> "apiKeyMissing"
+            !keyPresent -> "credentialMissing"
             else -> null
         }
         return AiRoleCapability(role, engineId, reason == null, reason)
     }
 
-    /** Читает только метаданные и факт наличия ключа; test/generate/transcribe не вызываются. */
+    /** Читает только метаданные и факт наличия реквизита; его значение остаётся в адаптере. */
     suspend fun cloud(
         role: AiRole,
         engineId: String,

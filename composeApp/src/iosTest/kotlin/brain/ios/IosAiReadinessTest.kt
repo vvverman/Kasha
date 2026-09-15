@@ -18,7 +18,7 @@ class IosAiReadinessTest {
     @Test fun savedConnectionWithMissingKeyIsNotReady() = runTest {
         val f = Fixture()
         f.key = null
-        assertEquals("apiKeyMissing", f.capability().reason)
+        assertEquals("credentialMissing", f.capability().reason)
         assertEquals(0, f.networkCalls)
     }
     @Test fun unavailableKeychainIsNotReady() = runTest {

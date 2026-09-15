@@ -6,7 +6,7 @@ internal object AiReadinessCopy {
         "ready", "cloudReady", "capabilityChecking", "platformUnavailable", "languageUnsupported",
         "modelNotInstalled", "modelDownloading", "modelInstallFailed", "runtimeUnavailable",
         "permissionRequired", "permissionDenied", "secureStoreUnavailable", "cloudConnectionDisabled",
-        "cloudConsentRequired", "cloudModelRequired", "apiKeyMissing", "capabilityCheckFailed",
+        "cloudConsentRequired", "cloudModelRequired", "credentialMissing", "capabilityCheckFailed",
         "INSTALL_MODEL", "CHOOSE_ENGINE", "REQUEST_PERMISSION", "OPEN_SETTINGS", "EDIT_CONNECTION", "RETRY", "connectionSaved",
     )
     private val values = mapOf(

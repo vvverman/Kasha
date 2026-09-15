@@ -48,7 +48,7 @@ class AiReadinessTest {
     @Test fun metadataWithoutKeyDoesNotMeanCloudReady() {
         val result = cloud(connection(), key = false)
         assertFalse(result.executable)
-        assertEquals("apiKeyMissing", result.reason)
+        assertEquals("credentialMissing", result.reason)
         assertEquals(AiCapabilityAction.EDIT_CONNECTION, result.action)
     }
     @Test fun cloudDisabledConsentAndSecureStoreAreDistinct() {
