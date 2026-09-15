@@ -5,8 +5,13 @@ import io.ktor.client.request.*
 import io.ktor.http.*
 import io.ktor.server.testing.testApplication
 import kotlinx.coroutines.*
+import java.io.File
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.nio.file.*
 import java.util.UUID
+import kotlin.math.PI
+import kotlin.math.sin
 import kotlin.test.*
 
 class RuntimeTest {
@@ -60,21 +65,59 @@ class RuntimeTest {
     }
     @Test fun subprocessTimeoutAndCancellationWork() = runBlocking<Unit> {
         val runner = JvmCommandRunner()
-        assertEquals("hello", runner.run(listOf("/bin/echo", "hello"), 3).trim())
-        assertFails { runner.run(listOf("/bin/sleep", "10"), 0) }
-        val task = async { runner.run(listOf("/bin/sleep", "10"), 20) }
+        assertEquals("hello", runner.run(fixtureCommand("echo", "hello"), 10).trim())
+        assertFailsWith<IllegalArgumentException> { runner.run(fixtureCommand("sleep", "10000"), 0) }
+        val task = async { runner.run(fixtureCommand("sleep", "10000"), 20) }
         delay(100); task.cancel(); assertFailsWith<CancellationException> { task.await() }
     }
     @Test fun pcmCompactionKeepsOriginalBytes() = runBlocking {
         val root = Files.createTempDirectory("brain-pcm")
         try {
             val original = root.resolve("original.wav")
-            val runner = JvmCommandRunner()
-            runner.run(listOf("ffmpeg", "-v", "error", "-f", "lavfi", "-i", "aevalsrc=if(lt(t\\,0.6)+gt(t\\,3.4)\\,0.3*sin(2*PI*440*t)\\,0):s=16000:d=4", "-ac", "1", "-c:a", "pcm_s16le", original.toString()), 20)
+            writePcmFixture(original)
             val before = Files.readAllBytes(original)
             val (meta, spans) = PcmAudio.compact(original, root.resolve("compact.wav"))
             assertEquals(4.0, meta.duration, .01); assertTrue(spans.sumOf { it.duration } < 3)
             assertContentEquals(before, Files.readAllBytes(original)); assertTrue(PcmAudio.info(root.resolve("compact.wav")).duration < 3)
         } finally { root.toFile().deleteRecursively() }
+    }
+
+    /** Используем ту же JVM на всех ОС, без Unix-команд и зависимости от PATH. */
+    private fun fixtureCommand(vararg args: String): List<String> {
+        val bin = Path.of(System.getProperty("java.home"), "bin")
+        val java = listOf("java", "java.exe").map(bin::resolve).first(Files::isRegularFile)
+        val classpath = listOf(RuntimeCommandFixture::class.java, Unit::class.java)
+            .map { Path.of(it.protectionDomain.codeSource.location.toURI()).toString() }
+            .distinct().joinToString(File.pathSeparator)
+        return listOf(java.toString(), "-cp", classpath, RuntimeCommandFixture::class.java.name) + args
+    }
+
+    /** Тот же сигнал: PCM16 mono/16kHz, 4 с, тон 440 Гц по краям и тишина в середине. */
+    private fun writePcmFixture(path: Path) {
+        val rate = 16_000
+        val frames = rate * 4
+        val bytes = frames * 2
+        val wav = ByteBuffer.allocate(44 + bytes).order(ByteOrder.LITTLE_ENDIAN)
+        wav.put("RIFF".toByteArray(Charsets.US_ASCII)).putInt(36 + bytes)
+        wav.put("WAVEfmt ".toByteArray(Charsets.US_ASCII)).putInt(16)
+        wav.putShort(1).putShort(1).putInt(rate).putInt(rate * 2).putShort(2).putShort(16)
+        wav.put("data".toByteArray(Charsets.US_ASCII)).putInt(bytes)
+        repeat(frames) { index ->
+            val time = index.toDouble() / rate
+            val sample = if (time < 0.6 || time > 3.4) 0.3 * sin(2 * PI * 440 * time) else 0.0
+            wav.putShort((sample * 32767).toInt().toShort())
+        }
+        Files.write(path, wav.array())
+    }
+}
+
+/** Только тестовый дочерний процесс; в поставку приложения не входит. */
+object RuntimeCommandFixture {
+    @JvmStatic fun main(args: Array<String>) {
+        when (args.first()) {
+            "echo" -> print(args[1])
+            "sleep" -> Thread.sleep(args[1].toLong())
+            else -> error("Неизвестная тестовая команда")
+        }
     }
 }
