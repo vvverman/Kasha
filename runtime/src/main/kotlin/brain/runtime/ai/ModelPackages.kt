@@ -16,46 +16,10 @@ import java.security.MessageDigest
 import java.time.Duration
 import java.util.concurrent.ConcurrentHashMap
 
-data class ModelPackageSpec(
-    val engineId: String,
-    val fileName: String,
-    val url: String,
-    val sha256: String,
-)
+typealias ModelPackageSpec = brain.ai.ModelArtifact
 
 object JvmModelManifest {
-    val packages = listOf(
-        ModelPackageSpec(
-            AiCatalog.DEFAULT_STT,
-            "ggml-small.bin",
-            "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin?download=true",
-            "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b",
-        ),
-        ModelPackageSpec(
-            "local.whisper.medium",
-            "ggml-medium.bin",
-            "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin?download=true",
-            "6c14d5adee5f86394037b4e4e8b59f1673b6cee10e3cf0b11bbdbee79c156208",
-        ),
-        ModelPackageSpec(
-            "local.whisper.large-v3",
-            "ggml-large-v3.bin",
-            "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin?download=true",
-            "64d182b440b98d5203c4f9bd541544d84c605196c4f7b845dfa11fb23594d1e2",
-        ),
-        ModelPackageSpec(
-            AiCatalog.DEFAULT_TEXT,
-            "Qwen3-4B-Q4_K_M.gguf",
-            "https://huggingface.co/Qwen/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf?download=true",
-            "7485fe6f11af29433bc51cab58009521f205840f5b4ae3a32fa7f92e8534fdf5",
-        ),
-        ModelPackageSpec(
-            "local.qwen.8b",
-            "Qwen3-8B-Q4_K_M.gguf",
-            "https://huggingface.co/Qwen/Qwen3-8B-GGUF/resolve/main/Qwen3-8B-Q4_K_M.gguf?download=true",
-            "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785",
-        ),
-    ).associateBy { it.engineId }
+    val packages = brain.ai.ModelArtifacts.packages
 }
 
 class JvmAiPackageGateway(

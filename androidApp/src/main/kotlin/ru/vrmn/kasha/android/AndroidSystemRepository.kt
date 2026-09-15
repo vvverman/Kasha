@@ -18,7 +18,7 @@ internal class AndroidSystemRepository(
     override val deviceCapabilities: AndroidPermissions,
     override val aiExecution: AiExecutionCapabilityGateway = NoopAiExecutionCapabilityGateway,
 ) : StudioRepository by delegate, AiPlatformServices {
-    override val aiPackages = NoopAiPackageGateway
+    override val aiPackages = (aiExecution as? AndroidIntelligence)?.packages ?: NoopAiPackageGateway
     override val cloudAi = NoopCloudAiGateway
 
     override suspend fun distributeTask(id: String, request: TaskDistributionRequest): Task {

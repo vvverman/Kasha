@@ -69,6 +69,15 @@ internal fun AiSettingsSection(s: StudioState) {
         connections = runCatching { cloud.connections() }.getOrDefault(emptyList())
     }
 
+    LaunchedEffect(packages, packageStates.any { it.downloading }) {
+        while (packageStates.any { it.downloading }) {
+            kotlinx.coroutines.delay(500)
+            try { packageStates = packages.states() }
+            catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+            catch (error: Exception) { actionError = error.message ?: t("aiUnavailable"); break }
+        }
+    }
+
     LaunchedEffect(services, s.preferences.ai, s.language) {
         val gateway = services?.aiExecution ?: NoopAiExecutionCapabilityGateway
         val selected = s.preferences.ai
@@ -91,6 +100,11 @@ internal fun AiSettingsSection(s: StudioState) {
 
     Text(t("ai"), style = MaterialTheme.typography.titleSmall)
     Spacer(Modifier.height(12.dp))
+
+    if (actionError != null && providerEditor == null) {
+        Text(actionError.orEmpty(), style = MaterialTheme.typography.bodySmall, color = colors.error)
+        Spacer(Modifier.height(8.dp))
+    }
 
     AiRole.entries.forEach { role ->
         val selectedId = s.preferences.ai.engineId(role)
@@ -142,12 +156,12 @@ internal fun AiSettingsSection(s: StudioState) {
                             Text(meta, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
                         }
                         when {
-                            selectedNow -> Text(
+                            selectedNow && engineReady -> Text(
                                 if (engineReady) t("aiSelected") else t("aiUnavailable"),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = colors.onSurfaceVariant,
                             )
-                            canSelect -> Column(horizontalAlignment = Alignment.End) {
+                            !selectedNow && canSelect -> Column(horizontalAlignment = Alignment.End) {
                                 KashaQuietButton(t("aiSelected"), {
                                     scope.launch { s.updatePreferences { it.copy(ai = it.ai.with(role, engine.id)) } }
                                 })
@@ -161,12 +175,16 @@ internal fun AiSettingsSection(s: StudioState) {
                                     })
                                 }
                             }
-                            engine.installable && packages.available -> KashaQuietButton(
-                                if (state?.downloading == true) "${((state.progress ?: 0f) * 100).toInt()}%" else t("aiDownload"),
+                            engine.installable && packages.available && state != null -> KashaQuietButton(
+                                if (state?.downloading == true) state.progress?.let { "${(it * 100).toInt()}%" } ?: s.tr("preparing") else t("aiDownload"),
                                 {
                                     scope.launch {
                                         actionError = null
-                                        runCatching { packages.install(engine.id) }.onFailure { actionError = it.message }
+                                        packageStates = packageStates.filterNot { it.engineId == engine.id } +
+                                            AiPackageState(engine.id, false, downloading = true)
+                                        try { packages.install(engine.id) }
+                                        catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+                                        catch (error: Exception) { actionError = error.message ?: t("aiUnavailable") }
                                         refreshPlatformState()
                                     }
                                 },
