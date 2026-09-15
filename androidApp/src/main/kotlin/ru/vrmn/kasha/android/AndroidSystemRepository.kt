@@ -17,9 +17,9 @@ internal class AndroidSystemRepository(
     private val reminders: AndroidReminders,
     override val deviceCapabilities: AndroidPermissions,
     override val aiExecution: AiExecutionCapabilityGateway = NoopAiExecutionCapabilityGateway,
+    override val cloudAi: brain.studio.CloudAiGateway = NoopCloudAiGateway,
 ) : StudioRepository by delegate, AiPlatformServices {
     override val aiPackages = (aiExecution as? AndroidIntelligence)?.packages ?: NoopAiPackageGateway
-    override val cloudAi = NoopCloudAiGateway
 
     override suspend fun distributeTask(id: String, request: TaskDistributionRequest): Task {
         val result = reminders.afterTaskChange { delegate.distributeTask(id, request) }

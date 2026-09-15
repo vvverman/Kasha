@@ -1,6 +1,7 @@
 package brain.ios
 
 import brain.ai.BuiltInAi
+import brain.domain.CaptureAiResult
 import brain.domain.BrainData
 import brain.domain.CaptureWorkflow
 import brain.domain.NoteText
@@ -201,18 +202,21 @@ internal class IosRepository(
         return try {
             val text = intelligence.transcribe(path, language(), prefs.demoExample)
             require(text.isNotBlank()) { "emptyTranscription" }
-            updateCapture(id) {
+            val transcribed = updateCapture(id) {
                 it.copy(
-                    title = NoteText.title(text),
+                    title = NoteText.title(if (it.draftEdited) it.preparedText else text),
                     transcript = text,
-                    preparedText = text,
-                    status = CaptureStatus.READY,
+                    preparedText = if (it.draftEdited) it.preparedText else text,
+                    status = CaptureStatus.POLISHING,
                     message = "",
                     simulated = false,
                     audioFinalized = true,
                 )
             }
+            val finished = workflow.finish(transcribed, data.projects, language())
+            updateCapture(id) { CaptureAiResult.apply(transcribed, it, finished) }
         } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            fail(id, CaptureStatus.FAILED, "Обработка прервана; запись сохранена")
             throw cancelled
         } catch (e: Throwable) {
             val unavailable = e.message in setOf("aiUnavailable", "runtimeUnavailable", "modelNotInstalled") ||
@@ -226,13 +230,15 @@ internal class IosRepository(
     }
 
     override suspend fun tidy(id: String): Capture {
-        val changed = workflow.tidy(capture(id), language())
-        return updateCapture(id) { changed }
+        val before = capture(id)
+        val changed = workflow.tidy(before, language())
+        return updateCapture(id) { CaptureAiResult.apply(before, it, changed) }
     }
 
     override suspend fun rank(id: String): Capture {
-        val changed = workflow.rank(capture(id), data.projects, language())
-        return updateCapture(id) { changed }
+        val before = capture(id)
+        val changed = workflow.rank(before, data.projects, language())
+        return updateCapture(id) { CaptureAiResult.apply(before, it, changed) }
     }
 
     override suspend fun discard(id: String) {

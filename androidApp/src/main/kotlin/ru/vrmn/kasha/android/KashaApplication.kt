@@ -24,7 +24,8 @@ internal class AndroidPlatformRuntime(application: Application) {
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val systemLanguage = Locale.getDefault().toLanguageTag()
     private lateinit var data: AndroidStudioRepository
-    private val intelligence = AndroidIntelligence(application) { data.preferences() }
+    private val cloud = androidCloudAi(application)
+    private val intelligence = AndroidIntelligence(application, cloud) { data.preferences() }
     init {
         data = AndroidStudioRepository(
             root = File(application.filesDir, "Kasha"),
@@ -48,9 +49,7 @@ internal class AndroidPlatformRuntime(application: Application) {
     )
     val recorder = AndroidPermissionRecorder(nativeRecorder, permissions, data, audio)
     val reminders = AndroidReminders(application, data, permissions)
-    val repository = AndroidSystemRepository(data, reminders, permissions, intelligence)
-    // Не заявляет работающее облако: этот системный адаптер доступен инфраструктуре optional AI.
-    val secrets by lazy { AndroidSecretStore(application) }
+    val repository = AndroidSystemRepository(data, reminders, permissions, intelligence, cloud)
     val state = StudioState(repository, recorder, audio, systemLanguage, reminders)
 
     fun onForeground() {

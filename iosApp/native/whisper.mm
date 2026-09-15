@@ -22,40 +22,68 @@ struct Cancellation {
 // AVAudioConverter читает исходный файл. Плеер, микрофон и пользовательское аудио не изменяются.
 static std::vector<float> decode(const char *path, Cancellation &cancel) {
     NSError *error = nil;
-    AVAudioFile *file = [[AVAudioFile alloc] initForReading:[NSURL fileURLWithPath:@(path)] error:&error];
-    if (!file || error) throw std::runtime_error("audioFailed");
+    AVAudioFile *file = [[AVAudioFile alloc] initForReading:[NSURL fileURLWithPath:[NSString stringWithUTF8String:path]]
+        commonFormat:AVAudioPCMFormatFloat32 interleaved:NO error:&error];
+    if (!file || error || file.length <= 0) throw std::runtime_error("audioOpenFailed");
     AVAudioFormat *format = [[AVAudioFormat alloc] initWithCommonFormat:AVAudioPCMFormatFloat32
         sampleRate:16000 channels:1 interleaved:NO];
-    AVAudioConverter *converter = [[AVAudioConverter alloc] initFromFormat:file.processingFormat toFormat:format];
-    if (!converter) throw std::runtime_error("audioFailed");
-    AVAudioPCMBuffer *output = [[AVAudioPCMBuffer alloc] initWithPCMFormat:format frameCapacity:4096];
-    __block NSError *inputError = nil;
-    __block bool inputFailed = false;
     std::vector<float> samples;
-    Cancellation *cancellation = &cancel;
-    for (;;) {
-        cancel.check();
-        auto status = [converter convertToBuffer:output error:&error
-            withInputFromBlock:^AVAudioBuffer *(AVAudioPacketCount count, AVAudioConverterInputStatus *state) {
-                if (Cancellation::aborted(cancellation)) { inputFailed = true; *state = AVAudioConverterInputStatus_EndOfStream; return nil; }
-                AVAudioPCMBuffer *input = [[AVAudioPCMBuffer alloc] initWithPCMFormat:file.processingFormat frameCapacity:count];
-                if (![file readIntoBuffer:input frameCount:count error:&inputError]) {
-                    inputFailed = true; *state = AVAudioConverterInputStatus_EndOfStream; return nil;
-                }
-                *state = input.frameLength ? AVAudioConverterInputStatus_HaveData : AVAudioConverterInputStatus_EndOfStream;
-                return input.frameLength ? input : nil;
-            }];
-        cancel.check();
-        if (inputFailed || inputError || error || status == AVAudioConverterOutputStatus_Error)
-            throw std::runtime_error("audioFailed");
-        if (samples.size() + output.frameLength > static_cast<size_t>(std::numeric_limits<int>::max()))
-            throw std::runtime_error("audioFailed");
-        if (output.frameLength) samples.insert(samples.end(), output.floatChannelData[0], output.floatChannelData[0] + output.frameLength);
-        if (status == AVAudioConverterOutputStatus_EndOfStream) break;
-        if (status == AVAudioConverterOutputStatus_InputRanDry && output.frameLength == 0)
-            throw std::runtime_error("audioFailed");
+    auto append = [&](AVAudioPCMBuffer *buffer) {
+        if (samples.size() + buffer.frameLength > static_cast<size_t>(std::numeric_limits<int>::max()))
+            throw std::runtime_error("audioTooLarge");
+        if (buffer.frameLength) {
+            if (!buffer.floatChannelData) throw std::runtime_error("audioReadFailed");
+            samples.insert(samples.end(), buffer.floatChannelData[0], buffer.floatChannelData[0] + buffer.frameLength);
+        }
+    };
+    // Для уже подходящего PCM не нужен преобразователь частоты/каналов.
+    if (file.processingFormat.sampleRate == 16000 && file.processingFormat.channelCount == 1) {
+        AVAudioPCMBuffer *buffer = [[AVAudioPCMBuffer alloc] initWithPCMFormat:file.processingFormat frameCapacity:4096];
+        while (file.framePosition < file.length) {
+            cancel.check(); error = nil;
+            const auto count = static_cast<AVAudioFrameCount>(std::min<AVAudioFramePosition>(4096, file.length - file.framePosition));
+            if (![file readIntoBuffer:buffer frameCount:count error:&error] || error || !buffer.frameLength)
+                throw std::runtime_error("audioReadFailed");
+            append(buffer);
+        }
+    } else {
+        AVAudioConverter *converter = [[AVAudioConverter alloc] initFromFormat:file.processingFormat toFormat:format];
+        if (!converter) throw std::runtime_error("audioConversionUnavailable");
+        AVAudioPCMBuffer *output = [[AVAudioPCMBuffer alloc] initWithPCMFormat:format frameCapacity:4096];
+        __block AVAudioPCMBuffer *input = nil;
+        __block bool inputFailed = false;
+        __block bool inputEnded = false;
+        Cancellation *cancellation = &cancel;
+        unsigned emptyReads = 0;
+        for (;;) {
+            cancel.check(); error = nil; output.frameLength = 0;
+            auto result = [converter convertToBuffer:output error:&error
+                withInputFromBlock:^AVAudioBuffer *(AVAudioPacketCount requested, AVAudioConverterInputStatus *state) {
+                    if (Cancellation::aborted(cancellation)) { *state = AVAudioConverterInputStatus_EndOfStream; return nil; }
+                    const AVAudioFramePosition remaining = file.length - file.framePosition;
+                    if (remaining <= 0) { inputEnded = true; *state = AVAudioConverterInputStatus_EndOfStream; return nil; }
+                    if (requested == 0) { *state = AVAudioConverterInputStatus_NoDataNow; return nil; }
+                    const auto count = static_cast<AVAudioFrameCount>(std::min<AVAudioFramePosition>(requested, remaining));
+                    input = [[AVAudioPCMBuffer alloc] initWithPCMFormat:file.processingFormat frameCapacity:count];
+                    NSError *readError = nil;
+                    if (![file readIntoBuffer:input frameCount:count error:&readError] || readError || !input.frameLength) {
+                        inputFailed = true; *state = AVAudioConverterInputStatus_EndOfStream; return nil;
+                    }
+                    *state = AVAudioConverterInputStatus_HaveData;
+                    return input;
+                }];
+            cancel.check();
+            if (inputFailed) throw std::runtime_error("audioReadFailed");
+            if (error || result == AVAudioConverterOutputStatus_Error) throw std::runtime_error("audioConversionFailed");
+            append(output);
+            if (result == AVAudioConverterOutputStatus_EndOfStream) break;
+            if (!output.frameLength) {
+                if (inputEnded) break;
+                if (++emptyReads > 4) throw std::runtime_error("audioConversionStalled");
+            } else emptyReads = 0;
+        }
     }
-    if (samples.empty()) throw std::runtime_error("audioFailed");
+    if (samples.empty()) throw std::runtime_error("audioReadFailed");
     return samples;
 }
 

@@ -1,6 +1,9 @@
 package ru.vrmn.kasha.android
 
 import android.content.Context
+import brain.ai.KashaAiCatalog
+import brain.ai.ManagedCloudGateway
+import brain.ai.ExternalTextRoles
 import brain.ai.BuiltInAi
 import brain.ai.BuiltInText
 import brain.ai.LocalTextRoles
@@ -13,6 +16,7 @@ import java.util.Locale
 /** Только исполнение выбранных AI-ролей; сценарии заметок/задач остаются в Core. */
 internal class AndroidIntelligence(
     context: Context,
+    private val cloud: ManagedCloudGateway? = null,
     private val preferences: suspend () -> Preferences,
 ) : Intelligence, AiExecutionCapabilityGateway {
     private val speech = AndroidOnDeviceSpeech(context)
@@ -27,7 +31,8 @@ internal class AndroidIntelligence(
     fun speechAvailable() = speech.available() || packages.hasVerifiedModel(ModelArtifacts.speech.keys)
 
     override suspend fun transcribe(file: String, language: String, example: String): String {
-        val selected = preferences().ai.speechToText
+        val selected = selected(AiRole.SPEECH_TO_TEXT)
+        AiCatalog.cloudProviderId(selected)?.let { return requireCloud().transcribe(it, file, language) }
         return when {
             selected in ModelArtifacts.speech -> whisper.transcribe(selected, file, language)
             selected == BuiltInAi.ANDROID_SPEECH -> speech.transcribe(file, language)
@@ -41,7 +46,8 @@ internal class AndroidIntelligence(
     }
 
     override suspend fun title(text: String, language: String): String {
-        val selected = preferences().ai.text
+        val selected = selected(AiRole.TEXT)
+        AiCatalog.cloudProviderId(selected)?.let { return external(it).title(text) }
         return when (selected) {
             in ModelArtifacts.text -> textModel(selected).title(text)
             BuiltInAi.LOCAL_RULES -> BuiltInText.title(text, language)
@@ -49,7 +55,8 @@ internal class AndroidIntelligence(
         }
     }
     override suspend fun tidy(text: String, language: String): String {
-        val selected = preferences().ai.text
+        val selected = selected(AiRole.TEXT)
+        AiCatalog.cloudProviderId(selected)?.let { return external(it).tidy(text) }
         return when (selected) {
             in ModelArtifacts.text -> textModel(selected).tidy(text)
             BuiltInAi.LOCAL_RULES -> BuiltInText.tidy(text, language)
@@ -58,13 +65,22 @@ internal class AndroidIntelligence(
     }
     override suspend fun rank(text: String, projects: List<Project>, language: String): Map<String, Int> {
         if (projects.isEmpty()) return emptyMap()
-        val selected = preferences().ai.routing
+        val selected = selected(AiRole.ROUTING)
+        AiCatalog.cloudProviderId(selected)?.let { return external(it).rank(text, projects) }
         return when (selected) {
             in ModelArtifacts.text -> textModel(selected).rank(text, projects)
             BuiltInAi.LOCAL_RULES -> BuiltInText.rank(text, projects, language)
             else -> error("androidAiNotConfigured")
         }
     }
+
+    private suspend fun selected(role: AiRole): String {
+        val id = preferences().ai.engineId(role)
+        check(KashaAiCatalog.supportsSelection(id, role)) { "aiUnavailable" }
+        return KashaAiCatalog.canonicalEngineId(id)
+    }
+    private fun requireCloud() = cloud ?: error("cloudConnectionUnavailable")
+    private fun external(provider: String) = ExternalTextRoles { role, prompt -> requireCloud().generate(provider, role, prompt) }
 
     private fun runtimeReady(id: String): Boolean = when (id) {
         in ModelArtifacts.speech -> AndroidWhisperNative.available
@@ -74,6 +90,8 @@ internal class AndroidIntelligence(
 
     override suspend fun roles(selection: AiSelection): List<AiRoleCapability> {
         val language = Languages.resolve(preferences().language, Locale.getDefault().toLanguageTag())
-        return androidRoleCapabilities(selection, language, packages::states, ::runtimeReady) { speech.capability(language) }
+        return androidRoleCapabilities(selection, language, packages::states, ::runtimeReady,
+            cloud = { role, id, provider -> cloud?.capability(role, id, provider) ?: AiReadiness.blocked(role, id, "platformUnavailable") },
+            nativeSpeech = { speech.capability(language) })
     }
 }

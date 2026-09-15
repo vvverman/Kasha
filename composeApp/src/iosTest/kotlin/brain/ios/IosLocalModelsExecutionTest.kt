@@ -40,6 +40,11 @@ class IosLocalModelsExecutionTest {
             val before = iosModelSha256(audio)
             val transcript = router.transcribe(audio, "ru", "")
             assertTrue(transcript.any { it in 'А'..'я' }, transcript)
+            val resampled = audio.substringBeforeLast('/') + "/russian-48k.m4a"
+            val resampledBefore = iosModelSha256(resampled)
+            val converted = router.transcribe(resampled, "ru", "")
+            assertTrue(converted.any { it in 'А'..'я' }, converted)
+            assertEquals(resampledBefore, iosModelSha256(resampled))
             val source = "Ирина не меняла 1200 пунктов."
             assertTrue(router.title(source, "ru").isNotBlank())
             val tidy = router.tidy(source, "ru")
@@ -52,7 +57,7 @@ class IosLocalModelsExecutionTest {
             assertEquals(selection, preferences.ai)
             IosPaths.directory(evidence)
             IosPaths.write(IosPaths.child(evidence, "ios-local-models.json"),
-                """{"passed":true,"nativeWhisper":true,"nativeQwen":true,"routerRoles":3,"sourceUnchanged":true,"networkTransport":false}""")
+                """{"passed":true,"nativeWhisper":true,"pcm16kAndAac48k":true,"nativeQwen":true,"routerRoles":3,"sourceUnchanged":true,"networkTransport":false}""")
         } finally { IosPaths.remove(root) }
     }
 }

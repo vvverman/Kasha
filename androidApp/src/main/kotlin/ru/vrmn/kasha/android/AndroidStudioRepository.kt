@@ -1,5 +1,6 @@
 package ru.vrmn.kasha.android
 
+import brain.domain.CaptureAiResult
 import brain.domain.BrainData
 import brain.domain.CaptureWorkflow
 import brain.domain.NoteText
@@ -85,7 +86,9 @@ internal class AndroidStudioRepository(
             projects = data.projects,
             notes = data.notes,
             captures = data.captures,
-            runtime = runtimeStatus(),
+            runtime = runtimeStatus().copy(localOnly = brain.studio.AiRole.entries.none {
+                brain.studio.AiCatalog.cloudProviderId(prefs.ai.engineId(it)) != null
+            }),
             tasks = data.tasks,
         )
     }
@@ -194,7 +197,7 @@ internal class AndroidStudioRepository(
             val transcribed = mutex.withLock {
                 val current = captureLocked(id)
                 val updated = current.copy(
-                    title = NoteText.title(text),
+                    title = NoteText.title(if (current.draftEdited) current.preparedText else text),
                     transcript = text,
                     preparedText = if (current.draftEdited) current.preparedText else text,
                     status = CaptureStatus.POLISHING,
@@ -208,10 +211,13 @@ internal class AndroidStudioRepository(
             val projects = mutex.withLock { data.projects }
             val finished = workflow.finish(transcribed, projects, language)
             mutex.withLock {
-                commit(data.updateCapture(id) { finished })
+                commit(data.updateCapture(id) { CaptureAiResult.apply(transcribed, it, finished) })
                 captureLocked(id)
             }
         } catch (cancelled: CancellationException) {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+                fail(id, CaptureStatus.FAILED, "Обработка прервана; запись сохранена")
+            }
             throw cancelled
         } catch (error: Throwable) {
             val needsModel = error.message == "androidAiNotConfigured"
@@ -223,7 +229,7 @@ internal class AndroidStudioRepository(
         val input = mutex.withLock { captureLocked(id) to Languages.resolve(prefs.language, systemLanguage) }
         val result = workflow.tidy(input.first, input.second)
         return mutex.withLock {
-            commit(data.updateCapture(id) { result })
+            commit(data.updateCapture(id) { CaptureAiResult.apply(input.first, it, result) })
             captureLocked(id)
         }
     }
@@ -234,7 +240,7 @@ internal class AndroidStudioRepository(
         }
         val result = workflow.rank(input.first, input.second, input.third)
         return mutex.withLock {
-            commit(data.updateCapture(id) { result })
+            commit(data.updateCapture(id) { CaptureAiResult.apply(input.first, it, result) })
             captureLocked(id)
         }
     }

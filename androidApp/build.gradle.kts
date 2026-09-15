@@ -26,6 +26,7 @@ android {
         applicationId = "ru.vrmn.kasha"
         minSdk = 26
         targetSdk = 37
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         versionCode = 1
         versionName = "1.1.4"
         // Одна STL для обоих JNI-движков; Gradle упаковывает её вместе с APK/AAB.
@@ -71,4 +72,6 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
 
     testImplementation("junit:junit:4.13.2")
+    androidTestImplementation("androidx.test:runner:1.7.0")
+    androidTestImplementation("junit:junit:4.13.2")
 }

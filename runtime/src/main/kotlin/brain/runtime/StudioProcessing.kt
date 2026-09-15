@@ -132,9 +132,9 @@ class StudioProcessor(
                 capture = store.finalizeAudio(id, target, seconds, peaks(verified), preferences.savedSpeed)
             }
 
-            store.updateCapture(id) { it.copy(status = CaptureStatus.POLISHING) }
-            val finished = workflow.finish(capture, store.snapshot().projects, language)
-            store.updateCapture(id) { finished }
+            val processing = store.updateCapture(id) { it.copy(status = CaptureStatus.POLISHING) }
+            val finished = workflow.finish(processing, store.snapshot().projects, language)
+            store.updateCapture(id) { CaptureAiResult.apply(processing, it, finished) }
         } catch (e: CancellationException) {
             withContext(NonCancellable) {
                 store.updateCapture(id) { it.copy(status = CaptureStatus.FAILED, message = "Обработка прервана") }
@@ -157,7 +157,7 @@ class StudioProcessor(
             val prefs = preferences.read()
             val language = Languages.resolve(prefs.language, Locale.getDefault().toLanguageTag())
             val result = workflow.tidy(capture, language)
-            store.updateCapture(id) { result }
+            store.updateCapture(id) { CaptureAiResult.apply(capture.copy(status = CaptureStatus.POLISHING), it, result) }
         } catch (e: CancellationException) {
             withContext(NonCancellable) { store.updateCapture(id) { it.copy(status = capture.status) } }
             throw e
@@ -173,7 +173,7 @@ class StudioProcessor(
         val prefs = preferences.read()
         val language = Languages.resolve(prefs.language, Locale.getDefault().toLanguageTag())
         val result = workflow.rank(capture, store.snapshot().projects, language)
-        store.updateCapture(id) { result }
+        store.updateCapture(id) { CaptureAiResult.apply(capture, it, result) }
     }
 
     private fun peaks(wav: Path): List<Float> {
@@ -271,7 +271,7 @@ class LocalStudioIntelligence(
             runner.run(
                 listOf(
                     env.getValue("KASHA_WHISPER_CLI"), "-m", env.getValue("KASHA_WHISPER_MODEL"),
-                    "-f", file, "-l", "auto", "-otxt", "-of", output.toString(),
+                    "-f", file, "-l", language.ifBlank { "auto" }, "-otxt", "-of", output.toString(),
                 ),
                 3600,
             )
