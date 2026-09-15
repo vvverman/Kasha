@@ -28,9 +28,11 @@ for engine in whisper llama; do
     NAME=KashaWhisper; [ "$engine" = whisper ] || NAME=KashaLlama
     BINARY="$OUT/$NAME.framework/$NAME"
     test -f "$BINARY"
-    lipo -verify_arch arm64 "$BINARY"
-    nm -gU "$BINARY" | grep -q "_kasha_${engine}_run$"
-    if nm -gU "$BINARY" | grep -qE ' _ggml_| _llama_| _whisper_'; then
+    lipo "$BINARY" -verify_arch arm64
+    # Сохраняем вывод целиком: grep -q в pipefail-конвейере может вызвать SIGPIPE у nm.
+    SYMBOLS="$(nm -gU "$BINARY")"
+    grep -q "_kasha_${engine}_run$" <<< "$SYMBOLS"
+    if grep -qE ' _ggml_| _llama_| _whisper_' <<< "$SYMBOLS"; then
         echo 'Internal engine symbols escaped the framework' >&2; exit 1
     fi
     cp "$SOURCE/LICENSE" "$OUT/$NAME.framework/LICENSE.txt"
