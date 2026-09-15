@@ -1,6 +1,7 @@
 package brain.ios
 
 import brain.ai.BuiltInAi
+import brain.ai.KashaAiCatalog
 import brain.domain.LocalModelText
 import brain.model.Project
 import brain.studio.*
@@ -18,7 +19,7 @@ internal class IosRoutedIntelligence(
     override val simulated: Boolean = false
 
     override suspend fun transcribe(file: String, language: String, example: String): String {
-        val selected = preferences().ai.speechToText
+        val selected = selectedEngine(AiRole.SPEECH_TO_TEXT)
         val provider = AiCatalog.cloudProviderId(selected)
         return if (provider == null) {
             BuiltInAi.requireApple(AiRole.SPEECH_TO_TEXT, selected)
@@ -29,7 +30,7 @@ internal class IosRoutedIntelligence(
     }
 
     override suspend fun title(text: String, language: String): String {
-        val selected = preferences().ai.text
+        val selected = selectedEngine(AiRole.TEXT)
         val provider = AiCatalog.cloudProviderId(selected)
         if (provider == null) {
             BuiltInAi.requireApple(AiRole.TEXT, selected)
@@ -46,7 +47,7 @@ internal class IosRoutedIntelligence(
     }
 
     override suspend fun tidy(text: String, language: String): String {
-        val selected = preferences().ai.text
+        val selected = selectedEngine(AiRole.TEXT)
         val provider = AiCatalog.cloudProviderId(selected)
         if (provider == null) {
             BuiltInAi.requireApple(AiRole.TEXT, selected)
@@ -70,7 +71,7 @@ internal class IosRoutedIntelligence(
 
     override suspend fun rank(text: String, projects: List<Project>, language: String): Map<String, Int> {
         if (projects.isEmpty()) return emptyMap()
-        val selected = preferences().ai.routing
+        val selected = selectedEngine(AiRole.ROUTING)
         val provider = AiCatalog.cloudProviderId(selected)
         if (provider == null) {
             BuiltInAi.requireApple(AiRole.ROUTING, selected)
@@ -114,18 +115,25 @@ internal class IosRoutedIntelligence(
         return AiRole.entries.map { role ->
             val id = selection.engineId(role)
             val provider = AiCatalog.cloudProviderId(id)
+            val validSelection = KashaAiCatalog.supportsSelection(id, role)
             val supported = BuiltInAi.supportsApple(role, id)
-            val ready = if (provider != null) {
+            val ready = validSelection && (if (provider != null) {
                 connections.any { it.providerId == provider && it.enabled &&
                     AiPrivacy.hasCurrentConsent(it) && it.modelFor(role) != null }
-            } else supported && (role != AiRole.SPEECH_TO_TEXT || local.supportsOnDevice(language))
+            } else supported && (role != AiRole.SPEECH_TO_TEXT || local.supportsOnDevice(language)))
             AiRoleCapability(role, id, ready, when {
                 ready -> null
+                !validSelection -> "platformUnavailable"
                 provider != null -> "aiConnectionFailed"
                 supported -> "onDeviceSpeechUnavailable"
                 else -> "platformUnavailable"
             })
         }
+    }
+
+    // Проверяется полный id роли, а не только извлечённое имя провайдера.
+    private fun selectedEngine(role: AiRole): String = preferences().ai.engineId(role).also { id ->
+        check(KashaAiCatalog.supportsSelection(id, role)) { "aiUnavailable" }
     }
 
     private fun requireCloud(): IosCloudAiGateway = cloud ?: error("aiUnavailable")
