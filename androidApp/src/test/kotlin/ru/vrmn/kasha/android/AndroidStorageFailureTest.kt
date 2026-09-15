@@ -11,10 +11,13 @@ import org.junit.Test
 import java.io.File
 import java.nio.file.Files
 import java.util.UUID
-import kotlin.test.*
+import org.junit.Assert.*
 
 /** ТЗ 8.6: реальные файлы; ошибка чтения не считается новой установкой. */
 class AndroidStorageFailureTest {
+    private inline fun assertFails(block: () -> Unit) {
+        assertNotNull("Ожидалась ошибка операции", runCatching(block).exceptionOrNull())
+    }
     private val json = Json { encodeDefaults = true }
     private val intelligence = object : Intelligence {
         override val simulated = false
