@@ -42,6 +42,7 @@ class AiCapabilityUiTest {
     @Test fun allEightLanguagesHaveEveryStatusAndAction() {
         for (language in listOf("ru", "en", "es", "fr", "de", "uk", "be", "kk")) {
             assertTrue(AiReadinessCopy.complete(language), language)
+            assertTrue(Copy.text(language, "about").isNotBlank(), language)
             for (action in AiCapabilityAction.entries.filterNot { it == AiCapabilityAction.NONE })
                 assertTrue(AiReadinessCopy.text(language, action.name).isNotBlank())
         }
