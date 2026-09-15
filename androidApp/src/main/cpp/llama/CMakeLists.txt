@@ -15,6 +15,11 @@ set(GGML_NATIVE OFF CACHE BOOL "" FORCE)
 set(GGML_OPENMP OFF CACHE BOOL "" FORCE)
 set(GGML_CPU_KLEIDIAI OFF CACHE BOOL "" FORCE)
 set(GGML_BACKEND_DL OFF CACHE BOOL "" FORCE)
+# В закреплённом llamafile SGEMM использует FP16 intrinsics, отсутствующие на ARMv7.
+# Обычный CPU backend остаётся рабочим; ABI и минимальная ОС не исключаются.
+if(ANDROID_ABI STREQUAL "armeabi-v7a")
+    set(GGML_LLAMAFILE OFF CACHE BOOL "" FORCE)
+endif()
 include(FetchContent)
 # Та же версия llama.cpp, которая уже поставляется в Desktop.
 FetchContent_Declare(llama
