@@ -21,13 +21,18 @@ class StorageRecoveryTest {
     private suspend fun finalizedFixture(root: Path, output: ByteArray?): Capture {
         val store = open(root)
         val capture = store.createCapture("source.wav", original)
-        val saved = root.resolve("audio/${capture.id}/saved.m4a")
-        if (output != null) Files.write(saved, output)
-        // Persisted metadata can outlive the output file after an interrupted publication.
-        return store.updateCapture(capture.id) {
-            it.copy(status = CaptureStatus.READY, audioFinalized = true,
-                audioFileName = "audio/${capture.id}/saved.m4a")
-        }
+        val source = store.resolveAudio(capture)
+        val saved = source.parent.resolve("saved.m4a")
+        Files.write(saved, finalized)
+        // Publish through the real filesystem contract: Core deliberately forbids
+        // changing the audio source through the ordinary updateCapture mutation.
+        store.finalizeAudio(capture.id, saved, 1.0, listOf(0.2f), 1.5)
+        val ready = store.updateCapture(capture.id) { it.copy(status = CaptureStatus.READY) }
+        // Recreate only the on-disk crash condition: a surviving original alongside
+        // metadata whose final output is missing, empty, or already durably present.
+        Files.write(source, original)
+        if (output == null) Files.delete(saved) else Files.write(saved, output)
+        return ready
     }
 
     private suspend fun assertOriginalSurvivesReopen(output: ByteArray?) = withRoot { root ->
