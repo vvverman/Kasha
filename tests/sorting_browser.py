@@ -57,6 +57,7 @@ with sync_playwright() as pw:
     )
     page = browser.new_page(viewport={'width': 1280, 'height': 1000}, locale='ru-RU')
     errors = []
+    interactions = []
     page.on('pageerror', lambda error: errors.append(str(error)))
 
     def wait(check, description, seconds=35):
@@ -90,10 +91,42 @@ with sync_playwright() as pw:
             page.wait_for_timeout(100)
         raise AssertionError('Не найден видимый элемент: ' + description)
 
+    def interaction_target(role, name, seconds=30):
+        # Canvas pointer input does not get Playwright locator.click auto-waiting.
+        # An accessible node may exist before Compose has enabled/laid out that control.
+        items = locator(role, name)
+        deadline = time.monotonic() + seconds
+        previous = None
+        stable = 0
+        while time.monotonic() < deadline:
+            candidate = None
+            for index in range(items.count()):
+                item = items.nth(index)
+                with suppress(Exception):
+                    box = item.bounding_box(timeout=500)
+                    if item.is_visible() and item.is_enabled() and box and box['width'] > 0 and box['height'] > 0:
+                        viewport = page.viewport_size
+                        if (box['x'] >= 0 and box['y'] >= 0 and
+                                box['x'] + box['width'] <= viewport['width'] + 1 and
+                                box['y'] + box['height'] <= viewport['height'] + 1):
+                            candidate = item, box
+                            break
+            if candidate:
+                signature = tuple(round(candidate[1][key], 1) for key in ('x', 'y', 'width', 'height'))
+                stable = stable + 1 if signature == previous else 1
+                previous = signature
+                if stable >= 3:
+                    return candidate
+            else:
+                previous, stable = None, 0
+            page.wait_for_timeout(100)
+        raise AssertionError('Элемент не стал доступен для ввода: ' + str(name))
+
     def click(role, name):
-        _, box = visible_item(locator(role, name), str(name))
+        _, box = interaction_target(role, name)
+        interactions.append({'action': 'click', 'role': role, 'name': str(name), 'bounds': box})
+        # Exactly one real pointer click; do not repeat an unacknowledged command.
         page.mouse.click(box['x'] + box['width'] / 2, box['y'] + box['height'] / 2)
-        page.wait_for_timeout(220)
 
     def button(name):
         click('button', name)
@@ -121,7 +154,8 @@ with sync_playwright() as pw:
         restore_sort_screen(pref_key)
 
     def field(label, value):
-        _, box = visible_item(page.get_by_role('textbox', name=label, exact=True), label)
+        _, box = interaction_target('textbox', label)
+        interactions.append({'action': 'field', 'name': label, 'value': value, 'bounds': box})
         page.mouse.click(box['x'] + min(20, box['width'] / 2), box['y'] + min(20, box['height'] / 2))
         page.wait_for_timeout(120)
         page.keyboard.press('Control+a'); page.keyboard.press('Backspace')
@@ -150,21 +184,31 @@ with sync_playwright() as pw:
         return next((c for c in api('snapshot')['captures'] if c['noteId'] is None and c.get('taskId') is None), None)
 
     def ready():
-        return wait(lambda: (c if (c := current()) and c['status'] == 'READY' else None), 'готовая demo-запись')
+        capture = wait(lambda: (c if (c := current()) and c['status'] == 'READY' and c['audioFinalized'] else None),
+                       'готовая demo-запись с финализированным аудио')
+        interaction_target('button', 'В задачи')
+        return capture
+
+    def capture_text(text):
+        capture = ready()
+        field('Текст заметки', text)
+        # Observe the actual autosave, not a fixed delay or a direct API replacement.
+        wait(lambda: (c := current()) and c['id'] == capture['id'] and c['preparedText'] == text and c['draftEdited'],
+             'текст захвата сохранён перед выбором назначения')
 
     def task_manual_order():
         tasks = [t for t in api('snapshot')['tasks'] if t.get('completedAt') is None]
         return [t['text'].splitlines()[0] for t in sorted(tasks, key=lambda t: t['manualOrder'])]
 
     def make_note(text, project_title):
-        click('tab', 'Главная'); button('Попробовать без микрофона'); ready()
-        field('Текст заметки', text)
+        click('tab', 'Главная'); button('Попробовать без микрофона')
+        capture_text(text)
         button('В заметки'); click('button', re.compile(r'^' + re.escape(project_title)))
         button('Новая заметка'); wait(lambda: current() is None, 'сохранение заметки ' + text.splitlines()[0])
 
     def make_task(text):
-        click('tab', 'Главная'); button('Попробовать без микрофона'); ready()
-        field('Текст заметки', text)
+        click('tab', 'Главная'); button('Попробовать без микрофона')
+        capture_text(text)
         button('В задачи')
         field('Дата', '31.12.2099'); field('Время', '15:00')
         button('Сохранить задачу'); wait(lambda: current() is None, 'сохранение задачи ' + text.splitlines()[0])
@@ -188,6 +232,8 @@ with sync_playwright() as pw:
         wait(lambda: y('Альфа сортировка') < y('Бета сортировка') < y('Твой первый проект'), 'алфавит проектов')
         select_sort('projectSort', 'CREATED')
         wait(lambda: y('Альфа сортировка') < y('Бета сортировка') < y('Твой первый проект'), 'дата создания проектов')
+        select_sort('projectSort', 'UPDATED')
+        wait(lambda: y('Альфа сортировка') < y('Бета сортировка') < y('Твой первый проект'), 'дата изменения проектов')
         select_sort('projectSort', 'MANUAL')
         drag('Альфа сортировка', 'Твой первый проект')
         wait(lambda: y('Альфа сортировка') < y('Твой первый проект'), 'manual проектов')
@@ -203,6 +249,8 @@ with sync_playwright() as pw:
         wait(lambda: y('Альфа заметка') < y('Бета заметка'), 'алфавит заметок')
         select_sort('noteSort', 'CREATED')
         wait(lambda: y('Альфа заметка') < y('Бета заметка'), 'создание заметок')
+        select_sort('noteSort', 'UPDATED')
+        wait(lambda: y('Альфа заметка') < y('Бета заметка'), 'дата изменения заметок')
         select_sort('noteSort', 'MANUAL')
         drag('Альфа заметка', 'Бета заметка')
         wait(lambda: y('Альфа заметка') < y('Бета заметка'), 'manual заметок')
@@ -216,6 +264,8 @@ with sync_playwright() as pw:
         wait(lambda: y('Альфа задача') < y('Бета задача'), 'алфавит задач')
         select_sort('taskSort', 'CREATED')
         wait(lambda: y('Альфа задача') < y('Бета задача'), 'создание задач')
+        select_sort('taskSort', 'UPDATED')
+        wait(lambda: y('Альфа задача') < y('Бета задача'), 'дата изменения задач')
         select_sort('taskSort', 'MANUAL')
         drag('Альфа задача', 'Бета задача')
         wait(lambda: task_manual_order() == ['Альфа задача', 'Бета задача'], 'manual задач в Core')
@@ -240,15 +290,25 @@ with sync_playwright() as pw:
         (OUT / 'result.json').write_text(json.dumps({
             'passed': True,
             'checks': [
-                'project alphabetical/created/manual',
-                'note alphabetical/created/manual',
-                'task alphabetical/created/manual',
+                'project alphabetical/created/updated/manual',
+                'note alphabetical/created/updated/manual',
+                'task alphabetical/created/updated/manual',
                 'manual order survives mode switch and reload',
+                'capture text autosave acknowledged before distribution',
+                'single pointer actions wait for enabled stable Compose geometry',
             ],
             'pageErrors': errors,
         }, ensure_ascii=False, indent=2), encoding='utf-8')
         print('SORTING BROWSER PASSED')
     finally:
         with suppress(Exception):
+            page.screenshot(path=str(OUT / 'final.png'))
+        with suppress(Exception):
             (OUT / 'semantics.txt').write_text(page.locator('body').aria_snapshot(), encoding='utf-8')
+        with suppress(Exception):
+            (OUT / 'dom.html').write_text(page.content(), encoding='utf-8')
+        with suppress(Exception):
+            (OUT / 'snapshot.json').write_text(json.dumps(api('snapshot'), ensure_ascii=False, indent=2), encoding='utf-8')
+        (OUT / 'interactions.json').write_text(json.dumps(interactions, ensure_ascii=False, indent=2), encoding='utf-8')
+        (OUT / 'page-errors.json').write_text(json.dumps(errors, ensure_ascii=False, indent=2), encoding='utf-8')
         browser.close()

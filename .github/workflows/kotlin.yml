@@ -70,8 +70,8 @@ jobs:
           python tests/studio_browser.py
           python tests/sorting_browser.py
           python tests/responsive_accessibility_browser.py
-          python tests/ai_readiness_browser.py
           python tests/non_ai_parity_browser.py
+          python tests/ai_readiness_browser.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
