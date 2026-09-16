@@ -19,11 +19,16 @@ class PreferenceStore(private val root: Path) {
     private val mutex = Mutex()
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
-    suspend fun read(): Preferences = mutex.withLock {
-        if (Files.exists(file)) json.decodeFromString<Preferences>(Files.readString(file)).validated() else Preferences()
-    }
+    // No lazy result or failure cache: retry always reads the original file again.
+    internal fun readForStartup(): Preferences = readLocalText(file)?.let {
+        json.decodeFromString<Preferences>(it).validated()
+    } ?: Preferences()
+
+    suspend fun read(): Preferences = mutex.withLock { readForStartup() }
 
     suspend fun save(value: Preferences) = mutex.withLock {
+        // Do not replace unreadable/corrupt preferences with newly generated defaults.
+        readForStartup()
         atomicWrite(file, json.encodeToString(value.validated()))
     }
 }

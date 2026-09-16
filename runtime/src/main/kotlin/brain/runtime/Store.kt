@@ -28,7 +28,19 @@ class FileBrainStore(val root: Path, private val runtimeStatus: () -> RuntimeSta
         root.createDirectories(); audioRoot.createDirectories()
         require(!Files.isSymbolicLink(stateFile) && !Files.isSymbolicLink(audioRoot))
 
-        state = if (!stateFile.exists()) BrainData() else json.decodeFromString(Files.readString(stateFile))
+        val saved = readLocalText(stateFile)
+        if (saved == null) {
+            // A missing index beside audio or an interrupted write is not a fresh installation.
+            val hasAudio = Files.list(audioRoot).use { it.findAny().isPresent }
+            val hasInterruptedWrite = Files.list(root).use { files ->
+                files.anyMatch { it.fileName.toString().let { name -> name.startsWith(".save-") && name.endsWith(".tmp") } }
+            }
+            check(!hasAudio && !hasInterruptedWrite) { "Индекс данных отсутствует; сохранённые файлы оставлены для восстановления" }
+        }
+        state = saved?.let { json.decodeFromString<BrainData>(it) } ?: BrainData()
+        // Both files must be readable before migrations or destructive journal reconciliation.
+        // This gate also covers DesktopServices, which constructs the same filesystem store.
+        PreferenceStore(root).readForStartup()
         val migrated = state.migrated()
         if (migrated != state) commit(migrated)
 
@@ -42,12 +54,8 @@ class FileBrainStore(val root: Path, private val runtimeStatus: () -> RuntimeSta
             val id = dir.fileName.toString().removePrefix(".deleted-")
             if (state.captures.any { it.id == id }) Files.move(dir, audioRoot.resolve(id)) else dir.toFile().deleteRecursively()
         } }
-        state.captures.filter { it.audioFinalized }.forEach { c ->
-            val dir = audioRoot.resolve(c.id)
-            if (Files.isDirectory(dir) && !Files.isSymbolicLink(dir)) Files.list(dir).use { files ->
-                files.filter { it.fileName.toString().startsWith("original.") && !Files.isSymbolicLink(it) }.forEach { Files.deleteIfExists(it) }
-            }
-        }
+        // Reopening is not proof that saved.m4a was durably published. Never delete a
+        // surviving original here; only successful finalizeAudio or explicit discard may do so.
     }
 
     suspend fun snapshot(): AppSnapshot = mutex.withLock {
@@ -185,6 +193,16 @@ class FileBrainStore(val root: Path, private val runtimeStatus: () -> RuntimeSta
     }
 
     private fun now() = Clock.System.now().toEpochMilliseconds()
+}
+
+/** Only a confirmed missing file is optional; access/read errors must remain retryable errors. */
+internal fun readLocalText(file: Path): String? {
+    require(!Files.isSymbolicLink(file)) { "Хранилище не должно быть символической ссылкой" }
+    return try { Files.readString(file) }
+    catch (error: NoSuchFileException) {
+        if (!Files.notExists(file, LinkOption.NOFOLLOW_LINKS)) throw error
+        null
+    }
 }
 
 internal fun atomicWrite(file: Path, text: String) {
