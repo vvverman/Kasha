@@ -1,8 +1,11 @@
 package brain.runtime
 
+import brain.domain.BrainData
 import brain.model.*
 import brain.studio.Preferences
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.*
@@ -203,4 +206,128 @@ class StorageRecoveryTest {
             assertEquals(1.0, PreferenceStore(root).read().savedSpeed)
         }
     }
+
+    @Test fun missingCommittedStateWithoutAudioIsNotAFirstLaunch() = runBlocking {
+        withRoot { root ->
+            val store = open(root)
+            val project = store.createProject(ProjectDraft("Сохранённый проект"))
+            val state = root.resolve("brain.json")
+            assertTrue(Files.exists(root.resolve(".brain.initialized")))
+            Files.delete(state)
+            repeat(2) {
+                assertFails { open(root) }
+                assertFalse(Files.exists(state))
+                assertTrue(Files.exists(root.resolve(".brain.initialized")))
+            }
+            // Repairing the original document is enough; reinstall/reset is not required.
+            val repaired = BrainData(projects = listOf(project))
+            atomicWrite(state, Json.encodeToString(repaired))
+            assertEquals(listOf(project), open(root).snapshot().projects)
+        }
+    }
+
+    @Test fun missingCommittedPreferencesAreNotReplacedWithDefaults() = runBlocking {
+        withRoot { root ->
+            val preferences = PreferenceStore(root)
+            val expected = Preferences(autoRecord = false, savedSpeed = 1.5, language = "de")
+            preferences.save(expected)
+            val file = root.resolve("preferences.json")
+            val valid = Files.readAllBytes(file)
+            assertTrue(Files.exists(root.resolve(".preferences.initialized")))
+            Files.delete(file)
+            repeat(2) {
+                assertFails { preferences.read() }
+                assertFails { preferences.save(Preferences()) }
+                assertFalse(Files.exists(file))
+            }
+            Files.write(file, valid)
+            assertEquals(expected, preferences.read())
+        }
+    }
+
+    @Test fun interruptedWriteBlocksStartupEvenWhenOldStateIsReadable() = runBlocking {
+        withRoot { root ->
+            val store = open(root)
+            val project = store.createProject(ProjectDraft("Старое подтверждённое состояние"))
+            val stateBefore = Files.readAllBytes(root.resolve("brain.json"))
+            val pending = root.resolve(".save-newer.tmp")
+            val pendingBytes = "{newer interrupted state".toByteArray()
+            Files.write(pending, pendingBytes)
+            repeat(2) {
+                assertFails { open(root) }
+                assertContentEquals(stateBefore, Files.readAllBytes(root.resolve("brain.json")))
+                assertContentEquals(pendingBytes, Files.readAllBytes(pending))
+            }
+            Files.delete(pending)
+            assertEquals(listOf(project), open(root).snapshot().projects)
+        }
+    }
+
+    @Test fun restartPreservesProjectsNotesTasksManualAndPinnedOrder() = runBlocking {
+        withRoot { root ->
+            val store = open(root)
+            val first = store.createProject(ProjectDraft("Первый"))
+            val second = store.createProject(ProjectDraft("Второй"))
+            store.pinProject(first.id, true); store.pinProject(second.id, true)
+            store.orderPins(listOf(second.id, first.id))
+            store.orderProjects(listOf(second.id, first.id))
+
+            suspend fun readyCapture(seed: Int, text: String): Capture {
+                val capture = store.createCapture("source.wav", byteArrayOf(seed.toByte(), 2, 3, 4))
+                store.updateCapture(capture.id) { it.copy(status = CaptureStatus.READY, preparedText = text) }
+                return store.capture(capture.id)!!
+            }
+
+            val noteA = store.distribute(readyCapture(11, "Заметка A").id, DistributionRequest(first.id))
+            val noteB = store.distribute(readyCapture(12, "Заметка B").id, DistributionRequest(first.id))
+            store.pinNote(noteA.id, true); store.pinNote(noteB.id, true)
+            store.orderNotePins(first.id, listOf(noteB.id, noteA.id))
+            store.orderNotes(first.id, listOf(noteB.id, noteA.id))
+
+            val taskA = store.distributeTask(
+                readyCapture(21, "Задача A").id,
+                TaskDistributionRequest(first.id, Long.MAX_VALUE),
+            )
+            val taskB = store.distributeTask(
+                readyCapture(22, "Задача B").id,
+                TaskDistributionRequest(second.id, Long.MAX_VALUE),
+            )
+            store.orderTasks(listOf(taskB.id, taskA.id))
+
+            val before = store.snapshot()
+            repeat(3) {
+                val after = open(root).snapshot()
+                assertEquals(before.projects, after.projects)
+                assertEquals(before.notes, after.notes)
+                assertEquals(before.tasks, after.tasks)
+                assertEquals(listOf(second.id, first.id), after.projects.sortedBy { it.manualOrder }.map { it.id })
+                assertEquals(listOf(second.id, first.id), after.projects.filter { it.pinned }.sortedBy { it.pinOrder }.map { it.id })
+                assertEquals(listOf(noteB.id, noteA.id), after.notes.filter { it.projectId == first.id }.sortedBy { it.manualOrder }.map { it.id })
+                assertEquals(listOf(noteB.id, noteA.id), after.notes.filter { it.projectId == first.id && it.pinned }.sortedBy { it.pinOrder }.map { it.id })
+                assertEquals(listOf(taskB.id, taskA.id), after.tasks.filterNot { it.completed }.sortedBy { it.manualOrder }.map { it.id })
+            }
+        }
+    }
+
+
+    @Test fun temporaryStateReadFailureIsRetryableAndNeverPublishesEmptyState() = runBlocking {
+        withRoot { root ->
+            val store = open(root)
+            val project = store.createProject(ProjectDraft("Сохранённый проект"))
+            val state = root.resolve("brain.json")
+            val backup = root.resolve("brain.backup")
+            Files.move(state, backup)
+            Files.createDirectory(state)
+            Files.writeString(state.resolve("unavailable"), "storage is temporarily unavailable")
+            repeat(2) {
+                assertFails { open(root) }
+                assertTrue(Files.isDirectory(state))
+                assertTrue(Files.exists(backup))
+            }
+            state.toFile().deleteRecursively()
+            Files.move(backup, state)
+            repeat(2) { assertEquals(listOf(project), open(root).snapshot().projects) }
+        }
+    }
+
 }

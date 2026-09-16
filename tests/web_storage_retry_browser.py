@@ -144,6 +144,67 @@ with tempfile.TemporaryDirectory(prefix='kasha-storage-profile-') as profile, sy
             assert json.loads(page.evaluate('() => kashaPlatform.pendingRecordings()')) == pending
             assert page.evaluate(SNAPSHOT) == original
         checks.append('browser process restart and repeated recovery preserve journal without duplicates')
+        # Corrupt a real on-disk journal by leaving indices 0 and 2. Recovery must
+        # fail before fetch, not acknowledge a shortened file and clear the source.
+        def put_chunk(index, text):
+            page.evaluate("""async ({index, text}) => {
+                const db = await new Promise((resolve, reject) => {
+                    const r = indexedDB.open('kasha-audio-v1', 1);
+                    r.onsuccess = () => resolve(r.result); r.onerror = () => reject(r.error);
+                });
+                try {
+                    await new Promise((resolve, reject) => {
+                        const tx = db.transaction('chunks', 'readwrite');
+                        tx.objectStore('chunks').put({id: 'kept', index, blob: new Blob([text])});
+                        tx.oncomplete = resolve;
+                        tx.onerror = tx.onabort = () => reject(tx.error || Error('Fixture write aborted'));
+                    });
+                } finally { db.close(); }
+            }""", {'index': index, 'text': text})
+
+        def observe_uploads():
+            # Only the HTTP boundary is controlled. IndexedDB, Blob, FormData,
+            # adapter execution and browser process restart remain real.
+            page.evaluate("""() => {
+                globalThis.recoveryUploads = [];
+                globalThis.originalRecoveryFetch = globalThis.fetch;
+                globalThis.fetch = async (_url, options) => {
+                    const bytes = Array.from(new Uint8Array(await options.body.get('audio').arrayBuffer()));
+                    recoveryUploads.push(bytes);
+                    return new Response('Runtime temporarily unavailable', {status: 503});
+                };
+            }""")
+
+        put_chunk(2, 'last part')
+        damaged = page.evaluate(SNAPSHOT)
+        assert [c['index'] for c in damaged['chunks']] == [0, 2]
+        observe_uploads()
+        for _ in range(2):
+            failed = page.evaluate('() => kashaPlatform.recover(location.origin, "kept")')
+            assert failed.startswith('ERROR:Audio journal is incomplete or corrupt'), failed
+            assert page.evaluate('recoveryUploads') == []
+            assert page.evaluate(SNAPSHOT) == damaged
+        checks.append('gap in the real IndexedDB journal: repeated recovery does not upload or erase source')
+
+        context.close()
+        context, page = launch()
+        page.add_script_tag(url=BASE + '/browser-platform.js')
+        observe_uploads()
+        failed = page.evaluate('() => kashaPlatform.recover(location.origin, "kept")')
+        assert failed.startswith('ERROR:Audio journal is incomplete or corrupt'), failed
+        assert page.evaluate('recoveryUploads') == []
+        assert page.evaluate(SNAPSHOT) == damaged
+        checks.append('damaged journal and exact bytes survive Chromium process restart')
+
+        put_chunk(1, 'restored middle')
+        repaired = page.evaluate(SNAPSHOT)
+        assert [c['index'] for c in repaired['chunks']] == [0, 1, 2]
+        failed = page.evaluate('() => kashaPlatform.recover(location.origin, "kept")')
+        assert failed == 'ERROR:Runtime temporarily unavailable', failed
+        assert page.evaluate('recoveryUploads') == [list(b'original audiorestored middlelast part')]
+        assert page.evaluate(SNAPSHOT) == repaired
+        page.evaluate('() => { globalThis.fetch = originalRecoveryFetch; }')
+        checks.append('Retry rereads a repaired journal; rejected upload retains every original fragment')
         assert not errors, errors
         (OUT / 'result.json').write_text(json.dumps(
             {'passed': True, 'checks': checks, 'pageErrors': errors}, ensure_ascii=False, indent=2))

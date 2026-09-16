@@ -56,13 +56,15 @@ internal class AndroidStudioRepository(
     // Чтение выполняется внутри команды Core, а не при создании оболочки.
     // Неуспешный lazy-load не кешируется: существующий «Повтор» может перечитать файл.
     private val loadedState by lazy {
-        val loaded = storage.read(storage.stateFile)
-            ?.let { json.decodeFromString<BrainData>(it) }
-            ?: BrainData()
-        val preferences = storage.read(storage.preferencesFile)
+        val storedData = storage.read(storage.stateFile)
+        val loaded = storedData?.let { json.decodeFromString<BrainData>(it) } ?: BrainData()
+        val storedPreferences = storage.read(storage.preferencesFile)
+        val preferences = storedPreferences
             ?.let { json.decodeFromString<Preferences>(it).validated() }
             ?: defaultPreferences
-        // До успешного чтения ОБОИХ файлов запрещены reconcile и миграционные записи.
+        // До успешного чтения ОБОИХ файлов запрещены любые recovery/migration записи.
+        if (storedData != null) storage.markKnown(storage.stateFile)
+        if (storedPreferences != null) storage.markKnown(storage.preferencesFile)
         val migrated = loaded.migrated()
         storage.reconcile(migrated.captures)
         val recovered = migrated.copy(captures = migrated.captures.map { capture ->

@@ -16,13 +16,24 @@ import kotlin.math.sin
 
 class PreferenceStore(private val root: Path) {
     private val file = root.resolve("preferences.json")
+    private val marker = root.resolve(".preferences.initialized")
     private val mutex = Mutex()
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
     // No lazy result or failure cache: retry always reads the original file again.
-    internal fun readForStartup(): Preferences = readLocalText(file)?.let {
-        json.decodeFromString<Preferences>(it).validated()
-    } ?: Preferences()
+    internal fun readForStartup(): Preferences {
+        check(!hasInterruptedAtomicWrite(root)) { "Незавершённая запись настроек сохранена для восстановления" }
+        val saved = readLocalText(file)
+        if (saved == null) {
+            check(!Files.exists(marker, LinkOption.NOFOLLOW_LINKS)) {
+                "Настройки отсутствуют; существующее хранилище оставлено для восстановления"
+            }
+            return Preferences()
+        }
+        val value = json.decodeFromString<Preferences>(saved).validated()
+        markInitialized(marker)
+        return value
+    }
 
     suspend fun read(): Preferences = mutex.withLock { readForStartup() }
 
@@ -30,6 +41,7 @@ class PreferenceStore(private val root: Path) {
         // Do not replace unreadable/corrupt preferences with newly generated defaults.
         readForStartup()
         atomicWrite(file, json.encodeToString(value.validated()))
+        markInitialized(marker)
     }
 }
 

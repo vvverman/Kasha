@@ -63,4 +63,15 @@ class IosPathsTest {
         IosPaths.remove(to)
         assertFalse(IosPaths.exists(to))
     }
+
+    @Test fun moveNeverClobbersAnExistingDestination() = withDirectory { root ->
+        val from = IosPaths.child(root, "source.txt")
+        val to = IosPaths.child(root, "existing.txt")
+        IosPaths.write(from, "Новая копия")
+        IosPaths.write(to, "Существующая копия")
+        assertFailsWith<IllegalStateException> { IosPaths.move(from, to) }
+        assertEquals("Новая копия", IosPaths.read(from))
+        assertEquals("Существующая копия", IosPaths.read(to))
+    }
+
 }

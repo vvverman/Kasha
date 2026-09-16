@@ -77,4 +77,37 @@ class IosStorageFailureTest {
         assertFailsWith<IllegalStateException> { IosPaths.read(directory) }
         assertNull(IosPaths.read(IosPaths.child(root, "absent.json")))
     }
+
+    @Test fun missingCommittedDatabaseIsNotTreatedAsFreshInstall() = withRoot { root -> runBlocking {
+        val repository = repository(root)
+        val project = repository.createProject(ProjectDraft("Сохранённый проект"))
+        val state = IosPaths.child(root, "state.json")
+        val marker = IosPaths.child(root, ".state.initialized")
+        val valid = IosPaths.read(state)!!
+        assertTrue(IosPaths.exists(marker))
+        IosPaths.remove(state)
+        repeat(2) { assertFails { repository(root).snapshot() } }
+        assertFalse(IosPaths.exists(state))
+        IosPaths.write(state, valid)
+        assertEquals(listOf(project), repository(root).snapshot().projects)
+    } }
+
+    @Test fun missingCommittedPreferencesAreNotReplacedWithDefaults() = withRoot { root -> runBlocking {
+        val repository = repository(root)
+        val expected = Preferences(autoRecord = false, language = "de")
+        repository.savePreferences(expected)
+        val preferences = IosPaths.child(root, "preferences.json")
+        val marker = IosPaths.child(root, ".preferences.initialized")
+        val valid = IosPaths.read(preferences)!!
+        assertTrue(IosPaths.exists(marker))
+        IosPaths.remove(preferences)
+        repeat(2) {
+            assertFails { repository(root).preferences() }
+            assertFails { repository(root).savePreferences(Preferences()) }
+        }
+        assertFalse(IosPaths.exists(preferences))
+        IosPaths.write(preferences, valid)
+        assertEquals(expected, repository(root).preferences())
+    } }
+
 }

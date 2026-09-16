@@ -123,4 +123,87 @@ class AndroidStorageFailureTest {
         assertEquals(previous, repository.preferences())
         assertEquals("Не удалять", File(path, "keep.txt").readText())
     } }
+
+    @Test fun missingCommittedDatabaseWithoutAudioIsNotAFirstLaunch() = withRoot { root -> runBlocking {
+        val repository = repository(root)
+        val project = repository.createProject(ProjectDraft("Сохранённый проект"))
+        val store = AndroidStorage(root)
+        val valid = store.stateFile.readBytes()
+        assertTrue(File(root, ".brain.json.initialized").isFile)
+        assertTrue(store.stateFile.delete())
+        repeat(2) {
+            assertFails { repository(root).snapshot() }
+            assertFalse(store.stateFile.exists())
+        }
+        store.stateFile.writeBytes(valid)
+        assertEquals(listOf(project), repository(root).snapshot().projects)
+    } }
+
+    @Test fun missingCommittedPreferencesAreNotReplacedWithDefaults() = withRoot { root -> runBlocking {
+        val repository = repository(root)
+        val expected = Preferences(autoRecord = false, savedSpeed = 1.5, language = "de")
+        repository.savePreferences(expected)
+        val store = AndroidStorage(root)
+        val valid = store.preferencesFile.readBytes()
+        assertTrue(File(root, ".preferences.json.initialized").isFile)
+        assertTrue(store.preferencesFile.delete())
+        repeat(2) {
+            assertFails { repository(root).preferences() }
+            assertFails { repository(root).savePreferences(Preferences()) }
+            assertFalse(store.preferencesFile.exists())
+        }
+        store.preferencesFile.writeBytes(valid)
+        assertEquals(expected, repository(root).preferences())
+    } }
+
+    @Test fun interruptedWriteBlocksReconcileEvenWhenOldDatabaseIsReadable() = withRoot { root -> runBlocking {
+        val store = AndroidStorage(root)
+        val id = UUID.randomUUID().toString()
+        val capture = Capture(id = id, createdAt = 1, status = CaptureStatus.READY,
+            audioFileName = "audio/$id/saved.m4a", audioFinalized = true)
+        store.write(store.stateFile, json.encodeToString(BrainData(captures = listOf(capture))))
+        store.write(store.preferencesFile, json.encodeToString(Preferences(autoRecord = false)))
+        val staged = File(store.audioDir, ".deleted-$id/saved.m4a")
+        staged.parentFile.mkdirs(); staged.writeBytes(byteArrayOf(1, 2, 3))
+        val interrupted = File(root, ".brain.json.${UUID.randomUUID()}.tmp")
+        interrupted.writeText("newer state that was not published")
+        val before = files(root)
+        repeat(2) { assertFails { repository(root).snapshot() } }
+        assertEquals(before, files(root))
+        assertTrue(interrupted.delete())
+        assertEquals(listOf(capture), repository(root).snapshot().captures)
+        assertTrue(File(store.audioDir, "$id/saved.m4a").isFile)
+    } }
+
+    @Test fun conflictingReferencedAudioCopiesArePreserved() = withRoot { root -> runBlocking {
+        val store = AndroidStorage(root)
+        val id = UUID.randomUUID().toString()
+        val capture = Capture(id = id, createdAt = 1, status = CaptureStatus.READY,
+            audioFileName = "audio/$id/saved.m4a", audioFinalized = true)
+        store.write(store.stateFile, json.encodeToString(BrainData(captures = listOf(capture))))
+        store.write(store.preferencesFile, json.encodeToString(Preferences()))
+        val saved = File(store.audioDir, "$id/saved.m4a").also { it.parentFile.mkdirs(); it.writeBytes(byteArrayOf(1,2,3)) }
+        val pending = File(store.pendingDir, "$id.m4a").also { it.writeBytes(byteArrayOf(9,8,7)) }
+        repeat(2) { assertFails { repository(root).snapshot() } }
+        assertArrayEquals(byteArrayOf(1,2,3), saved.readBytes())
+        assertArrayEquals(byteArrayOf(9,8,7), pending.readBytes())
+    } }
+
+    @Test fun identicalReferencedAudioDuplicateIsCleanedIdempotently() = withRoot { root -> runBlocking {
+        val store = AndroidStorage(root)
+        val id = UUID.randomUUID().toString()
+        val capture = Capture(id = id, createdAt = 1, status = CaptureStatus.READY,
+            audioFileName = "audio/$id/saved.m4a", audioFinalized = true)
+        store.write(store.stateFile, json.encodeToString(BrainData(captures = listOf(capture))))
+        store.write(store.preferencesFile, json.encodeToString(Preferences()))
+        val bytes = byteArrayOf(4,5,6)
+        val saved = File(store.audioDir, "$id/saved.m4a").also { it.parentFile.mkdirs(); it.writeBytes(bytes) }
+        val pending = File(store.pendingDir, "$id.m4a").also { it.writeBytes(bytes) }
+        repeat(3) {
+            assertEquals(listOf(capture), repository(root).snapshot().captures)
+            assertArrayEquals(bytes, saved.readBytes())
+            assertFalse(pending.exists())
+        }
+    } }
+
 }

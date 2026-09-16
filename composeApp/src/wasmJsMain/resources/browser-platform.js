@@ -62,7 +62,9 @@
       if(saved.id===protectedId||saved.id===activeSessionId)continue;
       // Listing is read-only: another tab may not have committed its first chunk yet.
       // A successful empty read is not permission to delete the source journal.
-      if(chunks.some(x=>x.id===saved.id&&x.blob?.size>0))result.push(saved);
+      // A damaged chunk still represents user data, not an empty journal.
+      // Surface it for recovery/error handling; upload validates before sending.
+      if(chunks.some(x=>x.id===saved.id))result.push(saved);
     }
     return result;
   };
@@ -72,8 +74,13 @@
     const sessions=await pendingSessions();
     const saved=pendingId?sessions.find(s=>s.id===pendingId):(sessions.length===1?sessions[0]:null);
     if(!saved)throw Error('Expected one matching pending recording');
-    const chunks=(await all('chunks')).filter(x=>x.id===saved.id&&x.blob?.size>0).sort((a,b)=>a.index-b.index);
+    const chunks=(await all('chunks')).filter(x=>x.id===saved.id).sort((a,b)=>a.index-b.index);
     if(!chunks.length)throw Error('No audio samples');
+    // Recorder indices start at zero. Never acknowledge/upload a filtered subset:
+    // a gap or malformed payload would silently truncate audio and cleanup its source.
+    if(chunks.some((chunk,index)=>!Number.isSafeInteger(chunk.index)||chunk.index!==index||!(chunk.blob instanceof Blob)||chunk.blob.size===0)){
+      throw Error('Audio journal is incomplete or corrupt; original fragments preserved');
+    }
     const blob=new Blob(chunks.map(x=>x.blob),{type:saved.mime});
     const form=new FormData();const ext=saved.mime.includes('mp4')?'m4a':saved.mime.includes('ogg')?'ogg':'webm';
     form.append('audio',blob,'capture.'+ext);

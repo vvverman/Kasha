@@ -58,7 +58,7 @@ internal object IosPaths {
     }
 
     fun move(from: String, to: String) {
-        if (exists(to)) remove(to)
+        check(!exists(to)) { "Целевой локальный файл Kasha уже существует; обе копии сохранены" }
         check(files.moveItemAtPath(from, toPath = to, error = null)) {
             "Не удалось завершить локальный аудиофайл Kasha"
         }

@@ -31,10 +31,28 @@ internal class AndroidStorage(root: File) {
     }
 
     fun read(file: File): String? {
+        require(file.parentFile?.canonicalFile == root.canonicalFile)
+        check(interruptedWrites(file).isEmpty()) { "Незавершённая запись ${file.name} сохранена для восстановления" }
         val path = file.toPath()
-        if (Files.notExists(path, NOFOLLOW_LINKS)) return null
+        if (Files.notExists(path, NOFOLLOW_LINKS)) {
+            check(!marker(file).exists()) { "Локальный файл ${file.name} отсутствует; данные оставлены для восстановления" }
+            return null
+        }
         check(Files.isRegularFile(path, NOFOLLOW_LINKS)) { "Не удалось прочитать локальные данные Kasha" }
         return file.readText(Charsets.UTF_8)
+    }
+
+    fun markKnown(file: File) {
+        require(file.parentFile?.canonicalFile == root.canonicalFile)
+        val marker = marker(file)
+        if (marker.exists()) {
+            check(marker.isFile) { "Некорректный маркер локального хранилища" }
+            return
+        }
+        FileOutputStream(marker).use { stream ->
+            stream.write(byteArrayOf(1))
+            stream.fd.sync()
+        }
     }
 
     /** Атомарная замена небольших JSON-файлов состояния с fsync временного файла. */
@@ -56,6 +74,7 @@ internal class AndroidStorage(root: File) {
             } catch (_: AtomicMoveNotSupportedException) {
                 Files.move(temp.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING)
             }
+            markKnown(file)
         } finally {
             temp.delete()
         }
@@ -102,41 +121,74 @@ internal class AndroidStorage(root: File) {
     fun reconcile(captures: List<Capture>) {
         val referenced = captures.map { it.id }.toSet()
 
-        // Если удаление capture оборвалось: state решает, восстанавливать файл или удалять staged copy.
+        // Staged delete is destructive only after state no longer references the capture.
         audioDir.listFiles().orEmpty()
             .filter { it.isDirectory && it.name.startsWith(DELETED_PREFIX) }
             .forEach { trash ->
                 val captureId = trash.name.removePrefix(DELETED_PREFIX)
                 if (runCatching { UUID.fromString(captureId) }.isFailure) return@forEach
                 val target = File(audioDir, captureId)
-                if (captureId in referenced && !target.exists()) move(trash, target)
-                else trash.deleteRecursively()
+                when {
+                    captureId !in referenced -> trash.deleteRecursively()
+                    !target.exists() -> move(trash, target)
+                    else -> error("Конфликт восстановления аудио $captureId; обе копии сохранены")
+                }
             }
 
-        // Если state уже содержит capture, его pending-дубликат не должен блокировать следующую запись.
+        // A referenced capture may have both final and pending copies after a crash. Never
+        // discard a non-empty copy merely because the file names match.
         captures.forEach { capture ->
             val directory = File(audioDir, capture.id)
             val saved = File(directory, "saved.m4a")
             val pending = File(pendingDir, "${capture.id}.m4a")
+            if (!pending.exists()) return@forEach
+            check(pending.isFile) { "Некорректный pending-файл ${capture.id}" }
             when {
-                saved.isFile && pending.isFile -> pending.delete()
-                !saved.isFile && pending.isFile -> {
+                !saved.exists() && pending.length() > 0L -> {
                     require(directory.mkdirs() || directory.isDirectory)
                     move(pending, saved)
                 }
+                !saved.exists() -> error("Пустая pending-запись ${capture.id} сохранена для восстановления")
+                !saved.isFile -> error("Некорректный финальный аудиофайл ${capture.id}")
+                saved.length() == 0L && pending.length() > 0L -> {
+                    check(saved.delete()) { "Не удалось заменить пустой финальный аудиофайл" }
+                    move(pending, saved)
+                }
+                saved.length() > 0L && pending.length() == 0L -> check(pending.delete())
+                saved.length() == 0L && pending.length() == 0L ->
+                    error("Пустые копии аудио ${capture.id} сохранены для диагностики")
+                sameBytes(saved, pending) -> check(pending.delete())
+                else -> error("Конфликт аудиокопий ${capture.id}; обе копии сохранены")
             }
         }
 
-        // Move мог завершиться до атомарной записи state. Возвращаем такой файл в pending.
+        // Move may complete before state commit. Return an orphan final file to pending.
+        // Conflicting non-empty copies are never overwritten or recursively deleted.
         audioDir.listFiles().orEmpty()
             .filter { it.isDirectory && !it.name.startsWith(DELETED_PREFIX) }
             .forEach { directory ->
                 val captureId = directory.name
                 if (runCatching { UUID.fromString(captureId) }.isFailure || captureId in referenced) return@forEach
+                val entries = directory.listFiles().orEmpty()
                 val saved = File(directory, "saved.m4a")
+                val unexpected = entries.filter { it.name != "saved.m4a" }
+                check(unexpected.isEmpty()) { "Неизвестные файлы orphan-аудио $captureId сохранены для восстановления" }
                 val pending = File(pendingDir, "$captureId.m4a")
-                if (saved.isFile && saved.length() > 0 && !pending.exists()) move(saved, pending)
-                directory.deleteRecursively()
+                when {
+                    !saved.exists() -> {
+                        if (entries.isEmpty()) check(directory.delete())
+                    }
+                    !saved.isFile -> error("Некорректный orphan-аудиофайл $captureId")
+                    !pending.exists() && saved.length() > 0L -> { move(saved, pending); check(directory.delete()) }
+                    !pending.exists() -> error("Пустой orphan-аудиофайл $captureId сохранён для восстановления")
+                    !pending.isFile -> error("Некорректный pending-файл $captureId")
+                    saved.length() == 0L && pending.length() > 0L -> { check(saved.delete()); check(directory.delete()) }
+                    saved.length() > 0L && pending.length() == 0L -> {
+                        check(pending.delete()); move(saved, pending); check(directory.delete())
+                    }
+                    saved.length() > 0L && sameBytes(saved, pending) -> { check(saved.delete()); check(directory.delete()) }
+                    else -> error("Конфликт orphan-аудио $captureId; обе копии сохранены")
+                }
             }
     }
 
@@ -194,6 +246,31 @@ internal class AndroidStorage(root: File) {
             }
         }
         return digest.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    private fun marker(file: File) = File(root, ".${file.name}.initialized")
+
+    private fun interruptedWrites(file: File): List<File> {
+        val prefix = ".${file.name}."
+        return root.listFiles().orEmpty().filter { candidate ->
+            candidate.isFile && candidate.name.startsWith(prefix) && candidate.name.endsWith(".tmp")
+        }
+    }
+
+    private fun sameBytes(first: File, second: File): Boolean {
+        if (first.length() != second.length()) return false
+        first.inputStream().buffered().use { a ->
+            second.inputStream().buffered().use { b ->
+                val left = ByteArray(DEFAULT_BUFFER_SIZE)
+                val right = ByteArray(DEFAULT_BUFFER_SIZE)
+                while (true) {
+                    val ac = a.read(left); val bc = b.read(right)
+                    if (ac != bc) return false
+                    if (ac < 0) return true
+                    for (index in 0 until ac) if (left[index] != right[index]) return false
+                }
+            }
+        }
     }
 
     private fun move(source: File, target: File) {

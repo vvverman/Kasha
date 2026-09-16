@@ -33,8 +33,11 @@ internal class IosRepository(
         prettyPrint = false
     }
     private val defaults = NSUserDefaults.standardUserDefaults
-    private val stateFile: String get() = storageRoot?.let { IosPaths.child(it, "state.json") } ?: IosPaths.stateFile
-    private val preferencesFile: String get() = storageRoot?.let { IosPaths.child(it, "preferences.json") } ?: IosPaths.preferencesFile
+    private val storageDirectory: String get() = storageRoot ?: IosPaths.root
+    private val stateFile: String get() = IosPaths.child(storageDirectory, "state.json")
+    private val preferencesFile: String get() = IosPaths.child(storageDirectory, "preferences.json")
+    private val stateMarker: String get() = IosPaths.child(storageDirectory, ".state.initialized")
+    private val preferencesMarker: String get() = IosPaths.child(storageDirectory, ".preferences.initialized")
 
     private data class LoadedState(var data: BrainData, var preferences: Preferences)
     private val loadedState by lazy { readState() }
@@ -44,6 +47,7 @@ internal class IosRepository(
             val state = loadedState
             if (value == state.data) return
             IosPaths.write(stateFile, json.encodeToString(value))
+            markKnown(stateMarker)
             state.data = value
         }
     private var prefs: Preferences
@@ -52,6 +56,7 @@ internal class IosRepository(
             val state = loadedState
             if (value == state.preferences) return
             IosPaths.write(preferencesFile, json.encodeToString(value))
+            markKnown(preferencesMarker)
             state.preferences = value
         }
     private val nativeModels by lazy { IosNativeModels() }
@@ -280,17 +285,35 @@ internal class IosRepository(
         updateCapture(id) { it.copy(status = status, message = message, audioFinalized = true) }
 
     private fun readState(): LoadedState {
-        val storedData = IosPaths.read(stateFile)
-        val storedPreferences = IosPaths.read(preferencesFile)
+        val storedData = readPersistent(stateFile, stateMarker, "state")
+        val storedPreferences = readPersistent(preferencesFile, preferencesMarker, "preferences")
         val legacyData = if (storedData == null) defaults.stringForKey("kasha.test.brain.v1") else null
         val legacyPreferences = if (storedPreferences == null) defaults.stringForKey("kasha.test.preferences.v1") else null
         val data = (storedData ?: legacyData)?.let { json.decodeFromString<BrainData>(it) } ?: BrainData()
         val preferences = (storedPreferences ?: legacyPreferences)
             ?.let { json.decodeFromString<Preferences>(it).validated() }
             ?: Preferences(ai = BuiltInAi.appleSelection())
-        // Миграция разрешена только после успешного чтения и разбора обоих документов.
-        if (legacyData != null) IosPaths.write(stateFile, json.encodeToString(data))
-        if (legacyPreferences != null) IosPaths.write(preferencesFile, json.encodeToString(preferences))
+        // Никаких recovery/migration записей до успешного чтения и разбора ОБОИХ документов.
+        if (storedData != null) markKnown(stateMarker)
+        if (storedPreferences != null) markKnown(preferencesMarker)
+        if (legacyData != null) { IosPaths.write(stateFile, json.encodeToString(data)); markKnown(stateMarker) }
+        if (legacyPreferences != null) {
+            IosPaths.write(preferencesFile, json.encodeToString(preferences)); markKnown(preferencesMarker)
+        }
         return LoadedState(data, preferences)
+    }
+
+    private fun readPersistent(path: String, marker: String, name: String): String? {
+        val value = IosPaths.read(path)
+        if (value == null) {
+            check(!IosPaths.exists(marker)) {
+                "Локальный файл $name отсутствует; существующие данные оставлены для восстановления"
+            }
+        }
+        return value
+    }
+
+    private fun markKnown(marker: String) {
+        if (!IosPaths.exists(marker)) IosPaths.write(marker, "1")
     }
 }

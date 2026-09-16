@@ -21,6 +21,7 @@ class FileBrainStore(val root: Path, private val runtimeStatus: () -> RuntimeSta
     private val json = Json { prettyPrint = true; ignoreUnknownKeys = true; encodeDefaults = true }
     private val mutex = Mutex()
     private val stateFile = root.resolve("brain.json")
+    private val stateMarker = root.resolve(".brain.initialized")
     private val audioRoot = root.resolve("audio")
     private var state: BrainData
 
@@ -28,19 +29,24 @@ class FileBrainStore(val root: Path, private val runtimeStatus: () -> RuntimeSta
         root.createDirectories(); audioRoot.createDirectories()
         require(!Files.isSymbolicLink(stateFile) && !Files.isSymbolicLink(audioRoot))
 
+        // An interrupted atomic write can contain a newer user snapshot than the published file.
+        // Never migrate/reconcile while such evidence exists, even when the old index is readable.
+        check(!hasInterruptedAtomicWrite(root)) { "Незавершённая запись состояния сохранена для восстановления" }
+
         val saved = readLocalText(stateFile)
         if (saved == null) {
-            // A missing index beside audio or an interrupted write is not a fresh installation.
+            // A marker is written only after a successful state commit/read. Its presence proves
+            // this is not a first launch even if there is currently no audio beside the index.
             val hasAudio = Files.list(audioRoot).use { it.findAny().isPresent }
-            val hasInterruptedWrite = Files.list(root).use { files ->
-                files.anyMatch { it.fileName.toString().let { name -> name.startsWith(".save-") && name.endsWith(".tmp") } }
+            check(!Files.exists(stateMarker, LinkOption.NOFOLLOW_LINKS) && !hasAudio) {
+                "Индекс данных отсутствует; сохранённые файлы оставлены для восстановления"
             }
-            check(!hasAudio && !hasInterruptedWrite) { "Индекс данных отсутствует; сохранённые файлы оставлены для восстановления" }
         }
         state = saved?.let { json.decodeFromString<BrainData>(it) } ?: BrainData()
         // Both files must be readable before migrations or destructive journal reconciliation.
         // This gate also covers DesktopServices, which constructs the same filesystem store.
         PreferenceStore(root).readForStartup()
+        if (saved != null) markInitialized(stateMarker)
         val migrated = state.migrated()
         if (migrated != state) commit(migrated)
 
@@ -189,7 +195,9 @@ class FileBrainStore(val root: Path, private val runtimeStatus: () -> RuntimeSta
 
     private fun commit(next: BrainData) {
         if (next == state) return
-        atomicWrite(stateFile, json.encodeToString(next)); state = next
+        atomicWrite(stateFile, json.encodeToString(next))
+        markInitialized(stateMarker)
+        state = next
     }
 
     private fun now() = Clock.System.now().toEpochMilliseconds()
@@ -214,4 +222,25 @@ internal fun atomicWrite(file: Path, text: String) {
         try { Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE) }
         catch (_: AtomicMoveNotSupportedException) { Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING) }
     } finally { Files.deleteIfExists(temp) }
+}
+
+/** Durable evidence that a storage document has existed successfully at least once. */
+internal fun markInitialized(marker: Path) {
+    if (Files.exists(marker, LinkOption.NOFOLLOW_LINKS)) {
+        require(Files.isRegularFile(marker, LinkOption.NOFOLLOW_LINKS)) { "Некорректный маркер локального хранилища" }
+        return
+    }
+    try {
+        FileChannel.open(marker, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE).use { channel ->
+            val buffer = ByteBuffer.wrap(byteArrayOf(1))
+            while (buffer.hasRemaining()) channel.write(buffer)
+            channel.force(true)
+        }
+    } catch (_: FileAlreadyExistsException) {
+        require(Files.isRegularFile(marker, LinkOption.NOFOLLOW_LINKS)) { "Некорректный маркер локального хранилища" }
+    }
+}
+
+internal fun hasInterruptedAtomicWrite(root: Path): Boolean = Files.list(root).use { files ->
+    files.anyMatch { it.fileName.toString().let { name -> name.startsWith(".save-") && name.endsWith(".tmp") } }
 }
