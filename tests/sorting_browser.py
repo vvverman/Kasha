@@ -59,6 +59,29 @@ with sync_playwright() as pw:
     errors = []
     interactions = []
     page.on('pageerror', lambda error: errors.append(str(error)))
+    # Trace the actual shadow-DOM input receiver, not only the accessibility proxy.
+    page.add_init_script(r"""(() => {
+        const describe = node => node && ({
+            tag: node.tagName, role: node.getAttribute?.('role'),
+            label: node.getAttribute?.('aria-label'), connected: node.isConnected,
+            editable: node.isContentEditable, readOnly: node.readOnly,
+            disabled: node.disabled, value: typeof node.value === 'string' ? node.value : null,
+        });
+        const active = () => {
+            let node = document.activeElement;
+            while (node?.shadowRoot?.activeElement) node = node.shadowRoot.activeElement;
+            return node;
+        };
+        window.kashaTestInputTrace = [];
+        window.kashaTestActiveInput = () => describe(active());
+        for (const type of ['focusin', 'focusout', 'keydown', 'keyup', 'beforeinput', 'input']) {
+            document.addEventListener(type, event => {
+                window.kashaTestInputTrace.push({type, key: event.key, inputType: event.inputType,
+                    data: event.data, target: describe(event.composedPath()[0]), active: describe(active())});
+                if (window.kashaTestInputTrace.length > 300) window.kashaTestInputTrace.shift();
+            }, true);
+        }
+    })()""")
 
     def wait(check, description, seconds=35):
         deadline = time.monotonic() + seconds
@@ -157,10 +180,20 @@ with sync_playwright() as pw:
         _, box = interaction_target('textbox', label)
         interactions.append({'action': 'field', 'name': label, 'value': value, 'bounds': box})
         page.mouse.click(box['x'] + min(20, box['width'] / 2), box['y'] + min(20, box['height'] / 2))
-        page.wait_for_timeout(120)
+        # Compose accessibility bounds can be ready before its native text-input session.
+        # Await the receiver created by this pointer interaction; never focus it by script.
+        page.wait_for_function("""() => {
+            let node = document.activeElement;
+            while (node?.shadowRoot?.activeElement) node = node.shadowRoot.activeElement;
+            return node?.isConnected && !node.disabled && !node.readOnly &&
+                (node.matches?.('input,textarea') || node.isContentEditable);
+        }""", timeout=5000)
+        interactions.append({'action': 'input-focused', 'name': label,
+                             'receiver': page.evaluate('kashaTestActiveInput()')})
         page.keyboard.press('Control+a'); page.keyboard.press('Backspace')
-        page.wait_for_timeout(80)
         page.keyboard.insert_text(value)
+        interactions.append({'action': 'input-sent', 'name': label,
+                             'receiver': page.evaluate('kashaTestActiveInput()')})
         page.wait_for_timeout(550)
 
     def card(label):
@@ -309,6 +342,8 @@ with sync_playwright() as pw:
             (OUT / 'dom.html').write_text(page.content(), encoding='utf-8')
         with suppress(Exception):
             (OUT / 'snapshot.json').write_text(json.dumps(api('snapshot'), ensure_ascii=False, indent=2), encoding='utf-8')
+        with suppress(Exception):
+            (OUT / 'input-events.json').write_text(json.dumps(page.evaluate('window.kashaTestInputTrace'), ensure_ascii=False, indent=2), encoding='utf-8')
         (OUT / 'interactions.json').write_text(json.dumps(interactions, ensure_ascii=False, indent=2), encoding='utf-8')
         (OUT / 'page-errors.json').write_text(json.dumps(errors, ensure_ascii=False, indent=2), encoding='utf-8')
         browser.close()
