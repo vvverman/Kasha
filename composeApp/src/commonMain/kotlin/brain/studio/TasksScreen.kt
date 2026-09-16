@@ -86,6 +86,7 @@ internal fun TasksScreen(s: StudioState) {
                 moveUpLabel = s.tr("up"),
                 moveDownLabel = s.tr("down"),
                 listState = listState,
+                enabled = !s.busy,
             ) { item, dragging ->
                 KashaListCard(
                     onClick = { s.openTask(item.id) },

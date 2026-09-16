@@ -32,6 +32,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
@@ -91,7 +92,8 @@ fun KashaButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifie
             KashaIcon(glyph, Modifier.size(KashaUi.iconGlyphSize), fg, animated = hovered || pressed || focused)
             Spacer(Modifier.width(10.dp))
         }
-        Text(label, style = MaterialTheme.typography.labelLarge, color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(label, Modifier.weight(1f, fill = false), style = MaterialTheme.typography.labelLarge,
+            color = fg, textAlign = TextAlign.Center)
     }
 }
 

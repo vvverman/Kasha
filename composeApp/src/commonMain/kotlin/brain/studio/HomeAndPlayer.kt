@@ -109,9 +109,10 @@ private fun HomeStateContent(s: StudioState) {
         }
 
         else -> BoxWithConstraints(Modifier.fillMaxSize()) {
-            val compactHeight = maxHeight < 460.dp
+            val compactHeight = maxHeight < 460.dp || LocalDensity.current.fontScale > 1.3f
             Column(
-                Modifier.fillMaxSize().padding(top = 10.dp, bottom = 10.dp),
+                Modifier.fillMaxSize().then(if (compactHeight) Modifier.verticalScroll(rememberScrollState()) else Modifier)
+                    .padding(top = 10.dp, bottom = 10.dp),
                 horizontalAlignment = Alignment.Start,
             ) {
                 Text(s.tr("emptyTitle"), style = MaterialTheme.typography.displayMedium, letterSpacing = (-1.2).sp)
@@ -122,7 +123,8 @@ private fun HomeStateContent(s: StudioState) {
                     color = c.onSurfaceVariant,
                     modifier = Modifier.widthIn(max = 320.dp),
                 )
-                Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Box(Modifier.then(if (!compactHeight) Modifier.weight(1f) else Modifier.padding(vertical = 16.dp))
+                    .fillMaxWidth(), contentAlignment = Alignment.Center) {
                     if (!compactHeight) KashaRecordingOrb(
                         KashaOrbState.IDLE,
                         Modifier.semantics { contentDescription = s.tr("record") }
@@ -150,11 +152,11 @@ private fun RecordingHome(s: StudioState) {
     val c = MaterialTheme.colorScheme
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val height = maxHeight
-        val showOrb = height >= 460.dp
+        val showOrb = height >= 460.dp && LocalDensity.current.fontScale <= 1.3f
         val compactWave = height < 620.dp
         val activelyRecording = s.recordPhase == "recording"
         Column(
-            Modifier.fillMaxSize().padding(vertical = if (height >= 620.dp) 24.dp else 12.dp),
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(vertical = if (height >= 620.dp) 24.dp else 12.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
@@ -188,7 +190,9 @@ private fun ResultActions(s: StudioState) {
     val captureId = s.current?.id
     val canSave = s.text.isNotBlank() && !s.busy && s.current?.audioFinalized == true
     BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val horizontal = maxWidth >= 520.dp
+        val horizontal = actionsFit(maxWidth,
+            listOf(KashaCopy.text(s.language, "sendToNotes") ?: s.tr("send"), KashaCopy.text(s.language, "sendToTasks") ?: "В задачи"),
+            glyph = true, leading = 48.dp)
         if (horizontal) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconAction(s.tr("cancelNote"), Glyph.DELETE, { captureId?.let { s.requestCaptureDiscard(it) } })

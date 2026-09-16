@@ -106,9 +106,20 @@ internal fun SettingsScreen(s: StudioState) {
         Text(s.tr("appearance"), style = MaterialTheme.typography.titleSmall)
         Spacer(Modifier.height(10.dp))
         KashaPanel(Modifier.fillMaxWidth(), padding = 16.dp) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                listOf("system", "light", "dark").forEach { theme ->
-                    Action(s.tr(theme), { save { it.copy(theme = theme) } }, primary = p.theme == theme, modifier = Modifier.weight(1f))
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                val themes = listOf("system", "light", "dark")
+                if (actionsFit(maxWidth, themes.map(s::tr), gap = 6.dp)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        themes.forEach { theme ->
+                            Action(s.tr(theme), { save { it.copy(theme = theme) } }, primary = p.theme == theme, modifier = Modifier.weight(1f))
+                        }
+                    }
+                } else {
+                    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        themes.forEach { theme ->
+                            Action(s.tr(theme), { save { it.copy(theme = theme) } }, primary = p.theme == theme, modifier = Modifier.fillMaxWidth())
+                        }
+                    }
                 }
             }
             Spacer(Modifier.height(12.dp))

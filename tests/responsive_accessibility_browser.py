@@ -14,12 +14,9 @@ OUT = pathlib.Path('test-output/responsive')
 OUT.mkdir(parents=True, exist_ok=True)
 NAV = ['Главная', 'Проекты', 'Задачи', 'Настройки']
 VIEWPORTS = [
-    ('compact-320', 320, 568),
-    ('mobile-390', 390, 844),
-    ('landscape-844', 844, 390),
-    ('desktop-1024', 1024, 768),
-    ('wide-1280', 1280, 800),
-]
+    (f'width-{width}', width, 800) for width in
+    [320, 359, 360, 390, 430, 431, 599, 600, 768, 1023, 1024, 1199, 1200, 1440, 1600]
+] + [('landscape-844', 844, 390)]
 
 
 def api(path, data=None, method=None):
@@ -83,7 +80,7 @@ with sync_playwright() as pw:
                             box['y'] + box['height'] <= height + 1
                         )
                         expected_region = (
-                            box['x'] + box['width'] < 320 if width >= 1024
+                            box['x'] + box['width'] <= max(0, (width - 1440) / 2) + 256 if width >= 1024
                             else box['y'] > height / 2
                         )
                         if inside and expected_region:
@@ -110,6 +107,12 @@ with sync_playwright() as pw:
             assert abs(root['height'] - height) <= 1, (name, root)
 
             boxes = stable_nav_boxes(width, height)
+            if width < 1024:
+                span = max(b['x'] + b['width'] for b in boxes) - min(b['x'] for b in boxes)
+                assert span <= 544 + 1, ('navigation max width ignored', width, span)
+            else:
+                left = min(b['x'] for b in boxes)
+                assert left >= max(0, (width - 1440) / 2) + 32, ('shell cap ignored', width, left)
 
             no_horizontal_scroll = page.evaluate(
                 'document.documentElement.scrollWidth <= window.innerWidth + 1 && document.body.scrollWidth <= window.innerWidth + 1'
@@ -129,10 +132,11 @@ with sync_playwright() as pw:
             'viewports': viewport_results,
             'checks': [
                 'web root follows current viewport width and height',
-                '320/390/844/1024/1280 without clipped navigation',
+                'all 8 canonical widths and breakpoint boundaries without clipped navigation',
                 'navigation targets are at least 44x44',
                 'no horizontal page scroll',
                 'desktop navigation stays in sidebar area',
+                'navigation capped at 560dp; shell capped at 1440dp',
                 'navigation exposes accessible names',
                 'navigation semantics stabilize after breakpoint resize',
             ],

@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.key.*
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
@@ -18,7 +19,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 
-/** Long-press + drag используется только для режима MANUAL. */
+/** Вне drag отображаются только актуальные данные Core, в том числе после ошибки сохранения. */
 @Composable
 fun <T> KashaReorderableList(
     items: List<T>,
@@ -31,102 +32,100 @@ fun <T> KashaReorderableList(
     moveUpLabel: String? = null,
     moveDownLabel: String? = null,
     listState: LazyListState? = null,
+    enabled: Boolean = true,
     itemContent: @Composable (T, Boolean) -> Unit,
 ) {
     val state = listState ?: rememberLazyListState()
     val scope = rememberCoroutineScope()
-    val local = remember { mutableStateListOf<T>() }
+    val latestItems by rememberUpdatedState(items)
+    val latestKey by rememberUpdatedState(key)
+    val saveOrder by rememberUpdatedState(onManualOrder)
+    var preview by remember { mutableStateOf<List<String>?>(null) }
+    var startOrder by remember { mutableStateOf<List<String>?>(null) }
     var draggingKey by remember { mutableStateOf<String?>(null) }
     var draggedCenter by remember { mutableStateOf(0f) }
+    val keys = items.map(key)
+    val editable = manual && enabled
 
-    LaunchedEffect(items.map(key)) {
-        if (draggingKey == null) {
-            local.clear()
-            local.addAll(items)
-        }
+    fun resetPreview() { preview = null; startOrder = null; draggingKey = null }
+
+    LaunchedEffect(keys, editable) {
+        if (!editable || (startOrder != null && startOrder != keys)) resetPreview()
     }
 
-    fun move(from: Int, to: Int) {
-        if (from == to || from !in local.indices || to !in local.indices) return
-        val item = local.removeAt(from)
-        local.add(to, item)
-    }
-
-    fun commitMove(from: Int, to: Int): Boolean {
-        if (!manual || from == to || from !in local.indices || to !in local.indices) return false
-        move(from, to)
-        onManualOrder(local.map(key))
+    fun commitMove(id: String, delta: Int): Boolean {
+        if (!editable || draggingKey != null) return false
+        val next = movedItemKeys(latestItems.map(latestKey), id, delta) ?: return false
+        // Не оставляем неподтверждённый локальный порядок после отказа Core/диска.
+        saveOrder(next)
         return true
     }
 
-    fun restoreAuthoritativeOrder() {
-        local.clear()
-        local.addAll(items)
-    }
-
-    val dragModifier = if (!manual) Modifier else Modifier.pointerInput(local.size) {
+    val dragModifier = if (!editable) Modifier else Modifier.pointerInput(editable, keys) {
         val edge = 56.dp.toPx()
         val scrollStep = 28.dp.toPx()
         detectDragGesturesAfterLongPress(
             onDragStart = { offset ->
-                val hit = state.layoutInfo.visibleItemsInfo.firstOrNull { offset.y.toInt() in it.offset..(it.offset + it.size) }
-                if (hit != null && hit.index in local.indices) {
-                    draggingKey = key(local[hit.index])
+                val hit = state.layoutInfo.visibleItemsInfo.firstOrNull {
+                    offset.y.toInt() in it.offset until (it.offset + it.size)
+                }
+                val current = latestItems.map(latestKey)
+                if (hit != null && hit.index in current.indices) {
+                    startOrder = current
+                    preview = current
+                    draggingKey = current[hit.index]
                     draggedCenter = hit.offset + hit.size / 2f
                 }
             },
-            onDrag = { change, dragAmount ->
+            onDrag = { change, amount ->
                 val active = draggingKey ?: return@detectDragGesturesAfterLongPress
+                if (startOrder != latestItems.map(latestKey)) { resetPreview(); return@detectDragGesturesAfterLongPress }
                 change.consume()
-                draggedCenter += dragAmount.y
-
+                draggedCenter += amount.y
                 val info = state.layoutInfo
-                val start = info.viewportStartOffset.toFloat()
-                val end = info.viewportEndOffset.toFloat()
                 when {
-                    draggedCenter < start + edge -> scope.launch { state.scrollBy(-scrollStep) }
-                    draggedCenter > end - edge -> scope.launch { state.scrollBy(scrollStep) }
+                    draggedCenter < info.viewportStartOffset + edge -> scope.launch { state.scrollBy(-scrollStep) }
+                    draggedCenter > info.viewportEndOffset - edge -> scope.launch { state.scrollBy(scrollStep) }
                 }
-
-                val from = local.indexOfFirst { key(it) == active }
+                val order = preview ?: return@detectDragGesturesAfterLongPress
+                val from = order.indexOf(active)
                 val to = info.visibleItemsInfo.firstOrNull {
-                    draggedCenter.toInt() in it.offset..(it.offset + it.size)
+                    draggedCenter.toInt() in it.offset until (it.offset + it.size)
                 }?.index
-                if (from >= 0 && to != null && to in local.indices && to != from) move(from, to)
+                if (from >= 0 && to != null && to in order.indices && from != to) {
+                    preview = order.toMutableList().apply { add(to, removeAt(from)) }
+                }
             },
             onDragEnd = {
-                if (draggingKey != null) onManualOrder(local.map(key))
-                draggingKey = null
+                val next = reorderCommit(startOrder, latestItems.map(latestKey), preview)
+                resetPreview()
+                if (next != null) saveOrder(next)
             },
-            onDragCancel = {
-                restoreAuthoritativeOrder()
-                draggingKey = null
-            },
+            onDragCancel = ::resetPreview,
         )
     }
 
-    LazyColumn(
-        state = state,
-        modifier = modifier.then(dragModifier),
-        verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(spacing),
-        contentPadding = contentPadding,
-    ) {
-        items(local, key = key) { item ->
-            val itemKey = key(item)
-            val index = local.indexOfFirst { key(it) == itemKey }
-            val accessibility = if (!manual || (moveUpLabel == null && moveDownLabel == null)) Modifier else Modifier.semantics {
-                customActions = buildList {
-                    if (moveUpLabel != null && index > 0) {
-                        add(CustomAccessibilityAction(moveUpLabel) { commitMove(index, index - 1) })
-                    }
-                    if (moveDownLabel != null && index >= 0 && index < local.lastIndex) {
-                        add(CustomAccessibilityAction(moveDownLabel) { commitMove(index, index + 1) })
+    LazyColumn(state = state, modifier = modifier.then(dragModifier),
+        verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(spacing), contentPadding = contentPadding) {
+        items(reorderPreview(items, preview, key), key = key) { item ->
+            val id = key(item)
+            val index = keys.indexOf(id)
+            val accessibility = if (!editable) Modifier else Modifier
+                .onPreviewKeyEvent { event ->
+                    if (event.type != KeyEventType.KeyDown || !event.isAltPressed || event.isCtrlPressed || event.isMetaPressed) false
+                    else when (event.key) {
+                        Key.DirectionUp -> commitMove(id, -1)
+                        Key.DirectionDown -> commitMove(id, 1)
+                        else -> false
                     }
                 }
-            }
-            Box(accessibility) {
-                itemContent(item, itemKey == draggingKey)
-            }
+                .semantics {
+                    customActions = buildList {
+                        if (moveUpLabel != null && index > 0) add(CustomAccessibilityAction(moveUpLabel) { commitMove(id, -1) })
+                        if (moveDownLabel != null && index >= 0 && index < keys.lastIndex) add(CustomAccessibilityAction(moveDownLabel) { commitMove(id, 1) })
+                    }
+                }
+            Box(accessibility) { itemContent(item, id == draggingKey) }
         }
     }
 }

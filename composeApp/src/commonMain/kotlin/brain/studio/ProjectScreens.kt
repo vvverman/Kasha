@@ -32,7 +32,7 @@ private fun ProjectLine(p: Project, onClick: () -> Unit, onEdit: (() -> Unit)? =
             val detail = p.instruction.ifBlank { p.description }
             if (detail.isNotBlank()) Text(detail, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        if (onEdit != null) IconAction(editLabel, Glyph.MORE, onEdit, modifier = Modifier.size(32.dp))
+        if (onEdit != null) IconAction(editLabel, Glyph.MORE, onEdit, modifier = Modifier.size(48.dp))
         else KashaIcon(Glyph.NEXT, Modifier.size(16.dp), colors.onSurfaceVariant)
     }
 }
@@ -45,15 +45,24 @@ internal fun ProjectsScreen(s: StudioState) {
     when {
         note != null && s.editingNoteId == note.id -> NoteEditorScreen(s, note)
         note != null -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 22.dp)) {
-            Heading(NoteText.title(note.body), { s.selectedNoteId = null; s.editingNoteId = null }, s.tr("back")) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    IconAction(s.tr(if (note.pinned) "unpin" else "pin"), Glyph.PIN, { scope.launch { s.pinNote(note) } }, filled = note.pinned, modifier = Modifier.size(34.dp))
-                    if (note.pinned) {
-                        IconAction(s.tr("up"), Glyph.UP, { scope.launch { s.moveNotePin(note, -1) } }, modifier = Modifier.size(34.dp))
-                        IconAction(s.tr("down"), Glyph.DOWN, { scope.launch { s.moveNotePin(note, 1) } }, modifier = Modifier.size(34.dp))
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                val controls: @Composable () -> Unit = {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        IconAction(s.tr(if (note.pinned) "unpin" else "pin"), Glyph.PIN, { scope.launch { s.pinNote(note) } }, filled = note.pinned, modifier = Modifier.size(48.dp))
+                        if (note.pinned) {
+                            IconAction(s.tr("up"), Glyph.UP, { scope.launch { s.moveNotePin(note, -1) } }, modifier = Modifier.size(48.dp))
+                            IconAction(s.tr("down"), Glyph.DOWN, { scope.launch { s.moveNotePin(note, 1) } }, modifier = Modifier.size(48.dp))
+                        }
+                        IconAction(s.tr("edit"), Glyph.EDIT, { s.beginNoteEdit(note.id) }, modifier = Modifier.size(48.dp))
                     }
-                    IconAction(s.tr("edit"), Glyph.EDIT, { s.beginNoteEdit(note.id) }, modifier = Modifier.size(34.dp))
                 }
+                val back = { s.selectedNoteId = null; s.editingNoteId = null }
+                if (note.pinned && maxWidth < 520.dp) {
+                    Column(Modifier.fillMaxWidth()) {
+                        Heading(NoteText.title(note.body), back, s.tr("back"))
+                        Row(Modifier.fillMaxWidth().padding(bottom = 16.dp), horizontalArrangement = Arrangement.End) { controls() }
+                    }
+                } else Heading(NoteText.title(note.body), back, s.tr("back"), controls)
             }
             KashaNoteText(
                 value = note.body,
@@ -97,6 +106,7 @@ internal fun ProjectsScreen(s: StudioState) {
                 moveUpLabel = s.tr("up"),
                 moveDownLabel = s.tr("down"),
                 listState = listState,
+                enabled = !s.busy,
             ) { n, dragging -> NoteLine(s, n, dragging) { s.openNote(n.id) } }
         }
         else -> Column {
@@ -116,6 +126,7 @@ internal fun ProjectsScreen(s: StudioState) {
                 moveUpLabel = s.tr("up"),
                 moveDownLabel = s.tr("down"),
                 listState = listState,
+                enabled = !s.busy,
             ) { p, dragging ->
                 ProjectLine(p, { s.selectedProjectId = p.id; s.selectedNoteId = null }, { s.editingProjectId = p.id }, s.tr("edit"), dragging)
             }
