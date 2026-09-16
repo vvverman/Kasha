@@ -1,5 +1,6 @@
 import androidx.compose.ui.ComposeUiFlags
 import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.useSnapshotCache
 import androidx.compose.ui.window.ComposeViewport
 import brain.studio.*
 import brain.web.*
