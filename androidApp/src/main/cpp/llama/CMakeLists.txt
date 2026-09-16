@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.22.1)
 project(kasha_llama LANGUAGES C CXX ASM)
 set(CMAKE_CXX_STANDARD 17)
+# JNI остаётся отлаживаемым; математика моделей не должна исполняться с -O0.
+# Обычная release-конфигурация и все ABI сохраняются.
+add_compile_options("$<$<CONFIG:Debug>:-O2>")
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_COMMON OFF CACHE BOOL "" FORCE)

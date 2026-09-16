@@ -9,7 +9,18 @@ TEST=$(find test-apks -type f -name '*androidTest*.apk' | head -n 1)
 test -n "$APP" && test -n "$TEST"
 adb root
 adb wait-for-device
-trap 'adb logcat -d > "$OUT/logcat.txt" 2>&1 || true' EXIT
+collect_diagnostics() {
+    adb logcat -d > "$OUT/logcat.txt" 2>&1 || true
+    adb shell cat /data/user/0/ru.vrmn.kasha/files/ai-fixtures/phase.txt > "$OUT/phase.txt" 2>&1 || true
+    if [ ! -f "$OUT/android-local-models.json" ]; then
+        local pid
+        pid=$(adb shell pidof ru.vrmn.kasha | tr -d '\r')
+        if [[ "$pid" =~ ^[0-9]+$ ]]; then
+            timeout 20 adb shell debuggerd -b "$pid" > "$OUT/native-stack.txt" 2>&1 || true
+        fi
+    fi
+}
+trap collect_diagnostics EXIT
 adb install -r -t "$APP"
 adb install -r -t "$TEST"
 PACKAGE=ru.vrmn.kasha

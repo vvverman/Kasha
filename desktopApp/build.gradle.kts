@@ -65,3 +65,19 @@ tasks.withType<AbstractJPackageTask>().configureEach {
         else -> Unit
     }
 }
+
+// Gradle/JPackage копируют ресурсы без исходного POSIX executable bit.
+// Исправляем сам app image до упаковки, а не только тестовую копию.
+if (!demoBuild && System.getProperty("os.name").lowercase().contains("linux")) {
+    tasks.named("createDistributable") {
+        doLast {
+            val bin = layout.buildDirectory.dir("compose/binaries/main/app/Kasha/lib/app/resources/bin").get().asFile
+            for (name in listOf("whisper-cli", "llama-completion", "ffmpeg")) {
+                val executable = bin.resolve(name)
+                check(executable.isFile && executable.setExecutable(true, false) && executable.canExecute()) {
+                    "Не удалось установить право запуска упакованного движка: $name"
+                }
+            }
+        }
+    }
+}

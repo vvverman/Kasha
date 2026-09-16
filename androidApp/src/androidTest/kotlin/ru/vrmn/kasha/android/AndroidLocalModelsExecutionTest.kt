@@ -20,6 +20,11 @@ class AndroidLocalModelsExecutionTest {
         val input = File(context.filesDir, "ai-fixtures")
         val evidence = File(input, "android-local-models.json")
         evidence.delete()
+        fun phase(value: String) {
+            File(input, "phase.txt").writeText(value)
+            android.util.Log.i("KashaAiTest", value)
+        }
+        phase("Проверка сети и JNI")
         var networkReachable = false
         try { Socket().use { it.connect(InetSocketAddress("1.1.1.1", 443), 1500); networkReachable = true } }
         catch (_: java.io.IOException) { }
@@ -35,18 +40,23 @@ class AndroidLocalModelsExecutionTest {
             check(file.isFile && file.canRead()) { "Missing pinned model fixture: ${file.absolutePath}; visible=${input.list()?.joinToString()}" }
             file.copyTo(File(models, artifact.fileName), overwrite = true)
         }
+        phase("Модели скопированы")
         val audio = File(input, "russian-with-pauses.wav")
         val originalHash = hash(audio)
         val intelligence = AndroidIntelligence(context) { preferences }
         assertTrue(intelligence.roles(selection).all { it.executable })
+        phase("Распознавание исходного аудио")
         val transcript = intelligence.transcribe(audio.absolutePath, "ru", "")
         assertTrue(transcript, transcript.any { it in 'А'..'я' })
         assertFalse(intelligence.simulated)
+        phase("Генерация заголовка")
         val source = "Ирина не меняла 1200 пунктов."
         assertTrue(intelligence.title(source, "ru").isNotBlank())
+        phase("Обработка текста")
         val tidied = intelligence.tidy(source, "ru")
         LocalModelText.requirePreserved(source, tidied)
         val projects = listOf(Project("work", "Работа", instruction = "Рабочие встречи"))
+        phase("Подбор проекта")
         val rank = intelligence.rank(source, projects, "ru")
         assertEquals(setOf("work"), rank.keys)
         assertTrue(rank.getValue("work") in 0..4)
@@ -56,17 +66,20 @@ class AndroidLocalModelsExecutionTest {
             val pending = repository.newPendingFile()
             audio.copyTo(pending, overwrite = true)
             val capture = repository.acceptPending(pending, 20.0, listOf(0.1f))
+            phase("Голосовой сценарий через repository")
             val ready = repository.reprocess(capture.id)
             assertEquals(CaptureStatus.READY, ready.status)
             assertTrue(ready.transcript.any { it in 'А'..'я' }); assertFalse(ready.simulated)
             val project = repository.createProject(ProjectDraft(title = "Работа"))
             val note = repository.distribute(ready.id, DistributionRequest(projectId = project.id))
             assertEquals(ready.textToSave.trimEnd(), note.body)
+            phase("Сохранение и перезапуск")
             val reopened = AndroidStudioRepository(root, intelligence, "ru", defaultPreferences = preferences)
             assertEquals(note, reopened.snapshot().notes.single())
             assertEquals(originalHash, hash(audio))
             assertEquals(originalHash, hash(repository.audioFile(capture.id)))
             assertEquals(selection, repository.preferences().ai)
+            phase("Все проверки завершены")
             evidence.writeText("""{"passed":true,"nativeWhisper":true,"nativeQwen":true,"routerRoles":3,"voiceSavedAsNote":true,"restartPreserved":true,"sourceUnchanged":true,"externalNetworkReachable":false,"fixture":"synthetic-russian-speech"}""")
         } finally { root.deleteRecursively() }
     }

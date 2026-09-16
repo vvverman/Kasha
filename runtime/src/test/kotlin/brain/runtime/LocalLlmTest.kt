@@ -10,6 +10,7 @@ class LocalLlmTest {
     @Test fun promptIsPrivateFileNotProcessArgument() = runBlocking {
         val root = Files.createTempDirectory("brain-llm")
         var file: Path? = null
+        var schemaFile: Path? = null
         try {
             val prompt = "Секретная заметка: не удалять 15 записей"
             val runner = CommandRunner { command, _ ->
@@ -17,11 +18,16 @@ class LocalLlmTest {
                 assertFalse(command.contains("--log-disable"))
                 file = Path.of(command[command.indexOf("--file") + 1])
                 assertEquals(prompt, Files.readString(file))
-                assertTrue(command.containsAll(listOf("--json-schema", "--no-escape", "--single-turn", "--reasoning", "off")))
+                schemaFile = Path.of(command[command.indexOf("--json-schema-file") + 1])
+                assertEquals(LocalModelText.RANK_SCHEMA, Files.readString(schemaFile))
+                assertFalse(command.contains("--json-schema"))
+                assertFalse(command.any { it == LocalModelText.RANK_SCHEMA })
+                assertTrue(command.containsAll(listOf("--json-schema-file", "--no-escape", "--single-turn", "--reasoning", "off")))
                 "{\"relevance\":4}\n[end of text]"
             }
             assertEquals("{\"relevance\":4}", LocalLlm("llama", "model", root, runner).generate(prompt, LocalModelText.RANK_SCHEMA, 80))
             assertFalse(Files.exists(file))
+            assertFalse(Files.exists(schemaFile))
         } finally { root.toFile().deleteRecursively() }
     }
     @Test fun failedModelCleansTemporaryPrompt() = runBlocking {
