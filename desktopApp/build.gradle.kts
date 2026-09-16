@@ -69,7 +69,7 @@ tasks.withType<AbstractJPackageTask>().configureEach {
 // Gradle/JPackage копируют ресурсы без исходного POSIX executable bit.
 // Исправляем сам app image до упаковки, а не только тестовую копию.
 if (!demoBuild && System.getProperty("os.name").lowercase().contains("linux")) {
-    tasks.named("createDistributable") {
+    tasks.matching { it.name == "createDistributable" }.configureEach {
         doLast {
             val bin = layout.buildDirectory.dir("compose/binaries/main/app/Kasha/lib/app/resources/bin").get().asFile
             for (name in listOf("whisper-cli", "llama-completion", "ffmpeg")) {
