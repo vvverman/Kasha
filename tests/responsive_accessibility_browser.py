@@ -60,6 +60,8 @@ with sync_playwright() as pw:
     def stable_nav_boxes(width, height):
         deadline = time.time() + 10
         last = {}
+        previous = None
+        stable_samples = 0
         while time.time() < deadline:
             boxes = []
             complete = True
@@ -80,6 +82,7 @@ with sync_playwright() as pw:
                             box['y'] + box['height'] <= height + 1
                         )
                         expected_region = (
+                            max(0, (width - 1440) / 2) + 32 <= box['x'] and
                             box['x'] + box['width'] <= max(0, (width - 1440) / 2) + 256 if width >= 1024
                             else box['y'] > height / 2
                         )
@@ -89,8 +92,17 @@ with sync_playwright() as pw:
                     complete = False
                     break
                 boxes.append(candidates[0])
+            # DOM viewport обновляется раньше Compose и его accessibility-дерева.
+            # Принимаем только геометрию нового размера, одинаковую в трёх замерах.
             if complete:
-                return boxes
+                signature = [[round(b[k], 1) for k in ('x', 'y', 'width', 'height')] for b in boxes]
+                stable_samples = stable_samples + 1 if signature == previous else 1
+                previous = signature
+                if stable_samples >= 3:
+                    return boxes
+            else:
+                previous = None
+                stable_samples = 0
             page.wait_for_timeout(100)
         raise AssertionError(('navigation did not stabilize after resize', width, height, last))
 
@@ -120,7 +132,7 @@ with sync_playwright() as pw:
             assert no_horizontal_scroll, name
 
             page.screenshot(path=str(OUT / f'{name}.png'))
-            viewport_results.append({'name': name, 'width': width, 'height': height})
+            viewport_results.append({'name': name, 'width': width, 'height': height, 'navigationBounds': boxes})
 
         semantics = page.locator('body').aria_snapshot()
         for label in NAV:
@@ -145,5 +157,6 @@ with sync_playwright() as pw:
         print('RESPONSIVE ACCESSIBILITY BROWSER PASSED')
     finally:
         with suppress(Exception):
+            page.screenshot(path=str(OUT / 'final.png'))
             (OUT / 'semantics.txt').write_text(page.locator('body').aria_snapshot(), encoding='utf-8')
         browser.close()
