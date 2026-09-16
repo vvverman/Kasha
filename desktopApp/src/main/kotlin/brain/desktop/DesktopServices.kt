@@ -24,7 +24,7 @@ class DesktopServices(val root: Path, val resources: Path, cpuOnly: Boolean = fa
         instanceLock = DesktopInstanceLock.acquire(root)
         try {
             val env = if (simulated) mapOf("KASHA_FFMPEG" to bundledExecutable(resources,"ffmpeg")) else bundledEnvironment(resources)
-            store = FileBrainStore(root, runtimeStatus = { RuntimeStatus(localOnly=true, simulated=simulated) }, singleCurrent=true)
+            store = FileBrainStore(root, runtimeStatus = { RuntimeStatus(localOnly=true, simulated=simulated) }, singleCurrent=true, deferInitialization=true)
             val runner = DesktopInferenceRunner(cpuOnly)
             processing = LocalProcessing(store, env, runner)
             val prefs = PreferenceStore(root)

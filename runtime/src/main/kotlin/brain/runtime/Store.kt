@@ -17,15 +17,27 @@ import kotlin.io.path.createDirectories
 import kotlin.io.path.exists
 import kotlin.time.Clock
 
-class FileBrainStore(val root: Path, private val runtimeStatus: () -> RuntimeStatus, private val singleCurrent: Boolean = false) {
+class FileBrainStore(
+    val root: Path,
+    private val runtimeStatus: () -> RuntimeStatus,
+    private val singleCurrent: Boolean = false,
+    deferInitialization: Boolean = false,
+) {
     private val json = Json { prettyPrint = true; ignoreUnknownKeys = true; encodeDefaults = true }
     private val mutex = Mutex()
     private val stateFile = root.resolve("brain.json")
     private val stateMarker = root.resolve(".brain.initialized")
     private val audioRoot = root.resolve("audio")
+    private class LoadedState(var data: BrainData)
+    // Неуспешная инициализация lazy не кешируется. Повтор Core перечитывает те же файлы.
+    private val loadedState by lazy { loadState() }
     private var state: BrainData
+        get() = loadedState.data
+        set(value) { loadedState.data = value }
 
-    init {
+    init { if (!deferInitialization) loadedState }
+
+    private fun loadState(): LoadedState {
         root.createDirectories(); audioRoot.createDirectories()
         require(!Files.isSymbolicLink(stateFile) && !Files.isSymbolicLink(audioRoot))
 
@@ -42,26 +54,25 @@ class FileBrainStore(val root: Path, private val runtimeStatus: () -> RuntimeSta
                 "Индекс данных отсутствует; сохранённые файлы оставлены для восстановления"
             }
         }
-        state = saved?.let { json.decodeFromString<BrainData>(it) } ?: BrainData()
+        val loaded = saved?.let { json.decodeFromString<BrainData>(it) } ?: BrainData()
         // Both files must be readable before migrations or destructive journal reconciliation.
         // This gate also covers DesktopServices, which constructs the same filesystem store.
         PreferenceStore(root).readForStartup()
-        if (saved != null) markInitialized(stateMarker)
-        val migrated = state.migrated()
-        if (migrated != state) commit(migrated)
-
-        val recovered = state.copy(captures = state.captures.map {
+        val migrated = loaded.migrated()
+        val recovered = migrated.copy(captures = migrated.captures.map {
             if (it.status.isWorking) it.copy(status = CaptureStatus.FAILED, message = "Обработка прервана; запись сохранена") else it
         })
-        if (recovered != state) commit(recovered)
+        if (recovered != loaded) atomicWrite(stateFile, json.encodeToString(recovered))
+        if (saved != null || recovered != loaded) markInitialized(stateMarker)
 
         Files.list(audioRoot).use { dirs -> dirs.filter { it.fileName.toString().startsWith(".deleted-") }.forEach { dir ->
             require(!Files.isSymbolicLink(dir))
             val id = dir.fileName.toString().removePrefix(".deleted-")
-            if (state.captures.any { it.id == id }) Files.move(dir, audioRoot.resolve(id)) else dir.toFile().deleteRecursively()
+            if (recovered.captures.any { it.id == id }) Files.move(dir, audioRoot.resolve(id)) else dir.toFile().deleteRecursively()
         } }
         // Reopening is not proof that saved.m4a was durably published. Never delete a
         // surviving original here; only successful finalizeAudio or explicit discard may do so.
+        return LoadedState(recovered)
     }
 
     suspend fun snapshot(): AppSnapshot = mutex.withLock {

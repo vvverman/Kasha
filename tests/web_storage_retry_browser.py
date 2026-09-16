@@ -205,6 +205,36 @@ with tempfile.TemporaryDirectory(prefix='kasha-storage-profile-') as profile, sy
         assert page.evaluate(SNAPSHOT) == repaired
         page.evaluate('() => { globalThis.fetch = originalRecoveryFetch; }')
         checks.append('Retry rereads a repaired journal; rejected upload retains every original fragment')
+        page.evaluate("""async () => {
+            const db = await new Promise((resolve, reject) => {
+                const r = indexedDB.open('kasha-audio-v1', 1);
+                r.onsuccess = () => resolve(r.result); r.onerror = () => reject(r.error);
+            });
+            try {
+                await new Promise((resolve, reject) => {
+                    const tx = db.transaction('sessions', 'readwrite');
+                    tx.objectStore('sessions').put({id:'kept', created:7, mime:'audio/webm', expectedChunks:4});
+                    tx.oncomplete = resolve;
+                    tx.onerror = tx.onabort = () => reject(tx.error || Error('Fixture write aborted'));
+                });
+            } finally { db.close(); }
+        }""")
+        missing_tail = page.evaluate(SNAPSHOT)
+        context.close()
+        context, page = launch()
+        page.add_script_tag(url=BASE + '/browser-platform.js')
+        observe_uploads()
+        for _ in range(2):
+            failed = page.evaluate('() => kashaPlatform.recover(location.origin, "kept")')
+            assert failed.startswith('ERROR:Audio journal is incomplete or corrupt'), failed
+            assert page.evaluate('recoveryUploads') == []
+            assert page.evaluate(SNAPSHOT) == missing_tail
+        put_chunk(3, 'restored tail')
+        failed = page.evaluate('() => kashaPlatform.recover(location.origin, "kept")')
+        assert failed == 'ERROR:Runtime temporarily unavailable', failed
+        assert page.evaluate('recoveryUploads') == [list(b'original audiorestored middlelast partrestored tail')]
+        page.evaluate('() => { globalThis.fetch = originalRecoveryFetch; }')
+        checks.append('expected chunk count detects a missing tail after restart; Retry reads the restored tail')
         assert not errors, errors
         (OUT / 'result.json').write_text(json.dumps(
             {'passed': True, 'checks': checks, 'pageErrors': errors}, ensure_ascii=False, indent=2))

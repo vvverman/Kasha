@@ -248,3 +248,25 @@ test('Восстановление одной записи не смешивае
   assert.equal(h.rows.chunks.length, 1); assert.equal(await h.rows.chunks[0].blob.text(), 'other audio');
   assert.ok(h.deletions.every(d => (Array.isArray(d.key) ? d.key[0] : d.key) === 'kept'));
 });
+
+for (const [name, expected, parts] of [
+  ['последний фрагмент', 2, [chunk(0)]],
+  ['единственный фрагмент', 1, []],
+  ['повреждённый счётчик', '2', [chunk(0), chunk(1)]],
+]) test(`Счётчик журнала: ${name} не теряется при Retry и перезапуске`, async () => {
+  const h = harness(); h.rows.sessions[0].expectedChunks = expected; h.rows.chunks = parts;
+  const before = await stored(h);
+  for (const instance of [h, h, harness([], h.rows)]) {
+    assert.equal((await pending(instance))[0].id, 'kept');
+    assert.match(await instance.api.recover('http://runtime.invalid', 'kept'), /^ERROR:Audio journal is incomplete or corrupt/);
+    assert.deepEqual(instance.uploads, []); assert.deepEqual(await stored(instance), before);
+  }
+});
+test('Полный журнал со счётчиком восстанавливается после возврата последнего фрагмента', async () => {
+  const h = harness(); h.rows.sessions[0].expectedChunks = 2; h.rows.chunks = [chunk(0, 'first')];
+  assert.match(await h.api.recover('http://runtime.invalid', 'kept'), /^ERROR:/);
+  h.rows.chunks.push(chunk(1, 'last'));
+  assert.equal(JSON.parse(await h.api.recover('http://runtime.invalid', 'kept')).id, 'kept');
+  assert.deepEqual(h.uploads.map(u => u.bytes), [bytesOf('firstlast')]);
+  assert.deepEqual(h.rows, {sessions: [], chunks: []});
+});

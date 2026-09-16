@@ -64,7 +64,7 @@
       // A successful empty read is not permission to delete the source journal.
       // A damaged chunk still represents user data, not an empty journal.
       // Surface it for recovery/error handling; upload validates before sending.
-      if(chunks.some(x=>x.id===saved.id))result.push(saved);
+      if(chunks.some(x=>x.id===saved.id)||(saved.expectedChunks!==undefined&&saved.expectedChunks!==0))result.push(saved);
     }
     return result;
   };
@@ -75,6 +75,11 @@
     const saved=pendingId?sessions.find(s=>s.id===pendingId):(sessions.length===1?sessions[0]:null);
     if(!saved)throw Error('Expected one matching pending recording');
     const chunks=(await all('chunks')).filter(x=>x.id===saved.id).sort((a,b)=>a.index-b.index);
+    // Счётчик записывается до Blob: пропавший последний фрагмент также обнаружим.
+    // Старые журналы без счётчика сохраняют совместимость и проверку индексов.
+    if(saved.expectedChunks!==undefined&&(!Number.isSafeInteger(saved.expectedChunks)||saved.expectedChunks<0||chunks.length!==saved.expectedChunks)){
+      throw Error('Audio journal is incomplete or corrupt; original fragments preserved');
+    }
     if(!chunks.length)throw Error('No audio samples');
     // Recorder indices start at zero. Never acknowledge/upload a filtered subset:
     // a gap or malformed payload would silently truncate audio and cleanup its source.
@@ -146,14 +151,19 @@
         const mime=['audio/webm;codecs=opus','audio/mp4','audio/ogg;codecs=opus'].find(t=>MediaRecorder.isTypeSupported(t));
         const own=new MediaRecorder(stream,mime?{mimeType:mime}:undefined);recorder=own;
         const id=crypto.randomUUID();sessionId=id;activeSessionId=id;let index=0,total=0,persistError=null;
-        await put('sessions',{id,mime:own.mimeType||mime||'audio/webm',created:Date.now()});
+        const session={id,mime:own.mimeType||mime||'audio/webm',created:Date.now(),expectedChunks:0};
+        await put('sessions',session);
         context=new (globalThis.AudioContext||globalThis.webkitAudioContext)();
         analyser=context.createAnalyser();analyser.fftSize=1024;context.createMediaStreamSource(stream).connect(analyser);
         await context.resume().catch(()=>{});
         writes=Promise.resolve();
         own.ondataavailable=e=>{
           if(!e.data?.size)return;
-          const chunk={id,index:index++,blob:e.data};writes=writes.then(()=>put('chunks',chunk)).catch(e=>{persistError=e;});
+          const chunk={id,index:index++,blob:e.data};
+          writes=writes.then(async()=>{
+            await put('sessions',{...session,expectedChunks:chunk.index+1});
+            await put('chunks',chunk);
+          }).catch(e=>{persistError=e;});
           total+=e.data.size;if(total>=60*1024*1024&&own.state!=='inactive')own.stop();
         };
         stopped=new Promise((resolve,reject)=>{
