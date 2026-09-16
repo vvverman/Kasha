@@ -99,14 +99,14 @@ with sync_playwright() as pw:
         click('button', name)
 
     def restore_sort_screen(pref_key):
-        visible_item(page.get_by_role('button', name='Главная', exact=True), 'Главная')
+        visible_item(page.get_by_role('tab', name='Главная', exact=True), 'Главная')
         if pref_key == 'projectSort':
-            button('Проекты')
+            click('tab', 'Проекты')
         elif pref_key == 'noteSort':
-            button('Проекты')
+            click('tab', 'Проекты')
             click('button', re.compile(r'^Альфа сортировка'))
         elif pref_key == 'taskSort':
-            button('Задачи')
+            click('tab', 'Задачи')
 
     def select_sort(pref_key, target):
         current = api('preferences')[pref_key]
@@ -157,13 +157,13 @@ with sync_playwright() as pw:
         return [t['text'].splitlines()[0] for t in sorted(tasks, key=lambda t: t['manualOrder'])]
 
     def make_note(text, project_title):
-        button('Главная'); button('Попробовать без микрофона'); ready()
+        click('tab', 'Главная'); button('Попробовать без микрофона'); ready()
         field('Текст заметки', text)
         button('В заметки'); click('button', re.compile(r'^' + re.escape(project_title)))
         button('Новая заметка'); wait(lambda: current() is None, 'сохранение заметки ' + text.splitlines()[0])
 
     def make_task(text):
-        button('Главная'); button('Попробовать без микрофона'); ready()
+        click('tab', 'Главная'); button('Попробовать без микрофона'); ready()
         field('Текст заметки', text)
         button('В задачи')
         field('Дата', '31.12.2099'); field('Время', '15:00')
@@ -172,10 +172,10 @@ with sync_playwright() as pw:
     try:
         page.goto(BASE, wait_until='networkidle', timeout=60000)
         page.locator('canvas').first.wait_for(state='visible')
-        visible_item(page.get_by_role('button', name='Главная', exact=True), 'Главная')
+        visible_item(page.get_by_role('tab', name='Главная', exact=True), 'Главная')
 
         # --- Проекты ---
-        button('Проекты')
+        click('tab', 'Проекты')
         for title in ['Бета сортировка', 'Альфа сортировка']:
             button('Новый проект')
             field('Название проекта', title)
@@ -197,7 +197,7 @@ with sync_playwright() as pw:
         # --- Заметки в отдельном проекте ---
         make_note('Бета заметка\nВторой текст', 'Альфа сортировка')
         make_note('Альфа заметка\nПервый текст', 'Альфа сортировка')
-        button('Проекты'); click('button', re.compile(r'^Альфа сортировка'))
+        click('tab', 'Проекты'); click('button', re.compile(r'^Альфа сортировка'))
         card('Бета заметка'); card('Альфа заметка')
         select_sort('noteSort', 'ALPHABETICAL')
         wait(lambda: y('Альфа заметка') < y('Бета заметка'), 'алфавит заметок')
@@ -210,7 +210,7 @@ with sync_playwright() as pw:
         # --- Задачи ---
         make_task('Бета задача\nТело бета')
         make_task('Альфа задача\nТело альфа')
-        button('Задачи')
+        click('tab', 'Задачи')
         card('Бета задача'); card('Альфа задача')
         select_sort('taskSort', 'ALPHABETICAL')
         wait(lambda: y('Альфа задача') < y('Бета задача'), 'алфавит задач')
@@ -227,8 +227,8 @@ with sync_playwright() as pw:
         assert task_manual_order() == saved_manual
 
         page.reload(wait_until='networkidle')
-        visible_item(page.get_by_role('button', name='Главная', exact=True), 'Главная')
-        button('Задачи')
+        visible_item(page.get_by_role('tab', name='Главная', exact=True), 'Главная')
+        click('tab', 'Задачи')
         wait(lambda: api('preferences')['taskSort'] == 'MANUAL', 'manual режим после reload')
         assert task_manual_order() == saved_manual
         card('Альфа задача'); card('Бета задача')

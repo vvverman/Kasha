@@ -51,19 +51,19 @@ with sync_playwright() as pw:
             page.wait_for_timeout(100)
         raise AssertionError(description)
 
-    def probe_box(name, exact=True):
-        loc = page.get_by_role('button', name=name, exact=exact)
+    def probe_box(name, exact=True, role='button'):
+        loc = page.get_by_role(role, name=name, exact=exact)
         for index in range(loc.count()):
             value = loc.nth(index).bounding_box(timeout=500)
             if value and value['width'] > 0 and value['height'] > 0:
                 return value
         return None
 
-    def box(name, exact=True):
-        return wait(lambda: probe_box(name, exact), 'Не найдено: ' + str(name))
+    def box(name, exact=True, role='button'):
+        return wait(lambda: probe_box(name, exact, role), 'Не найдено: ' + str(name))
 
-    def click(name):
-        b = box(name)
+    def click(name, role='button'):
+        b = box(name, role=role)
         page.mouse.click(b['x'] + b['width'] / 2, b['y'] + b['height'] / 2)
         page.wait_for_timeout(150)
 
@@ -90,7 +90,7 @@ with sync_playwright() as pw:
     checks = []
     try:
         page.goto(BASE, wait_until='networkidle', timeout=60000)
-        click('Проекты')
+        click('Проекты', role='tab')
         expect_order(first['title'], second['title'], 'Исходный порядок')
         denied = []
         def deny(route):
@@ -121,7 +121,7 @@ with sync_playwright() as pw:
         wait(lambda: manual_order() == expected, 'Повтор перестановки не сохранился')
         expect_order(second['title'], first['title'], 'Подтверждённый порядок не показан')
         page.reload(wait_until='networkidle')
-        click('Проекты')
+        click('Проекты', role='tab')
         expect_order(second['title'], first['title'], 'Порядок потерян после reload')
         checks.append('retry persists once and survives browser restart')
 

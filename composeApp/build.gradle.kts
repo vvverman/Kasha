@@ -1,3 +1,4 @@
+import java.io.File
 import org.gradle.api.tasks.Exec
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask
@@ -45,6 +46,25 @@ kotlin {
         target.binaries.framework {
             baseName = "KashaShared"
             isStatic = true
+        }
+        if (System.getProperty("os.name") == "Mac OS X") {
+            val sdk = if (target.name == "iosSimulatorArm64") "iphonesimulator" else "iphoneos"
+            // Resolve compatibility libraries from the selected Xcode, not a dependency's build host.
+            // Keep xcrun lazy: JVM/Web/Android tasks must not require an installed Apple toolchain.
+            val swiftRuntimeDirectory = providers.exec {
+                commandLine("xcrun", "--sdk", sdk, "--find", "swiftc")
+            }.standardOutput.asText.map { compilerPath ->
+                val directory = File(compilerPath.trim()).parentFile.parentFile.resolve("lib/swift/$sdk")
+                check(directory.isDirectory) { "Swift runtime directory not found for $sdk: $directory" }
+                directory.absolutePath
+            }
+            target.binaries.all {
+                linkTaskProvider.configure {
+                    toolOptions.freeCompilerArgs.addAll(swiftRuntimeDirectory.map { directory ->
+                        listOf("-linker-option", "-L$directory")
+                    })
+                }
+            }
         }
     }
 

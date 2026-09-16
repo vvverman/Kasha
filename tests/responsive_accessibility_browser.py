@@ -67,7 +67,7 @@ with sync_playwright() as pw:
             complete = True
             last = {}
             for label in NAV:
-                locator = page.get_by_role('button', name=label, exact=True)
+                locator = page.get_by_role('tab', name=label, exact=True)
                 candidates = []
                 for index in range(locator.count()):
                     with suppress(Exception):

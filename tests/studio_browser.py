@@ -131,7 +131,7 @@ with sync_playwright() as pw:
     try:
         page.goto(BASE, wait_until='networkidle', timeout=60000)
         page.locator('canvas').first.wait_for(state='visible')
-        visible_item(page.get_by_role('button', name='Главная', exact=True), 'Главная')
+        visible_item(page.get_by_role('tab', name='Главная', exact=True), 'Главная')
         web_app_box = page.locator('#webApp').bounding_box()
         assert web_app_box and web_app_box['width'] == 1280, web_app_box
         snapshot = api('snapshot')
@@ -158,7 +158,7 @@ with sync_playwright() as pw:
         assert note['body'].startswith('Моя первая строка\nЭто тело заметки')
         checks.append('первая строка заметки является названием')
 
-        button('Проекты')
+        click('tab', 'Проекты')
         click('button', re.compile(r'^Твой первый проект'))
         click_card('Моя первая строка')
         button('Править')
@@ -168,7 +168,7 @@ with sync_playwright() as pw:
         assert edited['body'].startswith('Новое название из первой строки')
         checks.append('редактирование заметки без отдельного title')
 
-        button('Главная')
+        click('tab', 'Главная')
         button('Попробовать без микрофона')
         ready()
         field('Текст заметки', 'Позвонить в сервис\nУточнить статус ремонта и записать ответ.')
@@ -191,7 +191,7 @@ with sync_playwright() as pw:
         assert task['completedAt'] is None
         checks.append('задача со сроком и частотой напоминаний')
 
-        visible_item(page.get_by_role('button', name='Задачи', exact=True), 'Задачи')
+        visible_item(page.get_by_role('tab', name='Задачи', exact=True), 'Задачи')
         click_card('Позвонить в сервис')
         field('Задача', 'Позвонить в сервис повторно\nЗапросить письменное подтверждение.')
         button('Сохранить')
@@ -234,6 +234,10 @@ with sync_playwright() as pw:
         }, ensure_ascii=False, indent=2), encoding='utf-8')
         print('STUDIO BROWSER PASSED')
     finally:
+        with suppress(Exception):
+            page.screenshot(path=str(OUT / 'final.png'))
+        with suppress(Exception):
+            (OUT / 'page-errors.json').write_text(json.dumps(errors, ensure_ascii=False, indent=2), encoding='utf-8')
         with suppress(Exception):
             (OUT / 'semantics.txt').write_text(page.locator('body').aria_snapshot(), encoding='utf-8')
         browser.close()
