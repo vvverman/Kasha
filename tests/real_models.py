@@ -3,6 +3,8 @@ import hashlib
 import json
 from pathlib import Path
 import subprocess
+import tempfile
+import wave
 import time
 import urllib.request
 import uuid
@@ -79,7 +81,15 @@ assert c['audioFinalized'] and c['durationSeconds'] > 0
 with urllib.request.urlopen(BASE + 'captures/' + cid + '/audio') as response:
     saved = OUT / 'saved.m4a'; saved.write_bytes(response.read())
 assert c['inputSha256'] == hashlib.sha256(voice.read_bytes()).hexdigest()
-subprocess.run(['ffmpeg','-v','error','-i',str(saved),'-f','null','-'],check=True)
+# Проверяем реальное декодирование теми кодеками, которые входят в приложение.
+# Минимальный bundled FFmpeg не содержит null muxer, но содержит WAV/PCM16.
+with tempfile.TemporaryDirectory(prefix='kasha-audio-verify-') as temporary:
+    decoded = Path(temporary) / 'decoded.wav'
+    subprocess.run(['ffmpeg', '-nostdin', '-v', 'error', '-y', '-i', str(saved),
+                    '-ar', '16000', '-ac', '1', '-c:a', 'pcm_s16le', str(decoded)], check=True)
+    with wave.open(str(decoded), 'rb') as audio:
+        assert audio.getnchannels() == 1 and audio.getsampwidth() == 2
+        assert audio.getframerate() == 16000 and audio.getnframes() > 0
 assert api('preferences')['ai'] == selection
 note = api('captures/' + cid + '/distribute', {'projectId':projects[0]['id']})
 assert note == api('captures/' + cid + '/distribute', {'projectId':projects[0]['id']})
