@@ -1,4 +1,4 @@
-"""ТЗ 8.4/11: реальные действия общего UI, без вызова AI и без новых тестовых API."""
+"""ТЗ 13.1/8.4: rollback, modal recovery and reorder in the real shared UI, without AI."""
 import json
 import os
 import pathlib
@@ -51,14 +51,16 @@ with sync_playwright() as pw:
             page.wait_for_timeout(100)
         raise AssertionError(description)
 
-    def box(name, exact=True):
+    def probe_box(name, exact=True):
         loc = page.get_by_role('button', name=name, exact=exact)
-        def find():
-            for index in range(loc.count()):
-                value = loc.nth(index).bounding_box(timeout=500)
-                if value and value['width'] > 0 and value['height'] > 0:
-                    return value
-        return wait(find, 'Не найдено: ' + str(name))
+        for index in range(loc.count()):
+            value = loc.nth(index).bounding_box(timeout=500)
+            if value and value['width'] > 0 and value['height'] > 0:
+                return value
+        return None
+
+    def box(name, exact=True):
+        return wait(lambda: probe_box(name, exact), 'Не найдено: ' + str(name))
 
     def click(name):
         b = box(name)
@@ -67,6 +69,14 @@ with sync_playwright() as pw:
 
     def card(title):
         return box(re.compile('^' + re.escape(title) + r'(?:\s|$)'), exact=False)
+
+    def expect_order(earlier, later, description):
+        # One bounded polling loop: distinguish missing semantics from a wrong visual order.
+        def ordered():
+            a = probe_box(re.compile('^' + re.escape(earlier) + r'(?:\s|$)'), exact=False)
+            b = probe_box(re.compile('^' + re.escape(later) + r'(?:\s|$)'), exact=False)
+            return a and b and a['y'] < b['y']
+        wait(ordered, description)
 
     def drag():
         a, b = card(first['title']), card(second['title'])
@@ -81,27 +91,38 @@ with sync_playwright() as pw:
     try:
         page.goto(BASE, wait_until='networkidle', timeout=60000)
         click('Проекты')
-        wait(lambda: card(first['title'])['y'] < card(second['title'])['y'], 'Исходный порядок')
+        expect_order(first['title'], second['title'], 'Исходный порядок')
         denied = []
         def deny(route):
             denied.append(route.request.post_data_json)
             route.fulfill(status=503, content_type='application/json', body='{"error":"saveFailed"}')
         page.route('**/api/projects/order', deny)
-        drag()
-        wait(lambda: denied, 'Не было попытки сохранить drag')
-        click('Понятно')
-        assert manual_order() == all_ids
-        wait(lambda: card(first['title'])['y'] < card(second['title'])['y'], 'После ошибки остался ложный порядок')
-        checks.append('failed reorder keeps authoritative order and every item')
-        page.screenshot(path=str(OUT / 'failed-reorder-restored.png'))
+        for attempt in range(2):
+            drag()
+            wait(lambda: len(denied) == attempt + 1, 'Не было попытки сохранить drag')
+            box('Понятно')
+            # Both pointer dismissal and Escape must restore the SAME screen, without reload.
+            if attempt == 0:
+                click('Понятно')
+            else:
+                page.keyboard.press('Escape')
+            wait(lambda: page.get_by_role('button', name='Понятно', exact=True).count() == 0,
+                 'Закрытый диалог остался в дереве доступности')
+            assert manual_order() == all_ids
+            expect_order(first['title'], second['title'],
+                         'После закрытия ошибки не восстановлены строки и исходный порядок')
+            assert len(denied) == attempt + 1, 'Повторная скрытая запись порядка'
+            page.screenshot(path=str(OUT / f'failed-reorder-restored-{attempt}.png'))
+        checks.append('two failed reorders preserve authoritative order and every item')
+        checks.append('pointer and Escape dismissal restore accessibility without reload')
         page.unroute('**/api/projects/order', deny)
         drag()
         expected = [second['id'], first['id']] + all_ids[2:]
         wait(lambda: manual_order() == expected, 'Повтор перестановки не сохранился')
-        wait(lambda: card(second['title'])['y'] < card(first['title'])['y'], 'Подтверждённый порядок не показан')
+        expect_order(second['title'], first['title'], 'Подтверждённый порядок не показан')
         page.reload(wait_until='networkidle')
         click('Проекты')
-        wait(lambda: card(second['title'])['y'] < card(first['title'])['y'], 'Порядок потерян после reload')
+        expect_order(second['title'], first['title'], 'Порядок потерян после reload')
         checks.append('retry persists once and survives browser restart')
 
         # Используется реальная аппаратная клавиатура браузера, а не вызов функции перестановки.
@@ -125,4 +146,6 @@ with sync_playwright() as pw:
         with suppress(Exception):
             page.screenshot(path=str(OUT / 'final.png'))
             (OUT / 'semantics.txt').write_text(page.locator('body').aria_snapshot())
+            (OUT / 'dom.html').write_text(page.content())
+            (OUT / 'page-errors.json').write_text(json.dumps(errors, ensure_ascii=False, indent=2))
         browser.close()
