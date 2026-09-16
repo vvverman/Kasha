@@ -3,14 +3,41 @@
   'use strict';
   let recorder=null,stream=null,player=null,playerLoading=false,writes=Promise.resolve(),stopped=null,context=null,analyser=null;
   let generation=0,openPromise,activeSessionId=null,recordingOperation=null,lastCancelledId=null,cancelAudioLoad=null;
-  const db=()=>openPromise ||= new Promise((resolve,reject)=>{
-    const r=indexedDB.open('kasha-audio-v1',1);
-    r.onupgradeneeded=()=>{r.result.createObjectStore('sessions',{keyPath:'id'});r.result.createObjectStore('chunks',{keyPath:['id','index']});};
-    r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);
-  });
+  const db=()=>{
+    if(openPromise)return openPromise;
+    const opening=new Promise((resolve,reject)=>{
+      const r=indexedDB.open('kasha-audio-v1',1);
+      let abandoned=false;
+      const fail=error=>{abandoned=true;reject(error||Error('Audio storage unavailable'));};
+      r.onupgradeneeded=()=>{r.result.createObjectStore('sessions',{keyPath:'id'});r.result.createObjectStore('chunks',{keyPath:['id','index']});};
+      r.onerror=()=>fail(r.error);
+      r.onblocked=()=>fail(Error('Audio storage blocked by another tab'));
+      r.onsuccess=()=>{if(abandoned)r.result.close();else resolve(r.result);};
+    });
+    const retryable=opening.then(database=>{
+      const invalidate=()=>{if(openPromise===retryable)openPromise=null;};
+      database.onclose=invalidate;
+      database.onversionchange=()=>{invalidate();database.close();};
+      return database;
+    }).catch(error=>{
+      // Cache only a live connection: Retry must not reuse a rejected open promise.
+      if(openPromise===retryable)openPromise=null;
+      throw error;
+    });
+    openPromise=retryable;
+    return retryable;
+  };
   const all=async store=>{
     const database=await db();
-    return new Promise((resolve,reject)=>{const r=database.transaction(store).objectStore(store).getAll();r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
+    return new Promise((resolve,reject)=>{
+      const tx=database.transaction(store),r=tx.objectStore(store).getAll();
+      // A successful request can still belong to an aborted transaction.
+      // Never reconcile/delete a journal using such an incomplete read.
+      r.onerror=()=>reject(r.error||Error('Audio read failed'));
+      tx.oncomplete=()=>resolve(r.result);
+      tx.onerror=()=>reject(tx.error||Error('Audio read failed'));
+      tx.onabort=()=>reject(tx.error||Error('Audio read aborted'));
+    });
   };
   const put=async(store,value)=>{
     const database=await db();

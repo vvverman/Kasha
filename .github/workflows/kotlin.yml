@@ -42,10 +42,10 @@ jobs:
           python scripts/prepare-fonts.py
           python scripts/check-ui-boundary.py
           bash -n run-web.sh scripts/gradle.sh
-      - name: Контракт Web-плеера без ожидания сборки
+      - name: Контракты Web-плеера и IndexedDB без ожидания сборки
         run: |
           set -o pipefail
-          node --test tests/web_playback_contract.test.cjs 2>&1 | tee web-playback-contract.tap
+          node --test tests/web_playback_contract.test.cjs tests/web_storage_contract.test.cjs 2>&1 | tee web-playback-contract.tap
       - name: Kasha Core, AI catalog и общий UI на JVM/Android; runtime и production WebAssembly
         run: |
           set -o pipefail
@@ -64,6 +64,7 @@ jobs:
           bash runtime/build/install/runtime/bin/runtime > runtime.log 2>&1 &
           PID=$!
           trap 'kill "$PID" 2>/dev/null || true' EXIT
+          python tests/web_storage_retry_browser.py
           python tests/web_recorder_identity_browser.py
           python tests/web_adapter_browser.py
           python tests/studio_browser.py
@@ -80,6 +81,7 @@ jobs:
             kotlin.log
             runtime.log
             web-playback-contract.tap
+            test-output/storage-retry
             test-output/browser-adapter
             test-output/studio
             test-output/sorting
