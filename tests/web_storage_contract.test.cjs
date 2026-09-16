@@ -11,7 +11,7 @@ function harness(plans = []) {
   const rows = {sessions: [{id: 'kept', created: 7, mime: 'audio/webm'}],
     chunks: [{id: 'kept', index: 0, blob: new Blob(['original audio'])}]};
   const opens = [], connections = [], deletions = [];
-  let readFailure = null, transactionFailure = false;
+  let readFailure = null, transactionFailure = false, emptyChunkRead = null, chunkReads = 0;
   function connection() {
     const database = {closed: false, close() { this.closed = true; },
       createObjectStore() {},
@@ -22,6 +22,7 @@ function harness(plans = []) {
         tx.objectStore = store => ({
           getAll() {
             const request = {};
+            const empty = store === 'chunks' && ++chunkReads === emptyChunkRead;
             const failure = readFailure?.store === store ? readFailure : null;
             if (failure) readFailure = null;
             setImmediate(() => {
@@ -29,7 +30,7 @@ function harness(plans = []) {
                 request.error = Error('Read failed'); tx.error = request.error;
                 request.onerror?.(); tx.onerror?.(); return;
               }
-              request.result = failure ? [] : rows[store].slice();
+              request.result = failure || empty ? [] : rows[store].slice();
               request.onsuccess?.();
               setImmediate(() => {
                 if (failure) { tx.error = Error('Read aborted after request success'); tx.onabort?.(); }
@@ -66,7 +67,8 @@ function harness(plans = []) {
   vm.runInContext(source, context);
   return {api: context.kashaPlatform, opens, connections, deletions, rows,
     failRead(store, kind = 'abort') { readFailure = {store, kind}; },
-    failTransaction() { transactionFailure = true; }};
+    failTransaction() { transactionFailure = true; },
+    emptyChunksOnRead(number) { emptyChunkRead = number; }};
 }
 async function pending(h) { return JSON.parse(await h.api.pendingRecordings()); }
 function retained(h) {
@@ -132,4 +134,22 @@ test('Успешное соединение переиспользуется к�
   const results = await Promise.all([pending(h), pending(h), pending(h)]);
   results.forEach(result => assert.equal(result[0].id, 'kept'));
   assert.equal(h.opens.length, 1); retained(h);
+});
+test('Чтение pending не удаляет сессию другой вкладки до первого аудиофрагмента', async () => {
+  const h = harness(); const chunk = h.rows.chunks.pop();
+  assert.deepEqual(await pending(h), []);
+  assert.equal(h.rows.sessions.length, 1); assert.deepEqual(h.deletions, []);
+  h.rows.chunks.push(chunk);
+  assert.equal((await pending(h))[0].id, 'kept'); retained(h);
+});
+test('Повторное чтение пустого журнала не является разрешением на очистку', async () => {
+  const h = harness(); h.rows.chunks = [];
+  for (let attempt = 0; attempt < 3; attempt++) assert.deepEqual(await pending(h), []);
+  assert.equal(h.rows.sessions.length, 1); assert.deepEqual(h.deletions, []);
+});
+test('Потеря видимости chunks между discovery и upload не удаляет исходное аудио', async () => {
+  const h = harness(); h.emptyChunksOnRead(2);
+  assert.match(await h.api.recover('http://runtime.invalid', 'kept'), /^ERROR:No audio samples/);
+  retained(h);
+  assert.equal((await pending(h))[0].id, 'kept'); retained(h);
 });

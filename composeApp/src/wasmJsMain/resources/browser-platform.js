@@ -60,8 +60,9 @@
     for(const saved of sessions){
       // A scan started before getUserMedia/IndexedDB completed must not delete the live journal.
       if(saved.id===protectedId||saved.id===activeSessionId)continue;
+      // Listing is read-only: another tab may not have committed its first chunk yet.
+      // A successful empty read is not permission to delete the source journal.
       if(chunks.some(x=>x.id===saved.id&&x.blob?.size>0))result.push(saved);
-      else await removeSession(saved.id);
     }
     return result;
   };
@@ -72,7 +73,7 @@
     const saved=pendingId?sessions.find(s=>s.id===pendingId):(sessions.length===1?sessions[0]:null);
     if(!saved)throw Error('Expected one matching pending recording');
     const chunks=(await all('chunks')).filter(x=>x.id===saved.id&&x.blob?.size>0).sort((a,b)=>a.index-b.index);
-    if(!chunks.length){await removeSession(saved.id);throw Error('No audio samples');}
+    if(!chunks.length)throw Error('No audio samples');
     const blob=new Blob(chunks.map(x=>x.blob),{type:saved.mime});
     const form=new FormData();const ext=saved.mime.includes('mp4')?'m4a':saved.mime.includes('ogg')?'ogg':'webm';
     form.append('audio',blob,'capture.'+ext);

@@ -41,6 +41,8 @@ SEED = """async () => {
         await new Promise((resolve, reject) => {
             const tx = db.transaction(['sessions', 'chunks'], 'readwrite');
             tx.objectStore('sessions').put({id: 'kept', created: 7, mime: 'audio/webm'});
+            // Another tab may commit its session before its first audio chunk.
+            tx.objectStore('sessions').put({id: 'awaiting-chunk', created: 8, mime: 'audio/webm'});
             tx.objectStore('chunks').put({id: 'kept', index: 0, blob: new Blob(['original audio'])});
             tx.oncomplete = resolve;
             tx.onerror = tx.onabort = () => reject(tx.error || Error('Seed aborted'));
@@ -85,7 +87,7 @@ with tempfile.TemporaryDirectory(prefix='kasha-storage-profile-') as profile, sy
     try:
         page.evaluate(SEED)
         original = page.evaluate(SNAPSHOT)
-        assert len(original['sessions']) == len(original['chunks']) == 1
+        assert len(original['sessions']) == 2 and len(original['chunks']) == 1
         assert bytes(original['chunks'][0]['bytes']) == b'original audio'
         page.evaluate("""() => {
             const nativeOpen = indexedDB.open.bind(indexedDB);
@@ -110,6 +112,7 @@ with tempfile.TemporaryDirectory(prefix='kasha-storage-profile-') as profile, sy
         page.evaluate('restoreOpen()')
         assert page.evaluate(SNAPSHOT) == original
         checks.append('real IndexedDB open error -> Retry -> original session and exact audio bytes')
+        checks.append('pending scan leaves a session awaiting its first chunk untouched')
 
         page.evaluate("""() => {
             const nativeGetAll = IDBObjectStore.prototype.getAll;
