@@ -2,7 +2,7 @@
 (() => {
   'use strict';
   let recorder=null,stream=null,player=null,playerLoading=false,writes=Promise.resolve(),stopped=null,context=null,analyser=null;
-  let generation=0,openPromise,activeSessionId=null,recordingOperation=null,lastCancelledId=null;
+  let generation=0,openPromise,activeSessionId=null,recordingOperation=null,lastCancelledId=null,cancelAudioLoad=null;
   const db=()=>openPromise ||= new Promise((resolve,reject)=>{
     const r=indexedDB.open('kasha-audio-v1',1);
     r.onupgradeneeded=()=>{r.result.createObjectStore('sessions',{keyPath:'id'});r.result.createObjectStore('chunks',{keyPath:['id','index']});};
@@ -55,7 +55,19 @@
     await removeSession(saved.id);
     return text;
   };
-  const stopAudio=()=>{generation++;playerLoading=false;player?.pause();player=null;};
+  const releaseAudio=own=>{
+    if(!own)return;
+    own.onloadedmetadata=null;own.onerror=null;
+    try{own.pause();}catch{}
+    // Сбрасываем загрузку и ожидающие play-promises, а не только ссылку адаптера.
+    try{own.removeAttribute('src');own.load();}catch{}
+  };
+  const stopAudio=()=>{
+    generation++;
+    const own=player;player=null;playerLoading=false;
+    const cancel=cancelAudioLoad;cancelAudioLoad=null;cancel?.();
+    releaseAudio(own);
+  };
   globalThis.kashaPlatform={
     baseUrl:()=>location.port==='8080'?'http://127.0.0.1:8787':location.origin,
     consent:async()=>{
@@ -173,19 +185,54 @@
       finally{recordingOperation=null;}
     },
     play:async(url,from,rate)=>{
+      let own=null;
       try{
         if(activeSessionId||recordingOperation==='starting')throw Error('Stop recording first');
-        stopAudio();const ownGeneration=generation;const own=new Audio();player=own;playerLoading=true;own.preservesPitch=true;own.playbackRate=rate;
+        stopAudio();const ownGeneration=generation;own=new Audio();player=own;playerLoading=true;
+        own.preservesPitch=true;own.playbackRate=rate;
         await new Promise((resolve,reject)=>{
-          const timeout=setTimeout(()=>reject(Error('Audio load timeout')),15000);
-          own.onloadedmetadata=()=>{clearTimeout(timeout);resolve();};own.onerror=()=>{clearTimeout(timeout);reject(Error('Audio unavailable'));};own.src=url;
+          let settled=false;
+          const finish=error=>{
+            if(settled)return;settled=true;clearTimeout(timeout);
+            own.onloadedmetadata=null;
+            if(cancelAudioLoad===cancel)cancelAudioLoad=null;
+            error?reject(error):resolve();
+          };
+          const cancel=()=>finish(Error('Playback cancelled'));
+          const timeout=setTimeout(()=>finish(Error('Audio load timeout')),15000);
+          cancelAudioLoad=cancel;
+          own.onloadedmetadata=()=>finish();
+          own.onerror=()=>{
+            finish(Error('Audio unavailable'));
+            if(player===own)stopAudio();
+          };
+          own.src=url;
         });
-        if(generation!==ownGeneration)throw Error('Playback cancelled');
-        own.currentTime=Math.max(0,Math.min(Number.isFinite(own.duration)?own.duration:from,from));await own.play();playerLoading=false;return 'ok';
-      }catch(e){playerLoading=false;return failure(e);}
+        if(generation!==ownGeneration||player!==own)throw Error('Playback cancelled');
+        own.currentTime=Math.max(0,Math.min(Number.isFinite(own.duration)?own.duration:from,from));
+        await own.play();
+        if(generation!==ownGeneration||player!==own)throw Error('Playback cancelled');
+        playerLoading=false;return 'ok';
+      }catch(e){
+        // Ошибка старой загрузки не меняет состояние уже выбранного нового источника.
+        if(own&&player===own)stopAudio();else releaseAudio(own);
+        return failure(e);
+      }
     },
     pauseAudio:()=>{player?.pause();return 'ok';},
-    resumeAudio:async()=>{try{if(activeSessionId||recordingOperation==='starting')throw Error('Stop recording first');await player?.play();return 'ok';}catch(e){return failure(e);}},
+    resumeAudio:async()=>{
+      const own=player,ownGeneration=generation;
+      try{
+        if(activeSessionId||recordingOperation==='starting')throw Error('Stop recording first');
+        if(!own||playerLoading)throw Error('Playback unavailable');
+        await own.play();
+        if(generation!==ownGeneration||player!==own)throw Error('Playback cancelled');
+        return 'ok';
+      }catch(e){
+        if(own&&player===own)stopAudio();else releaseAudio(own);
+        return failure(e);
+      }
+    },
     seekAudio:seconds=>{
       try{
         if(!player||playerLoading||player.ended)throw Error('Playback unavailable');

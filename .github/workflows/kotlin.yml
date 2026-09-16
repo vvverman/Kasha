@@ -42,6 +42,10 @@ jobs:
           python scripts/prepare-fonts.py
           python scripts/check-ui-boundary.py
           bash -n run-web.sh scripts/gradle.sh
+      - name: Контракт Web-плеера без ожидания сборки
+        run: |
+          set -o pipefail
+          node --test tests/web_playback_contract.test.cjs 2>&1 | tee web-playback-contract.tap
       - name: Kasha Core, AI catalog и общий UI на JVM/Android; runtime и production WebAssembly
         run: |
           set -o pipefail
@@ -75,6 +79,8 @@ jobs:
           path: |
             kotlin.log
             runtime.log
+            web-playback-contract.tap
+            test-output/browser-adapter
             test-output/studio
             test-output/sorting
             test-output/responsive

@@ -1,6 +1,7 @@
 """Browser-adapter regression: permissions, MediaRecorder, IndexedDB recovery and transport exclusion."""
 import json
 import os
+from pathlib import Path
 import shutil
 import time
 import urllib.request
@@ -159,7 +160,40 @@ with sync_playwright() as pw:
                 break
             page.wait_for_timeout(100)
         assert recovered is not None, 'Автоматическое recovery не опубликовало исходный browser session id'
+        # Snapshot видит capture до доставки ответа POST. Журнал удаляется только после
+        # подтверждения того же id: ждём завершения транзакции, а не фиксированную задержку.
+        page.wait_for_function('async () => !(await kashaPlatform.pending())', timeout=15000)
         assert page.evaluate('kashaPlatform.pending()') is False
+        assert persisted_recording() is None
+        assert sum(c['id'] == source_id for c in api('snapshot')['captures']) == 1
+
+        # Настоящий HTMLAudio: сбой загрузки освобождает адаптер, следующий источник работает.
+        broken_url = BASE + '/playback-regression-failure.wav'
+        page.route('**/playback-regression-failure.wav', lambda route: route.fulfill(status=503, body='unavailable'))
+        assert page.evaluate('(url) => kashaPlatform.play(url, 0, 1)', broken_url).startswith('ERROR:')
+        assert page.evaluate('kashaPlatform.audioState().phase') == 'idle'
+        page.unroute('**/playback-regression-failure.wav')
+
+        # Stop обязан завершить ожидание, даже если ответ с метаданными ещё не доставлен.
+        held_requests = []
+        page.route('**/playback-regression-delayed.wav', lambda route: held_requests.append(route))
+        page.evaluate("""(url) => {
+            window.playbackRegressionResult = null;
+            kashaPlatform.play(url, 0, 1).then(result => { window.playbackRegressionResult = result; });
+        }""", BASE + '/playback-regression-delayed.wav')
+        page.wait_for_function("kashaPlatform.audioState().phase === 'loading'")
+        deadline = time.monotonic() + 5
+        while not held_requests and time.monotonic() < deadline:
+            page.wait_for_timeout(25)
+        assert held_requests, 'HTMLAudio не начал загрузку проверяемого источника'
+        page.evaluate('kashaPlatform.stopAudio()')
+        page.wait_for_function("window.playbackRegressionResult !== null", timeout=3000)
+        assert page.evaluate('window.playbackRegressionResult').startswith('ERROR:')
+        assert page.evaluate('kashaPlatform.audioState().phase') == 'idle'
+        for request in held_requests:
+            request.fulfill(status=200, content_type='audio/wav', body=bytes(44))
+        page.unroute('**/playback-regression-delayed.wav')
+        assert page.evaluate('kashaPlatform.audioState().phase') == 'idle'
 
         first_audio_url = BASE + '/api/captures/' + recovered['id'] + '/audio'
         assert page.evaluate('(url) => kashaPlatform.play(url, 0, 1)', first_audio_url) == 'ok'
@@ -214,6 +248,14 @@ with sync_playwright() as pw:
         api('captures/' + final_receipt['id'], method='DELETE')
         assert not api('snapshot')['captures']
         assert not errors, errors
+        output = Path('test-output/browser-adapter')
+        output.mkdir(parents=True, exist_ok=True)
+        (output / 'result.json').write_text(json.dumps({
+            'passed': True, 'realMediaRecorder': True, 'recoveryAcknowledged': True,
+            'recoveryCaptureCount': 1, 'realAudioErrorReleased': True,
+            'stopDuringAudioLoad': True, 'seekPreservesPlayingAndPaused': True,
+            'recordPlaybackExclusion': True,
+        }, indent=2), encoding='utf-8')
         print('WEB ADAPTER BROWSER PASSED')
     finally:
         browser.close()
