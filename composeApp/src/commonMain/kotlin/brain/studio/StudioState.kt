@@ -387,7 +387,7 @@ class StudioState(
         val previous = current
         return try { block(); true }
         catch (e: CancellationException) { throw e }
-        catch (e: Exception) { error = e.message?.takeIf { Copy.has(it) } ?: "actionFailed"; false }
+        catch (e: Exception) { error = actionFailureMessageKey(e.message, initialized); false }
         finally {
             syncContent()
             reconcileContentPresentation(previous)

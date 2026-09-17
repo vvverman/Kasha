@@ -49,10 +49,28 @@ jobs:
           .ios-test-python/bin/python tests/make-russian-fixture.py
           ffmpeg -nostdin -v error -y -i test-output/real-models/russian-with-pauses.wav -ar 48000 -ac 1 test-output/real-models/russian-48k.m4a
           .ios-test-python/bin/python scripts/prepare-fonts.py
-      - name: Аудиоустройства и приложение Simulator
+      - name: Аудиоустройства и полностью загруженный iPhone
         run: |
+          set -euo pipefail
           system_profiler SPAudioDataType > ios-audio-host.txt
-          open -a Simulator
+          python3 - <<'PYBOOT'
+          import json, os, subprocess
+          from pathlib import Path
+          devices = json.loads(subprocess.check_output(['xcrun', 'simctl', 'list', 'devices', 'available', '-j']))
+          candidates = [device for runtime, group in devices['devices'].items() if '.iOS-' in runtime
+                        for device in group if device.get('isAvailable') and device['name'].startswith('iPhone')]
+          assert candidates, 'Нет доступного симулятора iPhone'
+          selected = next((d for d in candidates if d.get('state') == 'Booted'), candidates[-1])
+          device = selected['udid']
+          if selected.get('state') != 'Booted':
+              subprocess.run(['xcrun', 'simctl', 'boot', device], check=True, timeout=90)
+          subprocess.run(['xcrun', 'simctl', 'bootstatus', device, '-b'], check=True, timeout=180)
+          subprocess.run(['open', '-a', 'Simulator', '--args', '-CurrentDeviceUDID', device], check=True)
+          Path('ios-test-device.json').write_text(json.dumps(selected, indent=2))
+          with open(os.environ['GITHUB_ENV'], 'a') as env:
+              env.write('KASHA_IOS_TEST_DEVICE=' + device + '\n')
+          print('Все Kotlin iOS-тесты используют загруженный iPhone:', device)
+          PYBOOT
       - name: Compile and test Kasha shared iOS layer
         run: |
           set -o pipefail
@@ -102,6 +120,7 @@ jobs:
           path: |
             ios-shared.log
             ios-audio-host.txt
+            ios-test-device.json
             ios-audio-system-*.log
             ios-native.log
             test-output/ios-local-models/

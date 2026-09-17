@@ -97,22 +97,33 @@ with sync_playwright() as pw:
         page.mouse.click(box['x'] + box['width'] / 2, box['y'] + box['height'] / 2)
         page.wait_for_timeout(250)
 
+    def settle_input():
+        # Дожидаемся обработки предыдущего клавиатурного события общим Compose UI.
+        page.evaluate('() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))')
+
     def field(label, value):
         _, box = visible_item(page.get_by_role('textbox', name=label, exact=True), label)
         page.mouse.click(box['x'] + min(24, box['width'] / 2), box['y'] + min(24, box['height'] / 2))
-        page.wait_for_timeout(160)
+        page.wait_for_function("""() => {
+            let node = document.activeElement;
+            while (node?.shadowRoot?.activeElement) node = node.shadowRoot.activeElement;
+            return node?.isConnected && !node.disabled && !node.readOnly &&
+                (node.matches?.('input,textarea') || node.isContentEditable);
+        }""", timeout=5000)
+        settle_input()
         page.keyboard.press('Control+a')
-        page.wait_for_timeout(80)
+        settle_input()
         page.keyboard.press('Backspace')
-        page.wait_for_timeout(80)
+        settle_input()
         page.keyboard.insert_text(value)
+        settle_input()
         page.wait_for_timeout(650)
 
     def current():
         return next((c for c in api('snapshot')['captures'] if c['noteId'] is None and c.get('taskId') is None), None)
 
     def ready():
-        return wait(lambda: (c if (c := current()) and c['status'] == 'READY' else None), 'готовая тестовая запись')
+        return wait(lambda: (c if (c := current()) and c['status'] == 'READY' and c['audioFinalized'] else None), 'готовая тестовая запись')
 
     def card_locator(prefix):
         return page.get_by_role('button', name=re.compile(r'^' + re.escape(prefix) + r'(?:\s|$)'))
@@ -142,8 +153,30 @@ with sync_playwright() as pw:
         assert 'Скорость' not in aria and '1.0×' not in aria and '1×' not in aria
         checks.append('скорость воспроизведения убрана из плеера')
 
-        button('Попробовать без микрофона')
-        ready()
+        # Настоящие UI-команды и MediaRecorder; Chrome подаёт тестовый аудиосигнал.
+        # Текст формирует существующий demo-режим, не приёмка STT из раздела 6.
+        button('Запись')
+        wait(lambda: page.evaluate('kashaPlatform.phase()') == 'recording', 'запись через UI')
+        recording_id = json.loads(page.evaluate('kashaPlatform.sessionState()'))['activeSessionId']
+        assert recording_id
+        page.wait_for_timeout(1100)  # Накопить настоящие аудиофрагменты MediaRecorder.
+        screen('recording')
+        click('tab', 'Проекты')
+        assert json.loads(page.evaluate('kashaPlatform.sessionState()'))['activeSessionId'] == recording_id
+        assert page.evaluate('kashaPlatform.phase()') == 'recording'
+        button('Пауза')
+        wait(lambda: page.evaluate('kashaPlatform.phase()') == 'paused', 'пауза через UI')
+        click('tab', 'Главная')
+        screen('recording-paused')
+        button('Продолжить')
+        wait(lambda: page.evaluate('kashaPlatform.phase()') == 'recording', 'продолжение через UI')
+        page.wait_for_timeout(700)
+        button('Отправить')
+        recorded = ready()
+        assert recorded['id'] == recording_id, recorded
+        wait(lambda: not page.evaluate('kashaPlatform.pending()'), 'подтверждение сохранённого аудио')
+        assert page.evaluate('kashaPlatform.phase()') == 'idle'
+        checks.append('реальная запись через UI: pause/resume, навигация, stop; один идентификатор и подтверждённое аудио')
         visible_item(page.get_by_role('textbox', name='Текст заметки', exact=True), 'Текст заметки')
         assert page.get_by_role('textbox', name='Название заметки', exact=True).count() == 0
         field('Текст заметки', 'Моя первая строка\nЭто тело заметки. Отдельного заголовка больше нет.')

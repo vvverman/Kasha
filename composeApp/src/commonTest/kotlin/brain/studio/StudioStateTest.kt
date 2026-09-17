@@ -12,6 +12,7 @@ class StudioStateTest {
         override val simulated = true
         var prefs = Preferences(autoRecord = false)
         var data = BrainData(projects = listOf(Project("p", "Приложение")))
+        var failRead = false
         var failSave = false
         var failDiscard = false
         var failCreate = false
@@ -33,7 +34,10 @@ class StudioStateTest {
                 tasks = data.tasks,
             )
         }
-        override suspend fun preferences() = prefs
+        override suspend fun preferences(): Preferences {
+            check(!failRead) { "Storage is unavailable" }
+            return prefs
+        }
         override suspend fun savePreferences(value: Preferences) {
             preferencesGate?.await()
             check(!failPreferences)
@@ -151,6 +155,26 @@ class StudioStateTest {
         override suspend fun resume() { telemetry = telemetry.copy(phase = "playing") }
         override fun telemetry() = telemetry
         override fun stop() { telemetry = AudioTelemetry() }
+    }
+
+    @Test fun startupReadFailureHasSpecificMessageAndRetriesTheSameRepository() = runTest {
+        val repo = Repo()
+        val original = repo.data
+        val state = StudioState(repo, Recorder(repo), Audio())
+        repo.failRead = true
+        repeat(2) {
+            state.error = null
+            state.launch()
+            assertFalse(state.initialized)
+            assertEquals("loadFailed", state.error)
+            assertEquals(original, repo.data)
+        }
+        repo.failRead = false
+        state.error = null
+        state.launch()
+        assertTrue(state.initialized)
+        assertNull(state.error)
+        assertEquals(original, repo.data)
     }
 
     @Test

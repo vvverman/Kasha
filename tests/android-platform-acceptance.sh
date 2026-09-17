@@ -19,8 +19,10 @@ adb shell input keyevent 82
 # До instrument приложение остановлено: публикуем сразу полный набор тестовых данных.
 adb shell am force-stop ru.vrmn.kasha
 adb shell "run-as ru.vrmn.kasha sh -c 'test ! -e files/Kasha'"
+APP_UID=$(adb shell run-as ru.vrmn.kasha id -u | tr -d '\r')
+APP_GID=$(adb shell run-as ru.vrmn.kasha id -g | tr -d '\r')
 TOKEN=$(python3 -c 'import uuid; print(uuid.uuid4())')
-python3 - "$OUT/fixture.tar" "$TOKEN" <<'PYFIXTURE'
+python3 - "$OUT/fixture.tar" "$TOKEN" "$APP_UID" "$APP_GID" <<'PYFIXTURE'
 import io, json, math, struct, sys, tarfile, time, uuid, wave
 now = int(time.time() * 1000)
 id = lambda: str(uuid.uuid4())
@@ -51,6 +53,8 @@ files['platform-fixture.token'] = sys.argv[2].encode()
 with tarfile.open(sys.argv[1], 'w') as archive:
     for name, value in files.items():
         info=tarfile.TarInfo(name); info.size=len(value); info.mode=0o600
+        # Старый Android tar восстанавливает владельца: это UID/GID приложения, не root.
+        info.uid=int(sys.argv[3]); info.gid=int(sys.argv[4])
         archive.addfile(info, io.BytesIO(value))
 PYFIXTURE
 adb shell run-as ru.vrmn.kasha mkdir -p files
