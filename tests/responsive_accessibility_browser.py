@@ -16,7 +16,9 @@ NAV = ['Главная', 'Проекты', 'Задачи', 'Настройки']
 VIEWPORTS = [
     (f'width-{width}', width, 800) for width in
     [320, 359, 360, 390, 430, 431, 599, 600, 768, 1023, 1024, 1199, 1200, 1440, 1600]
-] + [('landscape-844', 844, 390)]
+] + [('landscape-844', 844, 390), ('narrow-short', 320, 568),
+     ('phone', 390, 844), ('phone-wide', 430, 932), ('tablet', 768, 1024),
+     ('desktop-min', 1024, 768), ('desktop-wide', 1440, 900)]
 
 
 def api(path, data=None, method=None):
@@ -111,29 +113,34 @@ with sync_playwright() as pw:
         page.locator('canvas').first.wait_for(state='visible', timeout=30000)
 
         viewport_results = []
-        for name, width, height in VIEWPORTS:
-            page.set_viewport_size({'width': width, 'height': height})
-            page.wait_for_timeout(100)
-            root = page.locator('#webApp').bounding_box()
-            assert root and abs(root['width'] - width) <= 1, (name, root)
-            assert abs(root['height'] - height) <= 1, (name, root)
+        for theme in ['light', 'dark']:
+            preferences = api('preferences')
+            preferences['theme'] = theme
+            api('preferences', preferences, 'PUT')
+            page.reload(wait_until='networkidle')
+            page.locator('canvas').first.wait_for(state='visible', timeout=30000)
+            for name, width, height in VIEWPORTS:
+                page.set_viewport_size({'width': width, 'height': height})
+                page.wait_for_timeout(100)
+                root = page.locator('#webApp').bounding_box()
+                assert root and abs(root['width'] - width) <= 1, (name, root)
+                assert abs(root['height'] - height) <= 1, (name, root)
 
-            boxes = stable_nav_boxes(width, height)
-            if width < 1024:
-                span = max(b['x'] + b['width'] for b in boxes) - min(b['x'] for b in boxes)
-                assert span <= 544 + 1, ('navigation max width ignored', width, span)
-            else:
-                left = min(b['x'] for b in boxes)
-                assert left >= max(0, (width - 1440) / 2) + 32, ('shell cap ignored', width, left)
+                boxes = stable_nav_boxes(width, height)
+                if width < 1024:
+                    span = max(b['x'] + b['width'] for b in boxes) - min(b['x'] for b in boxes)
+                    assert span <= 544 + 1, ('navigation max width ignored', width, span)
+                else:
+                    left = min(b['x'] for b in boxes)
+                    assert left >= max(0, (width - 1440) / 2) + 32, ('shell cap ignored', width, left)
 
-            no_horizontal_scroll = page.evaluate(
-                'document.documentElement.scrollWidth <= window.innerWidth + 1 && document.body.scrollWidth <= window.innerWidth + 1'
-            )
-            assert no_horizontal_scroll, name
+                no_horizontal_scroll = page.evaluate(
+                    'document.documentElement.scrollWidth <= window.innerWidth + 1 && document.body.scrollWidth <= window.innerWidth + 1'
+                )
+                assert no_horizontal_scroll, name
 
-            page.screenshot(path=str(OUT / f'{name}.png'))
-            viewport_results.append({'name': name, 'width': width, 'height': height, 'navigationBounds': boxes})
-
+                page.screenshot(path=str(OUT / f'{theme}-{name}.png'))
+                viewport_results.append({'name': name, 'theme': theme, 'width': width, 'height': height, 'navigationBounds': boxes})
         semantics = page.locator('body').aria_snapshot()
         for label in NAV:
             assert label in semantics, label
@@ -151,6 +158,7 @@ with sync_playwright() as pw:
                 'navigation capped at 560dp; shell capped at 1440dp',
                 'navigation exposes accessible names',
                 'navigation semantics stabilize after breakpoint resize',
+                'light and dark at exact short-mobile, tablet and desktop sizes',
             ],
             'pageErrors': errors,
         }, ensure_ascii=False, indent=2), encoding='utf-8')

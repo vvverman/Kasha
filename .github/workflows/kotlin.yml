@@ -69,6 +69,7 @@ jobs:
           python tests/web_storage_retry_browser.py
           python tests/web_recorder_identity_browser.py
           python tests/web_adapter_browser.py
+          python tests/playback_file_browser.py
           python tests/studio_browser.py
           python tests/sorting_browser.py
           python tests/responsive_accessibility_browser.py
@@ -104,6 +105,7 @@ jobs:
             web-playback-contract.tap
             test-output/storage-retry
             test-output/browser-adapter
+            test-output/playback-file
             test-output/studio
             test-output/sorting
             test-output/responsive
