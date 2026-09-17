@@ -49,6 +49,8 @@ jobs:
           .ios-test-python/bin/python tests/make-russian-fixture.py
           ffmpeg -nostdin -v error -y -i test-output/real-models/russian-with-pauses.wav -ar 48000 -ac 1 test-output/real-models/russian-48k.m4a
           .ios-test-python/bin/python scripts/prepare-fonts.py
+      - name: Аудиоустройства тестового Mac
+        run: system_profiler SPAudioDataType > ios-audio-host.txt
       - name: Compile and test Kasha shared iOS layer
         run: |
           set -o pipefail
@@ -76,6 +78,7 @@ jobs:
           retention-days: 14
           path: |
             ios-shared.log
+            ios-audio-host.txt
             ios-native.log
             test-output/ios-local-models/
             kashaCore/build/test-results/

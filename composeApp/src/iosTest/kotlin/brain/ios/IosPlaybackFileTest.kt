@@ -43,6 +43,21 @@ class IosPlaybackFileTest {
         try {
             test(audio, repository, root, capture)
             assertEquals(original, iosModelSha256(path), "Воспроизведение не меняет исходный файл")
+        } catch (error: Throwable) {
+            // Сохраняем причину отказа реального симулятора, не заменяя плеер заглушкой.
+            runCatching {
+                IosAudioSessionBridge.activatePlayback()
+                val probe = AVAudioPlayer(NSURL.fileURLWithPath(path), error = null)
+                try {
+                    println("AUDIO_DIAGNOSTIC duration=${probe.duration}; channels=${probe.numberOfChannels}; " +
+                        "sampleRate=${probe.format.sampleRate}; sessionRate=${session.sampleRate}; " +
+                        "outputs=${session.currentRoute.outputs}")
+                    val prepared = probe.prepareToPlay()
+                    val started = if (prepared) probe.play() else false
+                    println("AUDIO_DIAGNOSTIC prepared=$prepared; started=$started; playing=${probe.playing}")
+                } finally { probe.stop() }
+            }.onFailure { println("AUDIO_DIAGNOSTIC ${it.message}") }
+            throw error
         } finally {
             audio.stop()
             center.removeObserver(activation)
