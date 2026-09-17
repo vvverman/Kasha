@@ -176,6 +176,11 @@ with sync_playwright() as pw:
         page.reload(wait_until='networkidle')
         restore_sort_screen(pref_key)
 
+    def settle_input():
+        # Compose processes native keyboard events at requestAnimationFrame.
+        # Finish one user action before sending the next; no sleeps or repeated input.
+        page.evaluate('() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))')
+
     def field(label, value):
         _, box = interaction_target('textbox', label)
         interactions.append({'action': 'field', 'name': label, 'value': value, 'bounds': box})
@@ -190,8 +195,13 @@ with sync_playwright() as pw:
         }""", timeout=5000)
         interactions.append({'action': 'input-focused', 'name': label,
                              'receiver': page.evaluate('kashaTestActiveInput()')})
-        page.keyboard.press('Control+a'); page.keyboard.press('Backspace')
+        settle_input()
+        page.keyboard.press('Control+a')
+        settle_input()
+        page.keyboard.press('Backspace')
+        settle_input()
         page.keyboard.insert_text(value)
+        settle_input()
         interactions.append({'action': 'input-sent', 'name': label,
                              'receiver': page.evaluate('kashaTestActiveInput()')})
         page.wait_for_timeout(550)
@@ -317,7 +327,7 @@ with sync_playwright() as pw:
         card('Альфа задача'); card('Бета задача')
 
         snapshot = api('snapshot')
-        assert len([t for t in snapshot['tasks'] if t.get('completedAt') is None]) == 2
+        assert len([t for t in snapshot['tasks']] if False else [t for t in snapshot['tasks'] if t.get('completedAt') is None]) == 2
         assert not errors, errors
         page.screenshot(path=str(OUT / 'sorting-manual-after-reload.png'))
         (OUT / 'result.json').write_text(json.dumps({
