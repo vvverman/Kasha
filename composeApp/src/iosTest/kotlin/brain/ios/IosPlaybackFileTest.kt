@@ -9,6 +9,7 @@ import kotlinx.cinterop.addressOf
 import kotlinx.cinterop.usePinned
 import kotlinx.coroutines.runBlocking
 import platform.Foundation.*
+import platform.AVFAudio.*
 import kotlin.math.sin
 import kotlin.test.*
 import kotlin.time.TimeSource
@@ -26,10 +27,28 @@ class IosPlaybackFileTest {
         val capture = repository.createAudioCapture(path, 3.0, emptyList())
         val audio = IosAudio(repository)
         val original = iosModelSha256(path)
+        // Native unit tests do not launch the Swift app/coordinator. Supply only its
+        // AVAudioSession side of the existing notification bridge, not a fake player.
+        val center = NSNotificationCenter.defaultCenter
+        val session = AVAudioSession.sharedInstance()
+        val activation = center.addObserverForName(IosAudioSessionBridge.ACTIVATE_PLAYBACK, null, null) {
+            check(session.setCategory(AVAudioSessionCategoryPlayback, AVAudioSessionModeSpokenAudio, 0u, null)) {
+                "Test host could not configure the playback audio session"
+            }
+            check(session.setActive(true, null)) { "Test host could not activate the playback audio session" }
+        }
+        val deactivation = center.addObserverForName(IosAudioSessionBridge.DEACTIVATE, null, null) {
+            session.setActive(false, null)
+        }
         try {
             test(audio, repository, root, capture)
             assertEquals(original, iosModelSha256(path), "Воспроизведение не меняет исходный файл")
-        } finally { audio.stop(); IosPaths.remove(root) }
+        } finally {
+            audio.stop()
+            center.removeObserver(activation)
+            center.removeObserver(deactivation)
+            IosPaths.remove(root)
+        }
     }
 
     private fun pump(seconds: Double) {
