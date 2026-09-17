@@ -327,7 +327,7 @@ with sync_playwright() as pw:
         card('Альфа задача'); card('Бета задача')
 
         snapshot = api('snapshot')
-        assert len([t for t in snapshot['tasks']] if False else [t for t in snapshot['tasks'] if t.get('completedAt') is None]) == 2
+        assert len([t for t in snapshot['tasks'] if t.get('completedAt') is None]) == 2
         assert not errors, errors
         page.screenshot(path=str(OUT / 'sorting-manual-after-reload.png'))
         (OUT / 'result.json').write_text(json.dumps({

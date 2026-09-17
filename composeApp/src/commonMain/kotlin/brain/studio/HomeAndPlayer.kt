@@ -28,10 +28,10 @@ internal fun HomeScreen(s: StudioState) {
 private fun HomeStateContent(s: StudioState) {
     val scope = rememberCoroutineScope()
     val c = MaterialTheme.colorScheme
+    val application by s.application.state.collectAsState()
+    val progressKey = captureProgressKey(application)
     when {
-        s.recording -> RecordingHome(s)
-
-        s.working -> BoxWithConstraints(Modifier.fillMaxSize()) {
+        progressKey != null -> BoxWithConstraints(Modifier.fillMaxSize()) {
             val compact = maxHeight < 460.dp
             Column(
                 Modifier.fillMaxSize().padding(vertical = if (compact) 12.dp else 24.dp),
@@ -46,13 +46,7 @@ private fun HomeStateContent(s: StudioState) {
                     Spacer(Modifier.height(16.dp))
                 }
                 Text(
-                    s.tr(
-                        when (s.current?.status) {
-                            CaptureStatus.TRANSCRIBING -> "transcribing"
-                            CaptureStatus.COMPACTING -> "compacting"
-                            else -> "preparing"
-                        }
-                    ),
+                    KashaCopy.text(s.language, progressKey) ?: s.tr(progressKey),
                     style = MaterialTheme.typography.titleLarge,
                     textAlign = TextAlign.Center,
                 )
@@ -67,6 +61,8 @@ private fun HomeStateContent(s: StudioState) {
                 }
             }
         }
+
+        s.recording -> RecordingHome(s)
 
         s.current != null -> Column(Modifier.fillMaxSize().padding(top = 12.dp, bottom = 12.dp)) {
             Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) {
