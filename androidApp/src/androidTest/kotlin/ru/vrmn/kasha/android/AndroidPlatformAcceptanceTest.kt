@@ -5,27 +5,21 @@ import android.app.NotificationManager
 import android.graphics.Bitmap
 import android.os.Build
 import androidx.test.platform.app.InstrumentationRegistry
-import brain.ai.BuiltInAi
 import brain.domain.BrainData
 import brain.domain.PlaybackPhase
 import brain.domain.RecorderPermission
 import brain.domain.RecorderPhase
 import brain.model.*
-import brain.studio.Preferences
 import brain.studio.Tab
 import kotlinx.coroutines.*
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Test
 import java.io.File
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 import java.security.MessageDigest
 import java.util.UUID
-import kotlin.math.sin
 
 /** ТЗ 5/12/14: системные API и общий UI в изолированном эмуляторе; модели не устанавливаются. */
 class AndroidPlatformAcceptanceTest {
@@ -41,26 +35,20 @@ class AndroidPlatformAcceptanceTest {
             "Тест разрешён только на отдельной чистой установке с kashaIsolated=true"
         }
         val root = File(context.filesDir, "Kasha")
-        check(!File(root, "brain.json").exists() && !File(root, "preferences.json").exists()) {
-            "Не перезаписывать существующие пользовательские данные"
+        val token = InstrumentationRegistry.getArguments().getString("kashaFixtureToken")
+        check(!token.isNullOrBlank() && File(context.filesDir, "platform-fixture.token").readText().trim() == token) {
+            "Сценарий требует подготовленную CI-фикстуру, а не пользовательскую установку"
         }
-        check(root.mkdirs() || root.isDirectory)
+        // Все файлы опубликованы до старта процесса: receiver не может прочитать половину фикстуры.
+        val fixture = json.decodeFromString<BrainData>(File(root, "brain.json").readText())
+        val project = fixture.projects.single()
+        val note = fixture.notes.single()
+        val first = fixture.captures.single { it.title == "Первая запись" }
+        val second = fixture.captures.single { it.title == "Вторая запись" }
+        val broken = fixture.captures.single { it.title == "Повреждённый источник" }
+        val inbox = fixture.captures.single { it.isInbox }
+        val task = fixture.tasks.single { it.completedAt == null }
         val now = System.currentTimeMillis()
-        val project = Project(id(), "Проект приёмки", instruction = "Тестовые данные", createdAt = now, updatedAt = now)
-        val note = Note(id(), project.id, "Сохранённая заметка", "Сохранённая заметка\nИсходный текст.", now, now)
-        val first = fileCapture(root, note.id, "Первая запись")
-        val second = fileCapture(root, note.id, "Вторая запись")
-        val broken = fileCapture(root, note.id, "Повреждённый источник", corrupt = true)
-        val inbox = fileCapture(root, null, "Готовый текст\nПроверка сохранения в заметку.")
-        val task = Task(id = id(), text = "Проверить напоминание", createdAt = now, updatedAt = now,
-            dueAt = now + 86_400_000, reminderRepeat = ReminderRepeat.DAILY)
-        val archived = Task(id = id(), text = "Завершённая задача", createdAt = now, updatedAt = now,
-            dueAt = now, completedAt = now, nextReminderAt = Long.MAX_VALUE)
-        File(root, "brain.json").writeText(json.encodeToString(BrainData(
-            projects = listOf(project), notes = listOf(note), captures = listOf(first, second, broken, inbox),
-            tasks = listOf(task, archived))))
-        File(root, "preferences.json").writeText(json.encodeToString(Preferences(
-            autoRecord = false, autoRoute = false, language = "ru", theme = "light", ai = BuiltInAi.androidSelection())))
         val activity = instrumentation.startActivitySync(Intent(context, MainActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         val runtime = (context.applicationContext as KashaApplication).platform
@@ -105,6 +93,9 @@ class AndroidPlatformAcceptanceTest {
 
             assertEquals(RecorderPermission.GRANTED, runtime.recorder.permission())
             withContext(Dispatchers.Main.immediate) { runtime.state.navigate(Tab.HOME); runtime.state.startRecording() }
+            check(runtime.state.error == null) {
+                "Начало записи: ${runtime.state.error}; ${runtime.recorder.sessionState()}"
+            }
             await("MediaRecorder начал запись") { runtime.recorder.sessionState().phase == RecorderPhase.RECORDING }
             val recordingId = runtime.recorder.sessionState().activeSessionId!!
             delay(900)
@@ -200,7 +191,9 @@ class AndroidPlatformAcceptanceTest {
     }
 
     private suspend fun await(label: String, ready: () -> Boolean) {
-        withTimeout(12_000) { while (!ready()) delay(50) }
+        check(withTimeoutOrNull(12_000) { while (!ready()) delay(50); true } == true) {
+            "Не дождались: $label"
+        }
         checks += "Подтверждено: $label"
     }
     private suspend fun screenshot(name: String) {
@@ -210,25 +203,6 @@ class AndroidPlatformAcceptanceTest {
         File(output, "$name.png").outputStream().use { check(image.compress(Bitmap.CompressFormat.PNG, 100, it)) }
         image.recycle()
         shots += "$name.png"
-    }
-    private fun fileCapture(root: File, noteId: String?, text: String, corrupt: Boolean = false): Capture {
-        val captureId = id()
-        val relative = "audio/$captureId/source.wav"
-        val file = File(root, relative)
-        check(file.parentFile!!.mkdirs())
-        file.writeBytes(if (corrupt) "not an audio file".toByteArray() else wav())
-        return Capture(id = captureId, createdAt = System.currentTimeMillis(), title = text.lineSequence().first(),
-            preparedText = text, transcript = text, status = CaptureStatus.READY, audioFileName = relative,
-            noteId = noteId, audioFinalized = true, durationSeconds = 3.0)
-    }
-    private fun wav(): ByteArray {
-        val samples = 48_000
-        val data = ByteBuffer.allocate(44 + samples * 2).order(ByteOrder.LITTLE_ENDIAN)
-        data.put("RIFF".toByteArray()).putInt(data.capacity() - 8).put("WAVEfmt ".toByteArray()).putInt(16)
-        data.putShort(1).putShort(1).putInt(16_000).putInt(32_000).putShort(2).putShort(16)
-        data.put("data".toByteArray()).putInt(samples * 2)
-        repeat(samples) { data.putShort((sin(it * 2 * Math.PI * 440 / 16_000) * 1500).toInt().toShort()) }
-        return data.array()
     }
     private fun id() = UUID.randomUUID().toString()
     private fun hash(file: File) = MessageDigest.getInstance("SHA-256").digest(file.readBytes()).toList()

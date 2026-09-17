@@ -123,7 +123,7 @@ internal class AndroidRecorder(
                 }
                 registerRecordingCallback(created)
                 created.start()
-                routedDeviceId = created.routedDevice?.id
+                routedDeviceId = routedDeviceId(created)
                 registerRoutingListener(created)
                 recordedMillis = 0L
                 mark = TimeSource.Monotonic.markNow()
@@ -183,7 +183,7 @@ internal class AndroidRecorder(
                     runCatching { RecordingForegroundService.paused(appContext) }
                     return@withContext
                 }
-                val newDeviceId = active.routedDevice?.id
+                val newDeviceId = routedDeviceId(active)
                 val previousDeviceId = routedDeviceId
                 if (previousDeviceId != null && newDeviceId != previousDeviceId) {
                     runCatching { active.pause() }
@@ -322,7 +322,12 @@ internal class AndroidRecorder(
         active.registerAudioRecordingCallback(appContext.mainExecutor, callback)
     }
 
+    private fun routedDeviceId(active: MediaRecorder): Int? =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) active.routedDevice?.id else null
+
     private fun registerRoutingListener(active: MediaRecorder) {
+        // MediaRecorder поддерживает AudioRouting только начиная с API 28.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return
         val listener = AudioRouting.OnRoutingChangedListener { routing ->
             handleRouteChanged(active, routing.routedDevice?.id)
         }
@@ -535,7 +540,9 @@ internal class AndroidRecorder(
 
     private fun releaseSession(issue: RecorderIssue? = null) {
         val active = recorder
-        routingListener?.let { listener -> runCatching { active?.removeOnRoutingChangedListener(listener) } }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            routingListener?.let { listener -> runCatching { active?.removeOnRoutingChangedListener(listener) } }
+        }
         routingListener = null
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             recordingCallback?.let { callback -> runCatching { active?.unregisterAudioRecordingCallback(callback) } }

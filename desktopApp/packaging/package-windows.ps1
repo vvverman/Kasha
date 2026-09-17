@@ -124,6 +124,24 @@ if ($install.ExitCode -ne 0) { throw "setup install failed with exit code $($ins
 $InstalledExe = Join-Path $SmokeDir "Kasha.exe"
 if (!(Test-Path $InstalledExe)) { throw "installed Kasha.exe is missing" }
 Invoke-InstallSmoke $InstalledExe (Join-Path $Dist "windows-install-smoke.log")
+
+# Настоящий установленный EXE: общие экраны и темы, отдельный каталог пользовательских данных.
+$Visual = Join-Path $Dist "visual"
+New-Item -ItemType Directory -Force $Visual | Out-Null
+$SavedKashaHome = $env:KASHA_HOME
+try {
+    $env:KASHA_HOME = Join-Path $Visual "data"
+    $ui = Start-Process -FilePath $InstalledExe -ArgumentList @("--ui-smoke", "`"$Visual`"", "matrix") `
+        -PassThru -RedirectStandardOutput (Join-Path $Visual "run.log") -RedirectStandardError (Join-Path $Visual "run.stderr.log")
+    if (!$ui.WaitForExit(120000)) {
+        Stop-Process -Id $ui.Id -Force
+        throw 'Installed UI acceptance timed out'
+    }
+    $ui.Refresh()
+    if ($ui.ExitCode -ne 0) { throw "Installed UI failed with exit code $($ui.ExitCode)" }
+    if (!(Test-Path (Join-Path $Visual "visual-result.json"))) { throw 'Installed UI report is missing' }
+    if (!(Test-Path (Join-Path $Visual "matrix-ready.txt"))) { throw 'Installed UI did not finish its matrix' }
+} finally { $env:KASHA_HOME = $SavedKashaHome }
 $uninstaller = Get-ChildItem $SmokeDir -Filter "unins*.exe" -File | Select-Object -First 1
 if ($null -ne $uninstaller) {
     $uninstall = Start-Process -FilePath $uninstaller.FullName -ArgumentList @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART") -Wait -PassThru

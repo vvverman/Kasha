@@ -97,6 +97,10 @@ jobs:
             macos-output/*.txt
             macos-output/*.log
             macos-output/*.png
+            macos-output/visual/*.png
+            macos-output/visual/*.json
+            macos-output/visual/*.txt
+            macos-output/visual/*.log
             macos-output/self-test/*.json
             macos-output/self-test/*.log
             desktopApp/build/compose/logs

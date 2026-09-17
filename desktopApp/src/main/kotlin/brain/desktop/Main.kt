@@ -38,7 +38,11 @@ fun main(args:Array<String>){
     val smokeAt=args.indexOf("--ui-smoke")
     val smokeOutput=if(smokeAt>=0)Path.of(args[smokeAt+1])else null
     val screen=if(smokeAt>=0&&args.size>smokeAt+2)args[smokeAt+2]else "home"
-    if(smokeOutput!=null)runBlocking{services.repository.savePreferences(Preferences(autoRecord=false,language="ru",theme=if(screen.endsWith("dark"))"dark"else"light"))}
+    if(smokeOutput!=null)runBlocking{
+        if(screen == "matrix") check(root.toAbsolutePath().normalize().startsWith(smokeOutput.toAbsolutePath().normalize())) {
+            "KASHA_HOME для матрицы должен находиться внутри каталога результатов"
+        }
+        services.repository.savePreferences(Preferences(autoRecord=false,language="ru",theme=if(screen.endsWith("dark"))"dark"else"light"))}
     val state=StudioState(
         services.repository,
         services.recorder,
@@ -77,6 +81,12 @@ fun main(args:Array<String>){
                     if(smokeOutput!=null){
                         state.launch()
                         when{
+                            screen == "matrix" -> try { desktopVisualAcceptance(window, state, services, smokeOutput) }
+                            catch (failure: Exception) {
+                                Files.createDirectories(smokeOutput)
+                                Files.writeString(smokeOutput.resolve("visual-error.txt"), failure.stackTraceToString())
+                                failure.printStackTrace(); exitProcess(1)
+                            }
                             screen.startsWith("note")-> {state.demo();repeat(80){delay(100);state.refresh();if(state.current?.status==brain.model.CaptureStatus.READY)return@repeat}}
                             screen.startsWith("settings")->state.navigate(Tab.SETTINGS)
                             screen.startsWith("language")-> {state.navigate(Tab.SETTINGS);state.languagePage=true}

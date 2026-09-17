@@ -92,6 +92,24 @@ jobs:
           test -s desktopApp/bundle/common/models/Qwen3-4B-Q4_K_M.gguf
           find desktopApp/build/compose/binaries/main -type f \( -name '*.deb' -o -name '*.rpm' \) -print | tee linux-packages.txt
           test "$(wc -l < linux-packages.txt)" -ge 2
+      - name: Установка DEB и матрица настоящего общего UI
+        run: |
+          set -euo pipefail
+          sudo apt-get install -y xvfb xauth
+          DEB=$(find desktopApp/build/compose/binaries/main -type f -name '*.deb' | head -n 1)
+          test -n "$DEB"
+          PACKAGE=$(dpkg-deb -f "$DEB" Package)
+          sudo apt-get install -y "$PWD/$DEB"
+          APP=$(dpkg-query -L "$PACKAGE" | grep '/bin/Kasha$' | head -n 1)
+          test -x "$APP"
+          OUT="$PWD/test-output/linux-visual"
+          mkdir -p "$OUT"
+          export KASHA_HOME="$OUT/data"
+          timeout 120 xvfb-run -a -s '-screen 0 1680x1050x24' "$APP" --ui-smoke "$OUT" matrix > "$OUT/run.log" 2>&1
+          test -s "$OUT/visual-result.json"
+          test -s "$OUT/matrix-ready.txt"
+          sudo dpkg --remove "$PACKAGE"
+          test -s "$KASHA_HOME/brain.json"
       - name: "DEFERRED: section 6 — Linux and Web AI"
         id: linux_ai_deferred
         continue-on-error: true
@@ -123,6 +141,10 @@ jobs:
             linux-tests.log
             linux-package.log
             linux-packages.txt
+            test-output/linux-visual/*.png
+            test-output/linux-visual/*.json
+            test-output/linux-visual/*.txt
+            test-output/linux-visual/*.log
             test-output/desktop-ai/
             test-output/real-models/*.json
             desktopApp/build/compose/logs/**
@@ -259,6 +281,10 @@ jobs:
             windows-package.log
             test-output/desktop-ai/
             desktopApp/build/windows-dist/windows-install-smoke.log
+            desktopApp/build/windows-dist/visual/*.png
+            desktopApp/build/windows-dist/visual/*.json
+            desktopApp/build/windows-dist/visual/*.txt
+            desktopApp/build/windows-dist/visual/*.log
             desktopApp/build/compose/logs/**
             desktopApp/build/test-results/**
             runtime/build/test-results/**

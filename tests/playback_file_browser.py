@@ -6,6 +6,10 @@ import os
 from pathlib import Path
 import shutil
 import struct
+import time
+import urllib.request
+import uuid
+from contextlib import suppress
 import wave
 from playwright.sync_api import sync_playwright
 
@@ -19,6 +23,12 @@ with wave.open(stream, 'wb') as wav:
                              for i in range(48000)))
 audio_bytes = stream.getvalue()
 checks, errors = [], []
+
+def request(path, body=None, method=None, headers=None):
+    return urllib.request.urlopen(urllib.request.Request(BASE + '/api/' + path, data=body,
+        method=method, headers={'X-Kasha-Client': 'web', **(headers or {})}), timeout=15)
+
+runtime_capture = None
 with sync_playwright() as pw:
     executable = os.getenv('CHROME_PATH') or shutil.which('google-chrome') or shutil.which('chromium')
     browser = pw.chromium.launch(executable_path=executable, headless=True, args=['--no-sandbox'])
@@ -103,12 +113,60 @@ with sync_playwright() as pw:
         advancing()
         page.evaluate('kashaPlatform.stopAudio()')
         checks.append('the same source plays after a temporary HTTP failure')
+        # Тот же адаптер воспроизводит файл с настоящего audio endpoint, без route.fulfill.
+        # В CI уже включён существующий demo-режим текста; распознавание ИИ здесь не проверяется.
+        boundary = 'kasha-' + uuid.uuid4().hex
+        payload = (f'--{boundary}\r\nContent-Disposition: form-data; name="audio"; filename="source.wav"'
+                   '\r\nContent-Type: audio/wav\r\n\r\n').encode() + audio_bytes + f'\r\n--{boundary}--\r\n'.encode()
+        with request('captures/audio', payload, 'POST', {'Content-Type': 'multipart/form-data; boundary=' + boundary,
+                                                       'X-Capture-Id': str(uuid.uuid4())}) as response:
+            runtime_capture = json.load(response)['id']
+        deadline = time.monotonic() + 30
+        while True:
+            with request('snapshot') as response:
+                capture = next(c for c in json.load(response)['captures'] if c['id'] == runtime_capture)
+            if capture['status'] == 'READY' and capture['audioFinalized']:
+                break
+            assert capture['status'] not in ('FAILED', 'NEEDS_MODEL'), capture
+            assert time.monotonic() < deadline, capture
+            page.wait_for_timeout(100)
+        endpoint = 'captures/' + runtime_capture + '/audio'
+        with request(endpoint) as response:
+            published_audio = response.read()
+        with request(endpoint, headers={'Range': 'bytes=0-31'}) as response:
+            assert response.status == 206
+            assert response.headers['Content-Range'] == f'bytes 0-31/{len(published_audio)}'
+            assert response.read() == published_audio[:32]
+        play(BASE + '/api/' + endpoint)
+        advancing()
+        assert page.evaluate('kashaPlatform.pauseAudio()') == 'ok'
+        target = state()['duration'] / 2
+        assert target > 0.1
+        assert page.evaluate('(target) => kashaPlatform.seekAudio(target)', target) == 'ok'
+        page.wait_for_function("target => kashaPlatform.audioState().phase === 'paused' && "
+                               "Math.abs(kashaPlatform.audioState().position - target) < 0.05", arg=target, timeout=5000)
+        assert page.evaluate('kashaPlatform.resumeAudio()') == 'ok'
+        page.wait_for_function("kashaPlatform.audioState().phase === 'idle'", timeout=7000)
+        with request(endpoint) as response:
+            assert response.read() == published_audio
+        with request('captures/' + runtime_capture, method='DELETE') as response:
+            assert json.load(response)['ok'] is True
+        runtime_capture = None
+        checks.append('real runtime endpoint: 206 range, native AAC playback, paused seek, completion; source unchanged')
         assert not errors, errors
-        (OUT / 'result.json').write_text(json.dumps({'passed': True, 'realHtmlAudio': True,
+        (OUT / 'result.json').write_text(json.dumps({'passed': True, 'realHtmlAudio': True, 'realRuntimeAudio': True,
             'checks': checks, 'playedRates': page.evaluate('playedRates'), 'pageErrors': errors},
             ensure_ascii=False, indent=2), encoding='utf-8')
         print('PLAYBACK FILE BROWSER PASSED')
     finally:
-        (OUT / 'native-playback.json').write_text(json.dumps({'playedRates': page.evaluate('window.playedRates || []'), 'checks': checks}, ensure_ascii=False, indent=2), encoding='utf-8')
+        # Диагностика и cleanup не заменяют исходную причину падения теста.
+        with suppress(Exception):
+            (OUT / 'native-playback.json').write_text(json.dumps({'playedRates': page.evaluate('window.playedRates || []'), 'checks': checks}, ensure_ascii=False, indent=2), encoding='utf-8')
         (OUT / 'page-errors.json').write_text(json.dumps(errors), encoding='utf-8')
+        with suppress(Exception):
+            page.evaluate('kashaPlatform.stopAudio()')
+        if runtime_capture:
+            with suppress(Exception):
+                with request('captures/' + runtime_capture, method='DELETE') as response:
+                    response.read()
         browser.close()

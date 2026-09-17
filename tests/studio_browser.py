@@ -168,6 +168,40 @@ with sync_playwright() as pw:
         assert edited['body'].startswith('Новое название из первой строки')
         checks.append('редактирование заметки без отдельного title')
 
+        # Существующая заметка: реальный выбор в UI, без подмены команды HTTP-записью.
+        before_append = edited.copy()
+        addition = 'Дополнение к существующей заметке.\nСтарый текст остаётся без изменений.'
+        click('tab', 'Главная')
+        button('Попробовать без микрофона')
+        appended_capture = ready()
+        field('Текст заметки', addition)
+        wait(lambda: (c := current()) and c['id'] == appended_capture['id'] and
+             c['preparedText'] == addition and c['draftEdited'], 'автосохранение дополнения')
+        button('В заметки')
+        click('button', re.compile(r'^Твой первый проект'))
+        click_card('Новое название из первой строки')
+        wait(lambda: current() is None, 'добавление в существующую заметку')
+        after_append = api('snapshot')
+        assert len(after_append['notes']) == 1, after_append['notes']
+        appended_note = after_append['notes'][0]
+        assert appended_note['id'] == before_append['id']
+        assert appended_note['body'] == before_append['body'] + '\n\n' + addition
+        for name in ['title', 'projectId', 'createdAt', 'manualOrder', 'pinned', 'pinOrder']:
+            assert appended_note[name] == before_append[name], name
+        sources = [c for c in after_append['captures'] if c['noteId'] == appended_note['id']]
+        assert len(sources) == 2 and len({c['audioFileName'] for c in sources}) == 2, sources
+        assert sum(c['id'] == appended_capture['id'] for c in sources) == 1
+        page.reload(wait_until='networkidle')
+        visible_item(page.get_by_role('tab', name='Главная', exact=True), 'Главная после перезапуска')
+        click('tab', 'Проекты')
+        click('button', re.compile(r'^Твой первый проект'))
+        click_card('Новое название из первой строки')
+        visible_item(page.get_by_text(addition, exact=False), 'дополнение после перезапуска')
+        assert api('snapshot')['notes'][0] == appended_note
+        screen('appended-note-after-reload')
+        checks.append('append сохраняет старый текст, идентификатор, manual/pinned order и два аудиоисточника')
+        checks.append('дополненная заметка и её порядок сохраняются после перезапуска Web')
+
         click('tab', 'Главная')
         button('Попробовать без микрофона')
         ready()

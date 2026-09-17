@@ -86,6 +86,20 @@ done
 [ -f "$UI_READY" ]
 /usr/sbin/screencapture -x "$OUT/macos-window.png" || true
 wait "$PID"
+phase 'Матрица общего интерфейса в настоящем приложении'
+VISUAL="$OUT/visual"
+mkdir -p "$VISUAL"
+env -i HOME="$TEST_HOME" PATH=/usr/bin:/bin:/usr/sbin:/sbin TMPDIR="${TMPDIR:-/tmp}" \
+ KASHA_HOME="$VISUAL/data" "$APP/Contents/MacOS/Kasha" --ui-smoke "$VISUAL" matrix > "$VISUAL/run.log" 2>&1 &
+PID=$!
+for n in {1..120}; do
+ ! kill -0 "$PID" 2>/dev/null && break
+ sleep 1
+done
+if kill -0 "$PID" 2>/dev/null; then kill "$PID"; echo 'Таймаут матрицы UI' >&2; exit 1; fi
+wait "$PID"
+test -s "$VISUAL/visual-result.json"
+test -s "$VISUAL/matrix-ready.txt"
 phase 'Создание установочного образа'
 STAGE="$OUT/volume"
 mkdir -p "$STAGE"
