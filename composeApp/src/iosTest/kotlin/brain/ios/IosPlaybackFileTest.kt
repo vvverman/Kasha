@@ -53,7 +53,7 @@ class IosPlaybackFileTest {
                         "sampleRate=${probe.format.sampleRate}; sessionRate=${session.sampleRate}; " +
                         "outputs=${session.currentRoute.outputs}")
                     val prepared = probe.prepareToPlay()
-                    val started = if (prepared) probe.play() else false
+                    val started = probe.play()
                     println("AUDIO_DIAGNOSTIC prepared=$prepared; started=$started; playing=${probe.playing}")
                 } finally { probe.stop() }
             }.onFailure { println("AUDIO_DIAGNOSTIC ${it.message}") }
@@ -134,7 +134,7 @@ class IosPlaybackFileTest {
     }
 
     private fun wav(): ByteArray {
-        val rate = 8000
+        val rate = 48000
         val samples = rate * 3
         val result = ByteArray(44 + samples * 2)
         fun text(at: Int, value: String) = value.encodeToByteArray().copyInto(result, at)
