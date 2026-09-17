@@ -27,7 +27,22 @@ with sync_playwright() as pw:
     page.route(BASE + '/playback-file-probe', lambda route: route.fulfill(
         content_type='text/html', body='<!doctype html><title>Kasha playback regression</title>'))
     # Only file delivery is controlled. Decoding, timing, completion, pause and seek are native.
-    page.route('**/playback-fixture-*.wav', lambda route: route.fulfill(content_type='audio/wav', body=audio_bytes))
+    def serve_audio(route):
+        # Native media seeking requires a real range response, not a full 200 for every request.
+        requested = route.request.headers.get('range')
+        headers = {'Accept-Ranges': 'bytes'}
+        if requested:
+            start, end = requested.removeprefix('bytes=').split('-', 1)
+            first = int(start) if start else max(0, len(audio_bytes) - int(end))
+            last = min(int(end), len(audio_bytes) - 1) if start and end else len(audio_bytes) - 1
+            if first > last:
+                route.fulfill(status=416, headers={'Content-Range': f'bytes */{len(audio_bytes)}'}, body=b'')
+                return
+            headers['Content-Range'] = f'bytes {first}-{last}/{len(audio_bytes)}'
+            route.fulfill(status=206, headers=headers, content_type='audio/wav', body=audio_bytes[first:last + 1])
+        else:
+            route.fulfill(headers=headers, content_type='audio/wav', body=audio_bytes)
+    page.route('**/playback-fixture-*.wav', serve_audio)
     try:
         page.goto(BASE + '/playback-file-probe')
         page.add_script_tag(url=BASE + '/browser-platform.js')
@@ -65,6 +80,7 @@ with sync_playwright() as pw:
         page.wait_for_timeout(200)
         assert abs(state()['position'] - paused['position']) < 0.04
         assert page.evaluate('kashaPlatform.seekAudio(1.0)') == 'ok'
+        page.wait_for_function("kashaPlatform.audioState().phase === 'paused' && Math.abs(kashaPlatform.audioState().position - 1) < 0.05", timeout=5000)
         assert state()['phase'] == 'paused' and abs(state()['position'] - 1) < 0.05
         assert page.evaluate('kashaPlatform.resumeAudio()') == 'ok'
         page.wait_for_function('kashaPlatform.audioState().position > 1.1')
@@ -82,7 +98,7 @@ with sync_playwright() as pw:
         assert page.evaluate('(url) => kashaPlatform.play(url, 0, 1)', unavailable).startswith('ERROR:')
         assert state()['phase'] == 'idle' and page.evaluate('playingFileCount()') == 0
         page.unroute('**/temporarily-unavailable.wav')
-        page.route('**/temporarily-unavailable.wav', lambda route: route.fulfill(content_type='audio/wav', body=audio_bytes))
+        page.route('**/temporarily-unavailable.wav', serve_audio)
         play(unavailable)
         advancing()
         page.evaluate('kashaPlatform.stopAudio()')

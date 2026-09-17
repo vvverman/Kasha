@@ -15,6 +15,7 @@ import io.ktor.server.http.content.staticFiles
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.plugins.cors.routing.CORS
 import io.ktor.server.plugins.statuspages.StatusPages
+import io.ktor.server.plugins.partialcontent.PartialContent
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
@@ -132,9 +133,13 @@ fun Application.brainModule(store: FileBrainStore, processing: LocalProcessing, 
             }
             call.respond(HttpStatusCode.Created, store.capture(c.id)!!)
         }
-        get("/api/captures/{id}/audio") {
-            val c = store.capture(call.parameters["id"]!!) ?: error("No source")
-            call.respondFile(store.resolveAudio(c, call.request.queryParameters["compact"] == "true").toFile())
+        route("/api/captures/{id}/audio") {
+            // Браузер запрашивает диапазон байтов при перемотке, а не весь файл заново.
+            install(PartialContent)
+            get {
+                val c = store.capture(call.parameters["id"]!!) ?: error("No source")
+                call.respondFile(store.resolveAudio(c, call.request.queryParameters["compact"] == "true").toFile())
+            }
         }
         put("/api/captures/{id}/draft") { call.respond(store.updateDraft(call.parameters["id"]!!, call.receive<CaptureDraftUpdate>())) }
         post("/api/captures/{id}/process") {

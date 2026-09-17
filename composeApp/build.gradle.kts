@@ -37,6 +37,8 @@ kotlin {
         namespace = "ru.vrmn.kasha.ui"
         compileSdk = 37
         minSdk = 26
+        // Общие шрифты и изображения входят в Android assets, как и в другие сборки.
+        androidResources.enable = true
     }
 
     listOf(
