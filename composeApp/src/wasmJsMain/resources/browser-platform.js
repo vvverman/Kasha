@@ -234,7 +234,7 @@
       try{
         if(activeSessionId||recordingOperation==='starting')throw Error('Stop recording first');
         stopAudio();const ownGeneration=generation;own=new Audio();player=own;playerLoading=true;
-        own.preservesPitch=true;own.playbackRate=rate;
+        own.preservesPitch=true;
         await new Promise((resolve,reject)=>{
           let settled=false;
           const finish=error=>{
@@ -254,6 +254,8 @@
           own.src=url;
         });
         if(generation!==ownGeneration||player!==own)throw Error('Playback cancelled');
+        // Загрузка src сбрасывает playbackRate: применяем выбор после метаданных.
+        own.playbackRate=rate;
         own.currentTime=Math.max(0,Math.min(Number.isFinite(own.duration)?own.duration:from,from));
         await own.play();
         if(generation!==ownGeneration||player!==own)throw Error('Playback cancelled');

@@ -12,8 +12,11 @@ function harness() {
   class Audio {
     constructor() {
       this.paused = true; this.ended = false; this.duration = 60; this.currentTime = 0;
-      this.playCalls = 0; this.resets = 0; this.src = ''; players.push(this);
+      this.playCalls = 0; this.resets = 0; this.defaultPlaybackRate = 1; this.src = ''; players.push(this);
     }
+    // HTML media load resets the effective rate to defaultPlaybackRate.
+    set src(value) { this.url = value; this.playbackRate = this.defaultPlaybackRate; }
+    get src() { return this.url; }
     pause() { this.paused = true; }
     removeAttribute(name) { if (name === 'src') this.src = ''; }
     load() { this.resets++; }
@@ -111,4 +114,12 @@ test('Ошибка во время проигрывания освобождае
 test('Resume без источника не сообщает ложный успех, Stop идемпотентен', async () => {
   const h = harness(); h.api.stopAudio(); h.api.stopAudio();
   assert.match(await h.api.resumeAudio(), /^ERROR:/); assert.equal(h.api.audioState().phase, 'idle');
+});
+
+for (const rate of [1, 1.5, 2]) test(`Загрузка файла сохраняет выбранную скорость ${rate}×`, async () => {
+  const h = harness(), result = h.api.play('speed.wav', 0, rate), own = h.players[0];
+  own.onloadedmetadata(); assert.equal(await result, 'ok');
+  assert.equal(own.playbackRate, rate);
+  h.api.pauseAudio(); assert.equal(await h.api.resumeAudio(), 'ok');
+  assert.equal(own.playbackRate, rate); h.api.stopAudio();
 });

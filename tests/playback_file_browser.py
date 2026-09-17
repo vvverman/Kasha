@@ -53,7 +53,7 @@ with sync_playwright() as pw:
             play(first, rate)
             advancing()
             assert abs(state()['duration'] - 3.0) < 0.05
-            assert page.evaluate('playedRates.at(-1)') == rate
+            assert page.evaluate('playedRates.at(-1)') == rate, {'requestedRate': rate, 'playedRates': page.evaluate('playedRates'), 'state': state()}
             page.wait_for_function("kashaPlatform.audioState().phase === 'idle'", timeout=7000)
             assert page.evaluate('playingFileCount()') == 0
             checks.append(f'real file finishes at speed {rate}')
@@ -93,5 +93,6 @@ with sync_playwright() as pw:
             ensure_ascii=False, indent=2), encoding='utf-8')
         print('PLAYBACK FILE BROWSER PASSED')
     finally:
+        (OUT / 'native-playback.json').write_text(json.dumps({'playedRates': page.evaluate('window.playedRates || []'), 'checks': checks}, ensure_ascii=False, indent=2), encoding='utf-8')
         (OUT / 'page-errors.json').write_text(json.dumps(errors), encoding='utf-8')
         browser.close()

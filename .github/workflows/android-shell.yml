@@ -50,7 +50,7 @@ jobs:
       - name: Android adapter tests, APK and AAB
         run: |
           set -o pipefail
-          gradle :androidApp:testDebugUnitTest :androidApp:assembleDebug :androidApp:assembleRelease :androidApp:bundleRelease 2>&1 | tee android-build.log
+          gradle :androidApp:testDebugUnitTest :androidApp:assembleDebug :androidApp:assembleDebugAndroidTest :androidApp:assembleRelease :androidApp:bundleRelease 2>&1 | tee android-build.log
           printf 'Commit: %s\nRelease signing: unsigned in CI\n' "$GITHUB_SHA" > android-artifact-info.txt
       - name: Verify packaged local AI libraries
         run: |
@@ -95,6 +95,7 @@ jobs:
           retention-days: 14
           path: |
             androidApp/build/outputs/apk/debug/*.apk
+            androidApp/build/outputs/apk/androidTest/debug/*.apk
             android-artifact-info.txt
       - uses: actions/upload-artifact@v4
         if: success()
@@ -114,3 +115,38 @@ jobs:
           path: |
             androidApp/build/reports/tests/
             androidApp/build/test-results/
+
+  platform-acceptance:
+    needs: assemble-debug
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [26, 35]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: Kasha-android-debug-${{ github.sha }}
+          path: test-apks
+      - name: Разрешить KVM для тестового эмулятора
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api }}
+          arch: x86_64
+          target: default
+          profile: pixel_2
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -no-boot-anim
+          script: bash tests/android-platform-acceptance.sh ${{ matrix.api }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-platform-api${{ matrix.api }}-${{ github.sha }}
+          retention-days: 14
+          path: test-output/android-platform/
