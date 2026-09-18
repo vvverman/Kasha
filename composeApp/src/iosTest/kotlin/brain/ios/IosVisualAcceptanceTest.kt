@@ -183,7 +183,9 @@ class IosVisualAcceptanceTest {
         val state = StudioState(repository, recorder, VisualAudio(), systemLanguage = "ru-RU")
         runBlocking { state.launch() }
 
-        val controller = ComposeUIViewController { StudioApp(state) }
+        val controller = ComposeUIViewController(
+            configure = { enforceStrictPlistSanityCheck = false },
+        ) { StudioApp(state) }
         val frame = CGRectMake(0.0, 0.0, size.width, size.height)
         controller.view.setFrame(frame)
         val window = UIWindow(frame = frame)

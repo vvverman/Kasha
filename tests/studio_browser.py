@@ -85,8 +85,25 @@ with sync_playwright() as pw:
         raise AssertionError('Не найден видимый элемент: ' + description)
 
     def click(role, name):
-        _, box = visible_item(role_locator(role, name), str(name))
-        page.mouse.click(box['x'] + box['width'] / 2, box['y'] + box['height'] / 2)
+        locator = role_locator(role, name)
+        deadline = time.monotonic() + 10
+        previous = None
+        stable = 0
+        selected = None
+        while time.monotonic() < deadline:
+            item, box = visible_item(locator, str(name), seconds=1)
+            signature = tuple(round(box[key], 1) for key in ('x', 'y', 'width', 'height'))
+            if signature == previous:
+                stable += 1
+            else:
+                previous = signature
+                stable = 1
+            selected = box
+            if stable >= 3:
+                break
+            page.wait_for_timeout(100)
+        assert stable >= 3 and selected, f'Не стабилизировались bounds: {name}'
+        page.mouse.click(selected['x'] + selected['width'] / 2, selected['y'] + selected['height'] / 2)
         page.wait_for_timeout(250)
 
     def button(name):
