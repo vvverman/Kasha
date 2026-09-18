@@ -185,7 +185,7 @@ class IosVisualAcceptanceTest {
 
         val controller = ComposeUIViewController { StudioApp(state) }
         val frame = CGRectMake(0.0, 0.0, size.width, size.height)
-        controller.view.frame = frame
+        controller.view.setFrame(frame)
         val window = UIWindow(frame = frame)
         window.rootViewController = controller
         window.makeKeyAndVisible()
