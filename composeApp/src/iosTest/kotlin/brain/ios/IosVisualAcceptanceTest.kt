@@ -202,10 +202,14 @@ class IosVisualAcceptanceTest {
         view.layoutIfNeeded()
         UIGraphicsBeginImageContextWithOptions(CGSizeMake(size.width, size.height), false, 1.0)
         try {
-            check(view.drawViewHierarchyInRect(
-                CGRectMake(0.0, 0.0, size.width, size.height),
-                afterScreenUpdates = true,
-            )) { "UIKit could not render Kasha view hierarchy" }
+            val context = checkNotNull(UIGraphicsGetCurrentContext()) {
+                "UIKit did not create screenshot graphics context"
+            }
+            // Native unit-test hosts are not regular foreground app scenes, so
+            // drawViewHierarchyInRect may legitimately return false. CALayer
+            // rendering captures the same shared Compose view without requiring
+            // a scene-backed snapshot API.
+            view.layer.renderInContext(context)
             val image = checkNotNull(UIGraphicsGetImageFromCurrentImageContext()) {
                 "UIKit did not return screenshot image"
             }
