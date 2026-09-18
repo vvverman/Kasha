@@ -78,6 +78,7 @@ jobs:
           export SIMCTL_CHILD_KASHA_IOS_MODEL_FIXTURES="$PWD/desktopApp/bundle/common/models"
           export SIMCTL_CHILD_KASHA_IOS_AUDIO_FIXTURE="$PWD/test-output/real-models/russian-with-pauses.wav"
           export SIMCTL_CHILD_KASHA_IOS_AI_EVIDENCE="$PWD/test-output/ios-local-models"
+          export SIMCTL_CHILD_KASHA_IOS_VISUAL_EVIDENCE="$PWD/test-output/ios-visual"
           gradle \
             :kashaCore:compileKotlinIosArm64 \
             :kashaCore:compileKotlinIosSimulatorArm64 \
@@ -91,6 +92,7 @@ jobs:
             :composeApp:iosSimulatorArm64Test \
             2>&1 | tee ios-shared.log
           test -s test-output/ios-local-models/ios-local-models.json
+          test -s test-output/ios-visual/result.json
       - name: Системная диагностика аудио симулятора
         if: failure()
         run: |
@@ -124,6 +126,7 @@ jobs:
             ios-audio-system-*.log
             ios-native.log
             test-output/ios-local-models/
+            test-output/ios-visual/
             kashaCore/build/test-results/
             aiCatalog/build/test-results/
             composeApp/build/test-results/
