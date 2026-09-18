@@ -238,31 +238,21 @@ private fun ResultActions(s: StudioState) {
 @Composable
 internal fun GlobalPlayer(s: StudioState) {
     val scope = rememberCoroutineScope(); val c = MaterialTheme.colorScheme; val loaded = s.loadedAudio
-    val recordingId = s.activeRecordingSessionId
     val captureHome = s.tab == Tab.HOME && s.taskScheduleTarget == null &&
         !s.choosingProject && s.editingProjectId == null
     val presentation = captureTransportPresentation(captureHome, s.recording, s.current != null,
         loaded != null || s.playback.phase != "idle", s.pending, s.controlBusy)
-    when (presentation) {
-        CaptureTransportPresentation.HIDDEN -> return
-        CaptureTransportPresentation.EXPANDED_RECORDING -> {
-            // Expanded and compact transports use different geometry. Give them
-            // different composition identity so Web accessibility never keeps the
-            // outgoing controls' hit boxes after navigation.
-            key(presentation) { RecordingControls(s) }
-            return
-        }
-        CaptureTransportPresentation.COMPACT -> Unit
+    if (presentation == CaptureTransportPresentation.HIDDEN) return
+    if (s.recording) {
+        // Один call-site сохраняет identity transport controls при переходе
+        // между expanded Home и compact представлением других вкладок.
+        RecordingControls(s, compact = presentation == CaptureTransportPresentation.COMPACT)
+        return
     }
-    key(presentation) {
     KashaPanel(Modifier.fillMaxWidth(), padding = 12.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             when {
                 s.controlBusy -> KashaProcessingRing(Modifier.size(46.dp))
-                s.recordPhase == "recording" -> IconAction(s.tr("pause"), Glyph.PAUSE, { scope.launch { s.pauseRecording() } })
-                (s.recordPhase == "paused" || s.recordPhase == "interrupted") && s.recorderCanResume ->
-                    IconAction(s.tr("resume"), Glyph.RECORD, { scope.launch { s.resumeRecording() } })
-                s.recording -> Spacer(Modifier.size(46.dp))
                 s.playback.phase == "playing" -> IconAction(s.tr("pause"), Glyph.PAUSE, { scope.launch { s.pausePlayback() } }, true)
                 s.playback.phase == "paused" -> IconAction(s.tr("resume"), Glyph.PLAY, { scope.launch { s.resumePlayback() } }, true)
                 loaded?.audioFinalized == true -> IconAction(s.tr("play"), Glyph.PLAY, { scope.launch { s.play() } }, true)
@@ -272,10 +262,7 @@ internal fun GlobalPlayer(s: StudioState) {
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                if (s.recording) {
-                    KashaWaveform(s.liveWave, Modifier.fillMaxWidth().height(23.dp))
-                    Text(clock(s.elapsed), style = MaterialTheme.typography.labelSmall, color = c.onSurfaceVariant)
-                } else if (loaded?.audioFinalized == true) {
+                if (loaded?.audioFinalized == true) {
                     Text(loaded.title, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     val duration = s.playback.duration.takeIf { it > 0.0 } ?: loaded.durationSeconds
                     KashaWaveform(
@@ -301,19 +288,10 @@ internal fun GlobalPlayer(s: StudioState) {
             }
             Spacer(Modifier.width(10.dp))
             when {
-                s.recording && s.recordPhase != "finalizing" && !s.controlBusy -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    IconAction(s.tr("delete"), Glyph.DELETE, {
-                        val id = recordingId
-                        if (id == null) s.error = "audioFailed"
-                        else scope.launch { s.requestRecordingCancellation(id) }
-                    })
-                    Action(s.tr("submitRecording"), { scope.launch { s.stopRecording() } }, primary = true, glyph = Glyph.SEND)
-                }
                 s.playback.phase != "idle" -> IconAction(s.tr("stop"), Glyph.STOP, s::stopPlayback)
                 s.current == null && loaded != null && !s.pending -> IconAction(s.tr("record"), Glyph.RECORD, { scope.launch { s.startRecording() } })
             }
         }
-    }
     }
 }
 
@@ -326,10 +304,11 @@ internal fun recordingStatusKey(phase: String): String = when (phase) {
     else -> "audioFailed"
 }
 
-/** На Главной волна уже показана выше: здесь только управление той же сессией. */
+/** На Главной волна уже показана выше; в других разделах тот же transport становится compact. */
 @Composable
-private fun RecordingControls(s: StudioState) {
+private fun RecordingControls(s: StudioState, compact: Boolean) {
     val scope = rememberCoroutineScope()
+    val c = MaterialTheme.colorScheme
     val id = s.activeRecordingSessionId
     val enabled = !s.controlBusy && s.recordPhase != "finalizing"
     val pause = s.recordPhase == "recording"
@@ -342,9 +321,18 @@ private fun RecordingControls(s: StudioState) {
     }
     val finish: () -> Unit = { scope.launch { s.stopRecording() } }
     if (!enabled) {
-        Row(Modifier.fillMaxWidth().padding(vertical = 12.dp),
-            horizontalArrangement = Arrangement.Center) {
-            KashaProcessingRing(Modifier.size(48.dp))
+        if (compact) {
+            KashaPanel(Modifier.fillMaxWidth(), padding = 0.dp) {
+                Row(Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                    horizontalArrangement = Arrangement.Center) {
+                    KashaProcessingRing(Modifier.size(48.dp))
+                }
+            }
+        } else {
+            Row(Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                horizontalArrangement = Arrangement.Center) {
+                KashaProcessingRing(Modifier.size(48.dp))
+            }
         }
         return
     }
@@ -355,13 +343,67 @@ private fun RecordingControls(s: StudioState) {
             Action(s.tr("submitRecording"), finish, modifier = Modifier.fillMaxWidth())
             Action(s.tr("delete"), cancel, enabled = id != null, modifier = Modifier.fillMaxWidth())
         }
-    } else {
-        Row(Modifier.fillMaxWidth().padding(vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            RecordingControl(s.tr("delete"), Glyph.DELETE, cancel, Modifier.weight(1f), enabled = id != null)
-            RecordingControl(primaryLabel, if (pause) Glyph.PAUSE else Glyph.RECORD, primaryAction,
-                Modifier.weight(1f), primary = true, enabled = pause || s.recorderCanResume)
-            RecordingControl(s.tr("submitRecording"), Glyph.STOP, finish, Modifier.weight(1f))
+        return
+    }
+    Box(Modifier.fillMaxWidth()) {
+        if (compact) {
+            KashaPanel(Modifier.fillMaxWidth(), padding = 12.dp) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Spacer(Modifier.size(46.dp))
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        KashaWaveform(s.liveWave, Modifier.fillMaxWidth().height(23.dp))
+                        Text(clock(s.elapsed), style = MaterialTheme.typography.labelSmall, color = c.onSurfaceVariant)
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    IconAction(s.tr("delete"), Glyph.DELETE, {
+                        if (id == null) s.error = "audioFailed" else cancel()
+                    })
+                    Spacer(Modifier.width(8.dp))
+                    Action(s.tr("submitRecording"), finish, primary = true, glyph = Glyph.SEND)
+                }
+            }
+        } else {
+            Row(Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                RecordingControl(s.tr("delete"), Glyph.DELETE, cancel, Modifier.weight(1f), enabled = id != null)
+                Spacer(Modifier.weight(1f))
+                RecordingControl(s.tr("submitRecording"), Glyph.STOP, finish, Modifier.weight(1f))
+            }
+        }
+        RecordingPrimaryControl(
+            label = primaryLabel,
+            glyph = if (pause) Glyph.PAUSE else Glyph.RECORD,
+            onClick = primaryAction,
+            compact = compact,
+            enabled = pause || s.recorderCanResume,
+            modifier = if (compact) Modifier.padding(start = 12.dp).align(Alignment.CenterStart)
+                else Modifier.padding(top = 8.dp).align(Alignment.TopCenter),
+        )
+    }
+}
+
+@Composable
+private fun RecordingPrimaryControl(
+    label: String,
+    glyph: Glyph,
+    onClick: () -> Unit,
+    compact: Boolean,
+    enabled: Boolean,
+    modifier: Modifier,
+) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        KashaIconButton(
+            label,
+            glyph,
+            onClick,
+            Modifier.size(if (compact) 46.dp else 80.dp, if (compact) 46.dp else 56.dp),
+            filled = true,
+            enabled = enabled,
+        )
+        if (!compact) {
+            Spacer(Modifier.height(6.dp))
+            Text(label, style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
         }
     }
 }
