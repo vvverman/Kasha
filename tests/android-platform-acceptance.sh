@@ -74,3 +74,28 @@ assert result['physicalDevice'] is False
 assert len(result['screenshots']) >= 16, result
 print('Android non-AI platform acceptance: PASS, API', result['androidApi'])
 PY
+
+# ТЗ 15: та же версия APK должна переустанавливаться поверх существующих данных без их изменения.
+adb shell am force-stop ru.vrmn.kasha
+snapshot_data() {
+  local archive="$1"
+  adb exec-out run-as ru.vrmn.kasha tar -cf - -C files Kasha > "$archive"
+  python3 - "$archive" <<'PYHASH'
+import hashlib, sys, tarfile
+digest = hashlib.sha256()
+with tarfile.open(sys.argv[1], 'r:') as archive:
+    members = sorted((m for m in archive.getmembers() if m.isfile()), key=lambda m: m.name)
+    assert members, 'Kasha data snapshot is empty'
+    for member in members:
+        payload = archive.extractfile(member).read()
+        digest.update(member.name.encode('utf-8') + b'\0' + len(payload).to_bytes(8, 'big') + payload)
+print(digest.hexdigest())
+PYHASH
+}
+BEFORE=$(snapshot_data "$OUT/data-before-reinstall.tar")
+adb install -r -g -t "$APP"
+adb shell am force-stop ru.vrmn.kasha
+AFTER=$(snapshot_data "$OUT/data-after-reinstall.tar")
+test "$BEFORE" = "$AFTER"
+printf 'before=%s\nafter=%s\npassed=true\n' "$BEFORE" "$AFTER" > "$OUT/data-preservation.txt"
+echo "Android reinstall data preservation: PASS, API $API"

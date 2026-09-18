@@ -23,6 +23,24 @@ function Invoke-InstallSmoke([string]$Executable, [string]$LogPath) {
     if ($app.ExitCode -ne 0) { throw "Kasha install smoke failed with exit code $($app.ExitCode)" }
 }
 
+function Get-DataTreeHash([string]$Path) {
+    if (!(Test-Path $Path)) { throw "User data directory missing: $Path" }
+    $lines = @(
+        Get-ChildItem -Path $Path -Recurse -File |
+            Sort-Object FullName |
+            ForEach-Object {
+                $relative = $_.FullName.Substring($Path.Length).Replace('\\','/')
+                $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+                "$relative|$hash"
+            }
+    )
+    if ($lines.Count -eq 0) { throw "User data directory is empty: $Path" }
+    $bytes = [Text.Encoding]::UTF8.GetBytes([string]::Join([Environment]::NewLine, $lines))
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try { return ([BitConverter]::ToString($sha.ComputeHash($bytes))).Replace('-', '').ToLowerInvariant() }
+    finally { $sha.Dispose() }
+}
+
 Set-Location $Repo
 
 Write-Host "== Compose Windows app image =="
@@ -142,11 +160,27 @@ try {
     if (!(Test-Path (Join-Path $Visual "visual-result.json"))) { throw 'Installed UI report is missing' }
     if (!(Test-Path (Join-Path $Visual "matrix-ready.txt"))) { throw 'Installed UI did not finish its matrix' }
 } finally { $env:KASHA_HOME = $SavedKashaHome }
+
+# ТЗ 15: повторная установка того же setup не должна менять пользовательские данные.
+$DataPath = Join-Path $Visual "data"
+$BeforeReinstall = Get-DataTreeHash $DataPath
+$reinstall = Start-Process -FilePath $SetupExe.FullName -ArgumentList $installArgs -Wait -PassThru
+if ($reinstall.ExitCode -ne 0) { throw "setup reinstall failed with exit code $($reinstall.ExitCode)" }
+$AfterReinstall = Get-DataTreeHash $DataPath
+if ($BeforeReinstall -ne $AfterReinstall) { throw "User data changed during reinstall" }
 $uninstaller = Get-ChildItem $SmokeDir -Filter "unins*.exe" -File | Select-Object -First 1
 if ($null -ne $uninstaller) {
     $uninstall = Start-Process -FilePath $uninstaller.FullName -ArgumentList @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART") -Wait -PassThru
     if ($uninstall.ExitCode -ne 0) { throw "setup uninstall failed with exit code $($uninstall.ExitCode)" }
 }
+$AfterRemove = Get-DataTreeHash $DataPath
+if ($BeforeReinstall -ne $AfterRemove) { throw "User data changed during uninstall" }
+@(
+    "before=$BeforeReinstall",
+    "afterReinstall=$AfterReinstall",
+    "afterRemove=$AfterRemove",
+    "passed=true"
+) | Set-Content (Join-Path $Visual "data-preservation.txt") -Encoding UTF8
 Remove-Item $SmokeDir -Recurse -Force -ErrorAction SilentlyContinue
 
 $ManifestPath = Join-Path $Dist "windows-packages.txt"

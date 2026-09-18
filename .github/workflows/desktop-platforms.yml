@@ -110,8 +110,19 @@ jobs:
           timeout 120 xvfb-run -a -s '-screen 0 1680x1050x24' "$APP" --ui-smoke "$OUT" matrix > "$OUT/run.log" 2>&1
           test -s "$OUT/visual-result.json"
           test -s "$OUT/matrix-ready.txt"
+          data_hash() {
+            find "$KASHA_HOME" -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1
+          }
+          BEFORE_REINSTALL=$(data_hash)
+          # Повторная установка того же DEB не должна менять пользовательские данные.
+          sudo dpkg -i "$DEB"
+          AFTER_REINSTALL=$(data_hash)
+          test "$BEFORE_REINSTALL" = "$AFTER_REINSTALL"
           sudo dpkg --remove "$PACKAGE"
           test -s "$KASHA_HOME/brain.json"
+          AFTER_REMOVE=$(data_hash)
+          test "$BEFORE_REINSTALL" = "$AFTER_REMOVE"
+          printf 'before=%s\nafterReinstall=%s\nafterRemove=%s\npassed=true\n' "$BEFORE_REINSTALL" "$AFTER_REINSTALL" "$AFTER_REMOVE" > "$OUT/data-preservation.txt"
       - name: "DEFERRED: section 6 — Linux and Web AI"
         id: linux_ai_deferred
         continue-on-error: true
