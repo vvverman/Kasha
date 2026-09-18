@@ -241,15 +241,20 @@ internal fun GlobalPlayer(s: StudioState) {
     val recordingId = s.activeRecordingSessionId
     val captureHome = s.tab == Tab.HOME && s.taskScheduleTarget == null &&
         !s.choosingProject && s.editingProjectId == null
-    when (captureTransportPresentation(captureHome, s.recording, s.current != null,
-        loaded != null || s.playback.phase != "idle", s.pending, s.controlBusy)) {
+    val presentation = captureTransportPresentation(captureHome, s.recording, s.current != null,
+        loaded != null || s.playback.phase != "idle", s.pending, s.controlBusy)
+    when (presentation) {
         CaptureTransportPresentation.HIDDEN -> return
         CaptureTransportPresentation.EXPANDED_RECORDING -> {
-            RecordingControls(s)
+            // Expanded and compact transports use different geometry. Give them
+            // different composition identity so Web accessibility never keeps the
+            // outgoing controls' hit boxes after navigation.
+            key(presentation) { RecordingControls(s) }
             return
         }
         CaptureTransportPresentation.COMPACT -> Unit
     }
+    key(presentation) {
     KashaPanel(Modifier.fillMaxWidth(), padding = 12.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             when {
@@ -308,6 +313,7 @@ internal fun GlobalPlayer(s: StudioState) {
                 s.current == null && loaded != null && !s.pending -> IconAction(s.tr("record"), Glyph.RECORD, { scope.launch { s.startRecording() } })
             }
         }
+    }
     }
 }
 
