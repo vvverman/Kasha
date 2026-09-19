@@ -81,57 +81,65 @@ class IosVisualAcceptanceTest {
             ?: error("Required integration fixture: KASHA_IOS_VISUAL_EVIDENCE")
         IosPaths.directory(evidence)
         val screenshots = mutableListOf<String>()
+        val hosts = mutableListOf<Harness>()
         val normal = Size(390.0, 844.0)
         val narrow = Size(320.0, 568.0)
 
-        // Compose UIKit host teardown is asynchronous in a native unit-test process.
-        // Keep one host per theme and drive the shared StudioState through the whole
-        // canonical matrix instead of constructing/destroying 32 controllers.
         for (theme in listOf("light", "dark")) {
-            val harness = harness(resultData(), theme, normal)
+            // Result host: capture is present before launch; no visual test mutates persistence.
+            val result = harness(resultData(), theme, normal)
+            hosts += result
+            capture(result, evidence, screenshots, "$theme-result", normal)
+            capture(result, evidence, screenshots, "$theme-narrow-result", narrow)
 
-            capture(harness, evidence, screenshots, "$theme-result", normal)
-            capture(harness, evidence, screenshots, "$theme-narrow-result", narrow)
-            runBlocking { harness.state.discard("result") }
+            // Idle/content host drives only presentation state: navigation, selection,
+            // archive/language flags and local error overlay.
+            val idle = harness(baseData(), theme, normal)
+            hosts += idle
+            capture(idle, evidence, screenshots, "$theme-home", normal)
+            capture(idle, evidence, screenshots, "$theme-narrow-home", narrow)
 
-            capture(harness, evidence, screenshots, "$theme-home", normal)
-            capture(harness, evidence, screenshots, "$theme-narrow-home", narrow)
+            idle.state.navigate(Tab.PROJECTS)
+            capture(idle, evidence, screenshots, "$theme-projects", normal)
+            idle.state.selectedProjectId = "project"
+            capture(idle, evidence, screenshots, "$theme-notes", normal)
+            idle.state.openNote("note")
+            capture(idle, evidence, screenshots, "$theme-note", normal)
 
-            harness.state.navigate(Tab.PROJECTS)
-            capture(harness, evidence, screenshots, "$theme-projects", normal)
-            harness.state.selectedProjectId = "project"
-            capture(harness, evidence, screenshots, "$theme-notes", normal)
-            harness.state.openNote("note")
-            capture(harness, evidence, screenshots, "$theme-note", normal)
+            idle.state.navigate(Tab.TASKS)
+            idle.state.taskArchive = false
+            capture(idle, evidence, screenshots, "$theme-tasks", normal)
+            idle.state.taskArchive = true
+            capture(idle, evidence, screenshots, "$theme-archive", normal)
 
-            harness.state.navigate(Tab.TASKS)
-            harness.state.taskArchive = false
-            capture(harness, evidence, screenshots, "$theme-tasks", normal)
-            harness.state.taskArchive = true
-            capture(harness, evidence, screenshots, "$theme-archive", normal)
+            idle.state.navigate(Tab.SETTINGS)
+            capture(idle, evidence, screenshots, "$theme-settings", normal)
+            capture(idle, evidence, screenshots, "$theme-narrow-settings", narrow)
+            idle.state.languagePage = true
+            capture(idle, evidence, screenshots, "$theme-language", normal)
 
-            harness.state.navigate(Tab.SETTINGS)
-            capture(harness, evidence, screenshots, "$theme-settings", normal)
-            capture(harness, evidence, screenshots, "$theme-narrow-settings", narrow)
-            harness.state.languagePage = true
-            capture(harness, evidence, screenshots, "$theme-language", normal)
+            idle.state.error = "loadFailed"
+            capture(idle, evidence, screenshots, "$theme-error", normal)
 
-            harness.state.error = "loadFailed"
-            capture(harness, evidence, screenshots, "$theme-error", normal)
-            harness.state.error = null
+            // Recording and paused are supplied by the typed recorder contract before
+            // launch. Native recorder commands/lifecycle are already covered separately.
+            val recording = harness(
+                baseData(), theme, normal,
+                RecorderSessionState(RecorderPhase.RECORDING, "visual-session"),
+            )
+            hosts += recording
+            capture(recording, evidence, screenshots, "$theme-recording", normal)
+            capture(recording, evidence, screenshots, "$theme-narrow-recording", narrow)
 
-            harness.state.navigate(Tab.HOME)
-            runBlocking { harness.state.startRecording() }
-            capture(harness, evidence, screenshots, "$theme-recording", normal)
-            capture(harness, evidence, screenshots, "$theme-narrow-recording", narrow)
-            runBlocking { harness.state.pauseRecording() }
-            capture(harness, evidence, screenshots, "$theme-paused", normal)
-
-            // Do not tear down this Compose host inside the test. The native test
-            // process owns it and exits immediately after the matrix; explicit
-            // repeated UIKit host teardown was the source of the previous hang.
+            val paused = harness(
+                baseData(), theme, normal,
+                RecorderSessionState(RecorderPhase.PAUSED, "visual-session"),
+            )
+            hosts += paused
+            capture(paused, evidence, screenshots, "$theme-paused", normal)
         }
 
+        assertTrue(hosts.size == 8, "Expected 8 retained iOS visual hosts")
         assertTrue(screenshots.size == 32, "Expected 32 iOS visual screenshots, got ${screenshots.size}")
         val report = buildJsonObject {
             put("passed", true)
@@ -161,7 +169,7 @@ class IosVisualAcceptanceTest {
         size: Size,
     ) {
         resize(harness, size)
-        pump(0.25)
+        pump(0.18)
         val path = IosPaths.child(evidence, "$name.png")
         screenshot(harness.controller.view, size, path)
         assertTrue(IosPaths.exists(path), "Screenshot was not written: $name")
@@ -176,7 +184,12 @@ class IosVisualAcceptanceTest {
         harness.controller.view.layoutIfNeeded()
     }
 
-    private fun harness(data: BrainData, theme: String, size: Size): Harness {
+    private fun harness(
+        data: BrainData,
+        theme: String,
+        size: Size,
+        recorderState: RecorderSessionState = RecorderSessionState(),
+    ): Harness {
         val root = IosPaths.directory(IosPaths.child(NSTemporaryDirectory(), "visual-${NSUUID().UUIDString}"))
         IosPaths.write(IosPaths.child(root, "state.json"), json.encodeToString(data))
         IosPaths.write(IosPaths.child(root, "preferences.json"), json.encodeToString(
@@ -187,7 +200,7 @@ class IosVisualAcceptanceTest {
             systemLanguage = "ru-RU",
             storageRoot = root,
         )
-        val recorder = VisualRecorder()
+        val recorder = VisualRecorder(recorderState)
         val state = StudioState(repository, recorder, VisualAudio(), systemLanguage = "ru-RU")
         runBlocking { state.launch() }
 
@@ -201,7 +214,7 @@ class IosVisualAcceptanceTest {
         window.makeKeyAndVisible()
         controller.view.setNeedsLayout()
         controller.view.layoutIfNeeded()
-        pump(0.45)
+        pump(0.35)
         return Harness(root, state, recorder, controller, window)
     }
 
