@@ -14,7 +14,7 @@ internal object IosPaths {
             NSUserDomainMask,
             true,
         ).firstOrNull() as? String) ?: NSTemporaryDirectory()
-        directory((base as NSString).stringByAppendingPathComponent("Kasha"))
+        directory(child(base, "Kasha"))
     }
 
     val audio: String by lazy { directory(child(root, "audio")) }
@@ -24,7 +24,7 @@ internal object IosPaths {
     val aiConnectionsFile: String get() = child(root, "ai-connections.json")
 
     fun child(parent: String, name: String): String =
-        (parent as NSString).stringByAppendingPathComponent(name)
+        NSString.create(string = parent).stringByAppendingPathComponent(name)
 
     fun directory(path: String): String {
         if (!files.fileExistsAtPath(path)) {
@@ -40,11 +40,15 @@ internal object IosPaths {
 
     fun exists(path: String): Boolean = files.fileExistsAtPath(path)
 
-    fun read(path: String): String? = if (!exists(path)) null else
-        NSString.stringWithContentsOfFile(path, NSUTF8StringEncoding, null)?.toString()
+    fun read(path: String): String? {
+        if (!exists(path)) return null
+        return checkNotNull(NSString.stringWithContentsOfFile(path, NSUTF8StringEncoding, null)) {
+            "Не удалось прочитать локальные данные Kasha"
+        }
+    }
 
     fun write(path: String, text: String) {
-        val ok = (text as NSString).writeToFile(
+        val ok = NSString.create(string = text).writeToFile(
             path = path,
             atomically = true,
             encoding = NSUTF8StringEncoding,
@@ -54,7 +58,7 @@ internal object IosPaths {
     }
 
     fun move(from: String, to: String) {
-        if (exists(to)) remove(to)
+        check(!exists(to)) { "Целевой локальный файл Kasha уже существует; обе копии сохранены" }
         check(files.moveItemAtPath(from, toPath = to, error = null)) {
             "Не удалось завершить локальный аудиофайл Kasha"
         }

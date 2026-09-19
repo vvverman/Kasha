@@ -1,6 +1,7 @@
 """Browser-adapter regression: permissions, MediaRecorder, IndexedDB recovery and transport exclusion."""
 import json
 import os
+from pathlib import Path
 import shutil
 import time
 import urllib.request
@@ -66,28 +67,34 @@ with sync_playwright() as pw:
     page.on('pageerror', lambda error: errors.append(str(error)))
     page.on('dialog', lambda dialog: dialog.accept())
 
-    def persisted_recording():
-        return page.evaluate('''async () => {
+    def persisted_recording(session_id=None):
+        return page.evaluate('''async id => {
             const db = await new Promise((resolve, reject) => {
                 const r = indexedDB.open('kasha-audio-v1', 1);
                 r.onsuccess = () => resolve(r.result);
                 r.onerror = () => reject(r.error);
             });
             try {
-                const all = store => new Promise((resolve, reject) => {
-                    const r = db.transaction(store).objectStore(store).getAll();
-                    r.onsuccess = () => resolve(r.result);
-                    r.onerror = () => reject(r.error);
+                // Observe both stores at one committed snapshot, not request success.
+                const saved = await new Promise((resolve, reject) => {
+                    const tx = db.transaction(['sessions', 'chunks']);
+                    const sessions = tx.objectStore('sessions').getAll();
+                    const chunks = tx.objectStore('chunks').getAll();
+                    tx.oncomplete = () => resolve({sessions: sessions.result, chunks: chunks.result});
+                    tx.onerror = () => reject(tx.error);
+                    tx.onabort = () => reject(tx.error || Error('Journal read aborted'));
                 });
-                const sessions = (await all('sessions')).sort((a, b) => a.created - b.created);
-                const saved = sessions[0];
-                if (!saved) return null;
-                const chunks = (await all('chunks')).filter(x => x.id === saved.id && x.blob?.size > 0);
-                return {id: saved.id, chunks: chunks.length};
+                const sessions = saved.sessions.sort((a, b) => a.created - b.created);
+                const chunksFor = session => saved.chunks.filter(x => x.id === session.id && x.blob?.size > 0);
+                // An awaiting-chunk journal is retained, but is not recoverable audio yet.
+                const session = id === null
+                    ? sessions.find(session => chunksFor(session).length > 0)
+                    : sessions.find(session => session.id === id);
+                return session ? {id: session.id, chunks: chunksFor(session).length} : null;
             } finally {
                 db.close();
             }
-        }''')
+        }''', session_id)
 
     try:
         page.goto(BASE, wait_until='networkidle', timeout=60000)
@@ -97,28 +104,30 @@ with sync_playwright() as pw:
         assert page.evaluate('kashaPlatform.phase()') == 'idle'
         assert page.evaluate('kashaPlatform.pending()') is False
 
-        empty_left = page.evaluate('''async () => {
+        page.evaluate('''async () => {
             const db = await new Promise((resolve, reject) => {
                 const r = indexedDB.open('kasha-audio-v1', 1);
                 r.onsuccess = () => resolve(r.result);
                 r.onerror = () => reject(r.error);
             });
-            await new Promise((resolve, reject) => {
-                const tx = db.transaction('sessions', 'readwrite');
-                tx.objectStore('sessions').put({id:'empty-regression', mime:'audio/webm', created:0});
-                tx.oncomplete = resolve;
-                tx.onerror = () => reject(tx.error);
-            });
-            const pending = await kashaPlatform.pending();
-            const sessions = await new Promise((resolve, reject) => {
-                const r = db.transaction('sessions').objectStore('sessions').getAll();
-                r.onsuccess = () => resolve(r.result);
-                r.onerror = () => reject(r.error);
-            });
-            db.close();
-            return {pending, exists: sessions.some(x => x.id === 'empty-regression')};
+            try {
+                await new Promise((resolve, reject) => {
+                    const tx = db.transaction('sessions', 'readwrite');
+                    tx.objectStore('sessions').put({id:'empty-regression', mime:'audio/webm', created:0});
+                    tx.oncomplete = resolve;
+                    tx.onerror = () => reject(tx.error);
+                    tx.onabort = () => reject(tx.error || Error('Fixture write aborted'));
+                });
+            } finally {
+                db.close();
+            }
         }''')
-        assert empty_left == {'pending': False, 'exists': False}, empty_left
+        empty_session = {'id': 'empty-regression', 'chunks': 0}
+        for _ in range(3):
+            assert page.evaluate('kashaPlatform.pending()') is False
+            assert json.loads(page.evaluate('kashaPlatform.pendingRecordings()')) == []
+            assert persisted_recording('empty-regression') == empty_session
+        assert persisted_recording() is None
 
         denied = page.evaluate('''async () => {
             const mediaDevices = navigator.mediaDevices;
@@ -134,6 +143,7 @@ with sync_playwright() as pw:
         assert denied['result'].startswith('ERROR:'), denied
         assert denied['pending'] is False, denied
         assert denied['phase'] == 'idle', denied
+        assert persisted_recording('empty-regression') == empty_session
 
         assert page.evaluate('kashaPlatform.start()') == 'ok'
         source = None
@@ -145,6 +155,8 @@ with sync_playwright() as pw:
             page.wait_for_timeout(100)
         assert source and source['chunks'] > 0, 'MediaRecorder не записал ни одного persisted chunk'
         source_id = source['id']
+        assert source_id != 'empty-regression'
+        assert persisted_recording('empty-regression') == empty_session
         assert page.evaluate('kashaPlatform.phase()') == 'recording'
         assert page.evaluate('kashaPlatform.consent()') is True
         page.reload(wait_until='networkidle')
@@ -159,7 +171,41 @@ with sync_playwright() as pw:
                 break
             page.wait_for_timeout(100)
         assert recovered is not None, 'Автоматическое recovery не опубликовало исходный browser session id'
+        # Snapshot видит capture до доставки ответа POST. Журнал удаляется только после
+        # подтверждения того же id: ждём завершения транзакции, а не фиксированную задержку.
+        page.wait_for_function('async () => !(await kashaPlatform.pending())', timeout=15000)
         assert page.evaluate('kashaPlatform.pending()') is False
+        assert persisted_recording() is None
+        assert persisted_recording('empty-regression') == empty_session
+        assert sum(c['id'] == source_id for c in api('snapshot')['captures']) == 1
+
+        # Настоящий HTMLAudio: сбой загрузки освобождает адаптер, следующий источник работает.
+        broken_url = BASE + '/playback-regression-failure.wav'
+        page.route('**/playback-regression-failure.wav', lambda route: route.fulfill(status=503, body='unavailable'))
+        assert page.evaluate('(url) => kashaPlatform.play(url, 0, 1)', broken_url).startswith('ERROR:')
+        assert page.evaluate('kashaPlatform.audioState().phase') == 'idle'
+        page.unroute('**/playback-regression-failure.wav')
+
+        # Stop обязан завершить ожидание, даже если ответ с метаданными ещё не доставлен.
+        held_requests = []
+        page.route('**/playback-regression-delayed.wav', lambda route: held_requests.append(route))
+        page.evaluate("""(url) => {
+            window.playbackRegressionResult = null;
+            kashaPlatform.play(url, 0, 1).then(result => { window.playbackRegressionResult = result; });
+        }""", BASE + '/playback-regression-delayed.wav')
+        page.wait_for_function("kashaPlatform.audioState().phase === 'loading'")
+        deadline = time.monotonic() + 5
+        while not held_requests and time.monotonic() < deadline:
+            page.wait_for_timeout(25)
+        assert held_requests, 'HTMLAudio не начал загрузку проверяемого источника'
+        page.evaluate('kashaPlatform.stopAudio()')
+        page.wait_for_function("window.playbackRegressionResult !== null", timeout=3000)
+        assert page.evaluate('window.playbackRegressionResult').startswith('ERROR:')
+        assert page.evaluate('kashaPlatform.audioState().phase') == 'idle'
+        for request in held_requests:
+            request.fulfill(status=200, content_type='audio/wav', body=bytes(44))
+        page.unroute('**/playback-regression-delayed.wav')
+        assert page.evaluate('kashaPlatform.audioState().phase') == 'idle'
 
         first_audio_url = BASE + '/api/captures/' + recovered['id'] + '/audio'
         assert page.evaluate('(url) => kashaPlatform.play(url, 0, 1)', first_audio_url) == 'ok'
@@ -186,6 +232,7 @@ with sync_playwright() as pw:
         page.unroute('**/api/captures/audio')
 
         page.reload(wait_until='networkidle')
+        assert persisted_recording('empty-regression') == empty_session
         assert page.evaluate('kashaPlatform.pending()') is True
         wait_capture_idle(recovered['id'])
         api('captures/' + recovered['id'], method='DELETE')
@@ -213,7 +260,50 @@ with sync_playwright() as pw:
         wait_capture_idle(final_receipt['id'])
         api('captures/' + final_receipt['id'], method='DELETE')
         assert not api('snapshot')['captures']
+        # The other journal survives permission errors, reload and acknowledged cleanup.
+        assert persisted_recording('empty-regression') == empty_session
+        assert persisted_recording() is None
+        page.evaluate('''async () => {
+            const db = await new Promise((resolve, reject) => {
+                const r = indexedDB.open('kasha-audio-v1', 1);
+                r.onsuccess = () => resolve(r.result);
+                r.onerror = () => reject(r.error);
+            });
+            try {
+                // Journal-only fixture: no decoding or AI claim for this synthetic fragment.
+                await new Promise((resolve, reject) => {
+                    const tx = db.transaction('chunks', 'readwrite');
+                    tx.objectStore('chunks').put({id:'empty-regression', index:0,
+                        blob:new Blob(['late audio fragment'], {type:'audio/webm'})});
+                    tx.oncomplete = resolve;
+                    tx.onerror = () => reject(tx.error);
+                    tx.onabort = () => reject(tx.error || Error('Late chunk write aborted'));
+                });
+            } finally {
+                db.close();
+            }
+        }''')
+        assert json.loads(page.evaluate('kashaPlatform.pendingRecordings()')) == [
+            {'id': 'empty-regression', 'createdAt': 0}]
+        late_session = {'id': 'empty-regression', 'chunks': 1}
+        assert persisted_recording() == late_session
+        assert page.evaluate("kashaPlatform.discardPending('wrong-session')").startswith('ERROR:')
+        assert persisted_recording('empty-regression') == late_session
+        assert page.evaluate("kashaPlatform.discardPending('empty-regression')") == 'ok'
+        assert page.evaluate('kashaPlatform.pending()') is False
+        assert persisted_recording('empty-regression') is None
+        assert persisted_recording() is None
+        assert not api('snapshot')['captures'], 'Explicit discard must not upload the late fragment'
         assert not errors, errors
+        output = Path('test-output/browser-adapter')
+        output.mkdir(parents=True, exist_ok=True)
+        (output / 'result.json').write_text(json.dumps({
+            'passed': True, 'realMediaRecorder': True, 'recoveryAcknowledged': True,
+            'recoveryCaptureCount': 1, 'realAudioErrorReleased': True,
+            'stopDuringAudioLoad': True, 'seekPreservesPlayingAndPaused': True,
+            'recordPlaybackExclusion': True, 'emptySessionPreserved': True,
+            'lateChunkDiscovered': True, 'pendingDiscardExplicit': True,
+        }, indent=2), encoding='utf-8')
         print('WEB ADAPTER BROWSER PASSED')
     finally:
         browser.close()

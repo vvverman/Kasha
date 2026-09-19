@@ -68,6 +68,10 @@ aiDataProjectTitles|названия проектов|project titles|nombres de 
 aiDataProjectDescriptions|описания проектов|project descriptions|descripciones de proyectos|descriptions des projets|Projektbeschreibungen|описи проєктів|апісанні праектаў|жоба сипаттамалары
 aiDataProjectInstructions|инструкции проектов|project instructions|instrucciones de proyectos|instructions des projets|Projektanweisungen|інструкції проєктів|інструкцыі праектаў|жоба нұсқаулары
 aiUnavailable|Недоступно на этой платформе|Unavailable on this platform|No disponible en esta plataforma|Indisponible sur cette plateforme|Auf dieser Plattform nicht verfügbar|Недоступно на цій платформі|Недаступна на гэтай платформе|Бұл платформада қолжетімсіз
+captureInterrupted|Запись прервана|Recording interrupted|Grabación interrumpida|Enregistrement interrompu|Aufnahme unterbrochen|Запис перервано|Запіс перарваны|Жазу үзілді
+captureFinalizing|Сохраняем аудио|Saving audio|Guardando audio|Enregistrement de l’audio|Audio wird gespeichert|Зберігаємо аудіо|Захоўваем аўдыя|Аудио сақталуда
+captureRecovering|Восстанавливаем запись|Recovering recording|Recuperando la grabación|Récupération de l’enregistrement|Aufnahme wird wiederhergestellt|Відновлюємо запис|Аднаўляем запіс|Жазба қалпына келтірілуде
+captureNeedsModel|Для обработки требуется доступный ИИ. Проверьте выбранную модель в настройках.|Processing needs an available AI engine. Check the selected model in settings.|El procesamiento necesita un motor de IA disponible. Revisa el modelo seleccionado en los ajustes.|Le traitement nécessite un moteur d’IA disponible. Vérifiez le modèle sélectionné dans les réglages.|Für die Verarbeitung wird eine verfügbare KI benötigt. Prüfe das gewählte Modell in den Einstellungen.|Для обробки потрібен доступний ШІ. Перевірте вибрану модель у налаштуваннях.|Для апрацоўкі патрэбны даступны ШІ. Праверце выбраную мадэль у наладах.|Өңдеу үшін қолжетімді ЖИ қажет. Баптауларда таңдалған модельді тексеріңіз.
     """.trimIndent().lineSequence().filter { it.isNotBlank() }.associate { line ->
         val cells = line.split('|')
         require(cells.size == 9) { "Incomplete Kasha localization: ${cells.first()}" }

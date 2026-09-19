@@ -11,14 +11,15 @@ fun interface CommandRunner {
 }
 
 /** Без shell, раздельные stdout/stderr, ограниченные вывод и время, отмена дочерних процессов. */
-class JvmCommandRunner : CommandRunner {
+class JvmCommandRunner(private val environmentOverrides: Map<String, String> = emptyMap()) : CommandRunner {
     override suspend fun run(command: List<String>, timeoutSeconds: Long): String = withContext(Dispatchers.IO) {
         val dir = Files.createTempDirectory("kasha-command-")
         val out = dir.resolve("stdout"); val err = dir.resolve("stderr")
         var process: Process? = null
         try {
             val builder = ProcessBuilder(command).redirectOutput(out.toFile()).redirectError(err.toFile())
-            // Не наследуем скрытые RPC/URL-настройки llama.cpp из окружения компьютера.
+            // Меняется только окружение дочернего процесса, не JVM и не системные настройки.
+            builder.environment().putAll(environmentOverrides)
             builder.environment().keys.removeIf { it.startsWith("LLAMA_ARG_") }
             builder.environment()["HF_HUB_OFFLINE"] = "1"
             process = builder.start()

@@ -15,6 +15,13 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+      - name: Исходники проверяемой ревизии
+        run: git archive --format=zip --output=verification-source.zip HEAD
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kasha-verification-source-${{ github.sha }}
+          retention-days: 3
+          path: verification-source.zip
       - name: Проверка бренда, local-first и AI privacy границ
         run: |
           python3 scripts/check-brand-boundary.py
@@ -35,6 +42,10 @@ jobs:
           python scripts/prepare-fonts.py
           python scripts/check-ui-boundary.py
           bash -n run-web.sh scripts/gradle.sh
+      - name: Контракты Web-плеера и IndexedDB без ожидания сборки
+        run: |
+          set -o pipefail
+          node --test tests/web_playback_contract.test.cjs tests/web_storage_contract.test.cjs 2>&1 | tee web-playback-contract.tap
       - name: Kasha Core, AI catalog и общий UI на JVM/Android; runtime и production WebAssembly
         run: |
           set -o pipefail
@@ -45,18 +56,44 @@ jobs:
             :runtime:test :desktopApp:test \
             :composeApp:wasmJsBrowserDistribution :runtime:installDist \
             2>&1 | tee kotlin.log
-      - name: Весь пользовательский путь в браузере
+      - name: Обязательная non-AI приёмка в браузере
+        id: browser_non_ai
         run: |
           export KASHA_HOME=$(mktemp -d)
+          printf 'KASHA_BROWSER_HOME=%s\n' "$KASHA_HOME" >> "$GITHUB_ENV"
           export KASHA_DEMO_AI=1
           export KASHA_WEB_ROOT="$PWD/composeApp/build/dist/wasmJs/productionExecutable"
           bash runtime/build/install/runtime/bin/runtime > runtime.log 2>&1 &
           PID=$!
           trap 'kill "$PID" 2>/dev/null || true' EXIT
+          python tests/web_storage_retry_browser.py
+          python tests/web_recorder_identity_browser.py
           python tests/web_adapter_browser.py
+          python tests/playback_file_browser.py
           python tests/studio_browser.py
           python tests/sorting_browser.py
           python tests/responsive_accessibility_browser.py
+          python tests/non_ai_parity_browser.py
+          echo 'Non-AI browser acceptance: PASS' >> "$GITHUB_STEP_SUMMARY"
+      # Раздел 6 отложен владельцем. Сценарий выполняется и сохраняет ошибку,
+      # но не подменяет результат обязательной функциональной приёмки.
+      - name: 'DEFERRED: section 6 — AI readiness'
+        id: browser_ai_deferred
+        continue-on-error: true
+        run: |
+          export KASHA_HOME="$KASHA_BROWSER_HOME"
+          export KASHA_DEMO_AI=1
+          export KASHA_WEB_ROOT="$PWD/composeApp/build/dist/wasmJs/productionExecutable"
+          bash runtime/build/install/runtime/bin/runtime >> runtime.log 2>&1 &
+          PID=$!
+          trap 'kill "$PID" 2>/dev/null || true' EXIT
+          python tests/ai_readiness_browser.py
+      - name: Отдельный статус отложенного AI-сценария
+        if: always()
+        env:
+          AI_OUTCOME: ${{ steps.browser_ai_deferred.outcome }}
+        run: |
+          printf 'DEFERRED: section 6 — AI readiness outcome: %s. AI acceptance remains open.\n' "$AI_OUTCOME" >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -65,9 +102,15 @@ jobs:
           path: |
             kotlin.log
             runtime.log
+            web-playback-contract.tap
+            test-output/storage-retry
+            test-output/browser-adapter
+            test-output/playback-file
             test-output/studio
             test-output/sorting
             test-output/responsive
+            test-output/ai-readiness
+            test-output/non-ai-parity
             kashaCore/build/test-results
             aiCatalog/build/test-results
             composeApp/build/test-results

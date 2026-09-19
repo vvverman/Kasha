@@ -3,6 +3,7 @@
 from pathlib import Path
 import re
 import sys
+import xml.etree.ElementTree as ET
 
 REPO = Path(__file__).resolve().parents[1]
 ROOT = REPO / "composeApp/src/commonMain/kotlin/brain/studio"
@@ -74,6 +75,22 @@ if web_index.exists():
     html = web_index.read_text(encoding="utf-8").replace(" ", "").lower()
     if "max-width:430px" in html:
         violations.append("wasm index.html: запрещён legacy phone clamp 430px")
+
+# Производный XML вектор нужен Android; геометрия остаётся в каноническом SVG.
+android_ns = "{http://schemas.android.com/apk/res/android}"
+drawables = REPO / "composeApp/src/commonMain/composeResources/drawable"
+for logo in ("kasha_logo", "kasha_logo_solid"):
+    try:
+        svg = ET.parse(drawables / (logo + ".svg")).getroot()
+        vector = ET.parse(drawables / (logo + "_vector.xml")).getroot()
+        source_paths = [node.attrib["d"] for node in svg]
+        result_paths = [node.attrib[android_ns + "pathData"] for node in vector]
+        if source_paths != result_paths or any(node.attrib[android_ns + "fillColor"] != "#000000" for node in vector):
+            violations.append(logo + ": XML изменяет официальную геометрию или цвет")
+        if svg.attrib["viewBox"].split()[2:] != [vector.attrib[android_ns + "viewportWidth"], vector.attrib[android_ns + "viewportHeight"]]:
+            violations.append(logo + ": XML изменяет пропорции официального знака")
+    except (OSError, ET.ParseError, KeyError) as error:
+        violations.append(logo + ": отсутствует корректный общий XML: " + str(error))
 
 if violations:
     print("Kasha UI boundary нарушен:\n" + "\n".join(violations), file=sys.stderr)

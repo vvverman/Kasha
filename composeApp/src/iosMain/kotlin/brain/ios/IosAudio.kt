@@ -7,6 +7,9 @@ import brain.domain.PlaybackSessionGateway
 import brain.domain.PlaybackSessionState
 import brain.studio.AudioTelemetry
 import platform.AVFAudio.AVAudioPlayer
+import platform.AVFAudio.AVAudioPlayerDelegateProtocol
+import platform.Foundation.NSError
+import platform.darwin.NSObject
 import platform.Foundation.NSURL
 
 internal class IosAudio(
@@ -15,6 +18,16 @@ internal class IosAudio(
     private var player: AVAudioPlayer? = null
     private var paused = false
     private var sourceId: String? = null
+
+    // AVAudioPlayer может сбросить currentTime при окончании. Позиция не заменяет callback.
+    private val delegate = object : NSObject(), AVAudioPlayerDelegateProtocol {
+        override fun audioPlayerDidFinishPlaying(player: AVAudioPlayer, successfully: Boolean) {
+            if (this@IosAudio.player == player) stop()
+        }
+        override fun audioPlayerDecodeErrorDidOccur(player: AVAudioPlayer, error: NSError?) {
+            if (this@IosAudio.player == player) stop()
+        }
+    }
 
     init {
         IosAudioSessionBridge.observeSystemEvents(
@@ -29,18 +42,25 @@ internal class IosAudio(
         stop()
         IosAudioSessionBridge.activatePlayback()
 
-        val created = AVAudioPlayer(NSURL.fileURLWithPath(path), error = null)
-        created.enableRate = true
-        created.rate = rate.toFloat().coerceIn(1f, 2f)
-        created.currentTime = fromSeconds.coerceAtLeast(0.0).coerceAtMost(created.duration)
-        if (!created.prepareToPlay() || !created.play()) {
+        var created: AVAudioPlayer? = null
+        try {
+            val next = AVAudioPlayer(NSURL.fileURLWithPath(path), error = null)
+            created = next
+            next.delegate = delegate
+            next.enableRate = true
+            next.rate = rate.toFloat().coerceIn(1f, 2f)
+            next.currentTime = fromSeconds.coerceAtLeast(0.0).coerceAtMost(next.duration)
+            check(next.prepareToPlay() && next.play()) { "audioFailed" }
+            player = next
+            sourceId = captureId
+            paused = false
+        } catch (error: Throwable) {
+            created?.delegate = null
+            created?.stop()
             sourceId = previousSource
             IosAudioSessionBridge.deactivate()
-            error("audioFailed")
+            throw error
         }
-        player = created
-        sourceId = captureId
-        paused = false
     }
 
     override suspend fun pause() {
@@ -60,18 +80,8 @@ internal class IosAudio(
         val active = player ?: return PlaybackSessionState(sourceId = sourceId)
         val duration = active.duration.coerceAtLeast(0.0)
         val position = active.currentTime.coerceAtLeast(0.0).coerceAtMost(duration)
-        val phase = when {
-            active.playing -> PlaybackPhase.PLAYING
-            duration > 0.0 && position >= duration - 0.05 -> PlaybackPhase.IDLE
-            else -> PlaybackPhase.PAUSED
-        }
-        if (phase == PlaybackPhase.IDLE) {
-            active.stop()
-            player = null
-            paused = false
-            IosAudioSessionBridge.deactivate()
-            return PlaybackSessionState(sourceId = sourceId, durationSeconds = duration)
-        }
+        // Пауза рядом с концом остаётся паузой. Только системное завершение освобождает player.
+        val phase = if (active.playing) PlaybackPhase.PLAYING else PlaybackPhase.PAUSED
         if (phase == PlaybackPhase.PAUSED) paused = true
         return PlaybackSessionState(
             phase = phase,
@@ -114,6 +124,7 @@ internal class IosAudio(
     }
 
     override fun stop() {
+        player?.delegate = null
         player?.stop()
         player = null
         paused = false

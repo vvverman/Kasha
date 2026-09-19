@@ -1,3 +1,4 @@
+import java.io.File
 import org.gradle.api.tasks.Exec
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask
@@ -16,14 +17,16 @@ compose.resources {
     generateResClass = always
 }
 
+val generatedKashaIconsDirectory = layout.buildDirectory.dir("generated/kashaIcons/commonMain")
 val generateKashaIcons by tasks.registering(Exec::class) {
     group = "build setup"
     description = "Generate Compose runtime geometry from the canonical Kasha Icons registry"
     workingDir(rootProject.projectDir)
-    commandLine("python3", "scripts/generate-kasha-icons.py")
+    commandLine("python3", "scripts/generate-kasha-icons.py",
+        generatedKashaIconsDirectory.get().file("brain/studio/GeneratedKashaIcons.kt").asFile.absolutePath)
     inputs.file(rootProject.file("docs/design/icons/registry.json"))
     inputs.file(rootProject.file("scripts/generate-kasha-icons.py"))
-    outputs.file(project.file("src/commonMain/kotlin/brain/studio/ui/GeneratedKashaIcons.kt"))
+    outputs.dir(generatedKashaIconsDirectory)
 }
 
 kotlin {
@@ -34,6 +37,8 @@ kotlin {
         namespace = "ru.vrmn.kasha.ui"
         compileSdk = 37
         minSdk = 26
+        // Общие шрифты и изображения входят в Android assets, как и в другие сборки.
+        androidResources.enable = true
     }
 
     listOf(
@@ -44,6 +49,25 @@ kotlin {
             baseName = "KashaShared"
             isStatic = true
         }
+        if (System.getProperty("os.name") == "Mac OS X") {
+            val sdk = if (target.name == "iosSimulatorArm64") "iphonesimulator" else "iphoneos"
+            // Resolve compatibility libraries from the selected Xcode, not a dependency's build host.
+            // Keep xcrun lazy: JVM/Web/Android tasks must not require an installed Apple toolchain.
+            val swiftRuntimeDirectory = providers.exec {
+                commandLine("xcrun", "--sdk", sdk, "--find", "swiftc")
+            }.standardOutput.asText.map { compilerPath ->
+                val directory = File(compilerPath.trim()).parentFile.parentFile.resolve("lib/swift/$sdk")
+                check(directory.isDirectory) { "Swift runtime directory not found for $sdk: $directory" }
+                directory.absolutePath
+            }
+            target.binaries.all {
+                linkTaskProvider.configure {
+                    toolOptions.freeCompilerArgs.addAll(swiftRuntimeDirectory.map { directory ->
+                        listOf("-linker-option", "-L$directory")
+                    })
+                }
+            }
+        }
     }
 
     @OptIn(ExperimentalWasmDsl::class)
@@ -53,6 +77,11 @@ kotlin {
     }
 
     sourceSets {
+        getByName("commonMain").kotlin.apply {
+            srcDir(generateKashaIcons)
+            // Не компилировать оставшийся игнорируемый результат старой локальной сборки.
+            exclude("brain/studio/ui/GeneratedKashaIcons.kt")
+        }
         commonMain.dependencies {
             implementation(project(":kashaCore"))
             implementation(project(":aiCatalog"))
@@ -85,9 +114,7 @@ kotlin {
     }
 }
 
-// GeneratedKashaIcons.kt lives in commonMain, so every platform compilation that consumes
-// commonMain must wait for the canonical registry generator. Using the task type also covers
-// Android's compileAndroidMain, whose name does not match compileKotlin*.
+// Все компиляции общего UI, включая Android, ожидают генерацию в build/generated.
 tasks.withType<KotlinCompilationTask<*>>().configureEach {
     dependsOn(generateKashaIcons)
 }

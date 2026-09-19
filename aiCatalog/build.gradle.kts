@@ -25,9 +25,11 @@ kotlin {
         commonMain.dependencies {
             implementation(project(":kashaCore"))
             implementation(libs.kotlinx.serialization.json)
+            implementation(libs.kotlinx.coroutines.core)
         }
         commonTest.dependencies {
             implementation(kotlin("test"))
+            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
         }
     }
 }

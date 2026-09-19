@@ -88,7 +88,7 @@ object KashaAiCatalog {
             installable = true,
             description = "Более тяжёлая локальная модель",
         ),
-    )
+    ) + BuiltInAi.engines
 
     val cloudProviders: List<CloudProviderDescriptor> = listOf(
         CloudProviderDescriptor("openai", "OpenAI", setOf(AiRole.SPEECH_TO_TEXT, AiRole.TEXT, AiRole.ROUTING), description = "OpenAI API"),

@@ -11,18 +11,11 @@ internal interface IosCloudMetadataStore {
     fun write(value: List<CloudAiConnection>)
 }
 
-internal class IosFileCloudMetadataStore(
-    private val path: String = IosPaths.aiConnectionsFile,
-) : IosCloudMetadataStore {
+internal class IosFileCloudMetadataStore(private val path: String = IosPaths.aiConnectionsFile) : IosCloudMetadataStore {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
-
     override fun read(): List<CloudAiConnection> = IosPaths.read(path)
-        ?.let { runCatching { json.decodeFromString<List<CloudAiConnection>>(it) }.getOrNull() }
-        .orEmpty()
-
-    override fun write(value: List<CloudAiConnection>) {
-        IosPaths.write(path, json.encodeToString(value))
-    }
+        ?.let { json.decodeFromString<List<CloudAiConnection>>(it) }.orEmpty()
+    override fun write(value: List<CloudAiConnection>) { IosPaths.write(path, json.encodeToString(value)) }
 }
 
 internal interface IosCloudTransport {
@@ -31,102 +24,36 @@ internal interface IosCloudTransport {
     suspend fun transcribe(connection: CloudAiConnection, apiKey: String, file: String, language: String): String
 }
 
-/**
- * iOS implementation of the existing CloudAiGateway contract.
- * Connection metadata is ordinary local JSON; the secret is only read/written through IosSecretStore.
- */
+/** iOS предоставляет только Keychain, файл метаданных и сетевой транспорт. */
 internal class IosCloudAiGateway(
-    private val secrets: IosSecretStore = IosKeychainSecretStore(),
-    private val metadata: IosCloudMetadataStore = IosFileCloudMetadataStore(),
-    private val transport: IosCloudTransport = IosExternalAiClient(),
+    secrets: IosSecretStore = IosKeychainSecretStore(),
+    metadata: IosCloudMetadataStore = IosFileCloudMetadataStore(),
+    transport: IosCloudTransport = IosExternalAiClient(),
 ) : CloudAiGateway {
-    override val available: Boolean get() = secrets.available
-
-    override suspend fun connections(): List<CloudAiConnection> = metadata.read()
-
-    override suspend fun save(connection: CloudAiConnection, apiKey: String?) {
-        require(available) { "secureStoreUnavailable" }
-        validate(connection)
-        val providerId = connection.providerId
-        val previousSecret = secrets.get(providerId)
-        val nextSecret = apiKey?.takeIf(String::isNotBlank) ?: previousSecret
-        require(!nextSecret.isNullOrBlank()) { "apiKeyRequired" }
-
-        if (!apiKey.isNullOrBlank()) secrets.put(providerId, apiKey)
-        try {
-            val next = metadata.read()
-                .filterNot { it.providerId == providerId }
-                .plus(connection)
-                .sortedBy { it.providerId }
-            metadata.write(next)
-        } catch (error: Throwable) {
-            if (!apiKey.isNullOrBlank()) {
-                runCatching {
-                    if (previousSecret.isNullOrBlank()) secrets.remove(providerId)
-                    else secrets.put(providerId, previousSecret)
-                }
-            }
-            throw error
-        }
-    }
-
-    override suspend fun remove(providerId: String) {
-        disconnect(providerId)
-    }
-
-    override suspend fun disconnect(providerId: String): CloudAiDisconnectResult {
-        val before = metadata.read()
-        val next = before.filterNot { it.providerId == providerId }
-        val metadataRemoved = next != before
-        if (metadataRemoved) metadata.write(next)
-        val deletion = if (!available) {
-            SecureSecretDeletion.UNAVAILABLE
-        } else {
-            runCatching { secrets.remove(providerId) }.getOrElse { SecureSecretDeletion.FAILED }
-        }
-        return CloudAiDisconnectResult(metadataRemoved, deletion)
-    }
-
-    override suspend fun test(connection: CloudAiConnection, apiKey: String?): Boolean {
-        if (!available) return false
-        validate(connection)
-        val key = apiKey?.takeIf(String::isNotBlank) ?: secrets.get(connection.providerId) ?: return false
-        return runCatching { transport.test(connection, key) }.getOrDefault(false)
-    }
-
-    suspend fun generate(providerId: String, role: AiRole, prompt: String): String {
-        val connection = executableConnection(providerId, role)
-        return transport.generate(connection, role, requireSecret(providerId), prompt)
-    }
-
-    suspend fun transcribe(providerId: String, file: String, language: String): String {
-        val connection = executableConnection(providerId, AiRole.SPEECH_TO_TEXT)
-        return transport.transcribe(connection, requireSecret(providerId), file, language)
-    }
-
-    private fun executableConnection(providerId: String, role: AiRole): CloudAiConnection = metadata.read()
-        .firstOrNull {
-            it.providerId == providerId && it.enabled && AiPrivacy.hasCurrentConsent(it) && it.modelFor(role) != null
-        }
-        ?: error("cloudConnectionUnavailable")
-
-    private fun requireSecret(providerId: String): String = secrets.get(providerId)
-        ?.takeIf(String::isNotBlank)
-        ?: error("apiKeyMissing")
-
-    private fun validate(connection: CloudAiConnection) {
-        val provider = AiCatalog.provider(connection.providerId) ?: error("unknownAiProvider")
-        require(connection.enabled) { "cloudConnectionDisabled" }
-        require(AiPrivacy.hasCurrentConsent(connection)) { "cloudConsentRequired" }
-        require(connection.roles.isNotEmpty()) { "cloudModelRequired" }
-        require(connection.roles.all { it in provider.roles }) { "cloudRoleUnsupported" }
-        if (provider.endpointRequired) {
-            val endpoint = connection.endpoint.orEmpty().trim()
-            require(
-                endpoint.startsWith("https://") ||
-                    endpoint.startsWith("http://127.0.0.1") ||
-                    endpoint.startsWith("http://localhost")
-            ) { "cloudEndpointMustBeHttps" }
-        }
-    }
+    private val delegate = brain.ai.ManagedCloudGateway(
+        object : brain.ai.CloudSecretStore {
+            override val available: Boolean get() = secrets.available
+            override suspend fun get(providerId: String) = secrets.get(providerId)
+            override suspend fun put(providerId: String, value: String) { secrets.put(providerId, value) }
+            override suspend fun remove(providerId: String) = secrets.remove(providerId)
+        },
+        object : brain.ai.CloudMetadataStore {
+            override suspend fun read() = metadata.read()
+            override suspend fun write(value: List<CloudAiConnection>) { metadata.write(value) }
+        },
+        object : brain.ai.CloudTransport {
+            override suspend fun test(connection: CloudAiConnection, apiKey: String) = transport.test(connection, apiKey)
+            override suspend fun generate(connection: CloudAiConnection, role: AiRole, apiKey: String, prompt: String) = transport.generate(connection, role, apiKey, prompt)
+            override suspend fun transcribe(connection: CloudAiConnection, apiKey: String, file: String, language: String) = transport.transcribe(connection, apiKey, file, language)
+        },
+    )
+    override val available: Boolean get() = delegate.available
+    override suspend fun connections() = delegate.connections()
+    override suspend fun save(connection: CloudAiConnection, apiKey: String?) = delegate.save(connection, apiKey)
+    override suspend fun remove(providerId: String) = delegate.remove(providerId)
+    override suspend fun disconnect(providerId: String) = delegate.disconnect(providerId)
+    override suspend fun test(connection: CloudAiConnection, apiKey: String?) = delegate.test(connection, apiKey)
+    suspend fun capability(role: AiRole, engineId: String, providerId: String) = delegate.capability(role, engineId, providerId)
+    suspend fun generate(providerId: String, role: AiRole, prompt: String) = delegate.generate(providerId, role, prompt)
+    suspend fun transcribe(providerId: String, file: String, language: String) = delegate.transcribe(providerId, file, language)
 }
