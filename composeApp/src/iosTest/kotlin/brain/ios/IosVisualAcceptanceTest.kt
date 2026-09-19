@@ -81,51 +81,55 @@ class IosVisualAcceptanceTest {
             ?: error("Required integration fixture: KASHA_IOS_VISUAL_EVIDENCE")
         IosPaths.directory(evidence)
         val screenshots = mutableListOf<String>()
+        val normal = Size(390.0, 844.0)
+        val narrow = Size(320.0, 568.0)
 
+        // Compose UIKit host teardown is asynchronous in a native unit-test process.
+        // Keep one host per theme and drive the shared StudioState through the whole
+        // canonical matrix instead of constructing/destroying 32 controllers.
         for (theme in listOf("light", "dark")) {
-            val size = Size(390.0, 844.0)
-            captureScenario(evidence, screenshots, "$theme-home", size, theme, baseData()) { }
-            captureScenario(evidence, screenshots, "$theme-recording", size, theme, baseData()) {
-                runBlocking { startRecording() }
-            }
-            captureScenario(evidence, screenshots, "$theme-paused", size, theme, baseData()) {
-                runBlocking { startRecording(); pauseRecording() }
-            }
-            captureScenario(evidence, screenshots, "$theme-result", size, theme, resultData()) { }
-            captureScenario(evidence, screenshots, "$theme-projects", size, theme, baseData()) {
-                navigate(Tab.PROJECTS)
-            }
-            captureScenario(evidence, screenshots, "$theme-notes", size, theme, baseData()) {
-                navigate(Tab.PROJECTS); selectedProjectId = "project"
-            }
-            captureScenario(evidence, screenshots, "$theme-note", size, theme, baseData()) {
-                navigate(Tab.PROJECTS); selectedProjectId = "project"; openNote("note")
-            }
-            captureScenario(evidence, screenshots, "$theme-tasks", size, theme, baseData()) {
-                navigate(Tab.TASKS); taskArchive = false
-            }
-            captureScenario(evidence, screenshots, "$theme-archive", size, theme, baseData()) {
-                navigate(Tab.TASKS); taskArchive = true
-            }
-            captureScenario(evidence, screenshots, "$theme-settings", size, theme, baseData()) {
-                navigate(Tab.SETTINGS)
-            }
-            captureScenario(evidence, screenshots, "$theme-language", size, theme, baseData()) {
-                navigate(Tab.SETTINGS); languagePage = true
-            }
-            captureScenario(evidence, screenshots, "$theme-error", size, theme, baseData()) {
-                error = "loadFailed"
-            }
+            val harness = harness(resultData(), theme, normal)
 
-            val narrow = Size(320.0, 568.0)
-            captureScenario(evidence, screenshots, "$theme-narrow-home", narrow, theme, baseData()) { }
-            captureScenario(evidence, screenshots, "$theme-narrow-recording", narrow, theme, baseData()) {
-                runBlocking { startRecording() }
-            }
-            captureScenario(evidence, screenshots, "$theme-narrow-result", narrow, theme, resultData()) { }
-            captureScenario(evidence, screenshots, "$theme-narrow-settings", narrow, theme, baseData()) {
-                navigate(Tab.SETTINGS)
-            }
+            capture(harness, evidence, screenshots, "$theme-result", normal)
+            capture(harness, evidence, screenshots, "$theme-narrow-result", narrow)
+            runBlocking { harness.state.discard("result") }
+
+            capture(harness, evidence, screenshots, "$theme-home", normal)
+            capture(harness, evidence, screenshots, "$theme-narrow-home", narrow)
+
+            harness.state.navigate(Tab.PROJECTS)
+            capture(harness, evidence, screenshots, "$theme-projects", normal)
+            harness.state.selectedProjectId = "project"
+            capture(harness, evidence, screenshots, "$theme-notes", normal)
+            harness.state.openNote("note")
+            capture(harness, evidence, screenshots, "$theme-note", normal)
+
+            harness.state.navigate(Tab.TASKS)
+            harness.state.taskArchive = false
+            capture(harness, evidence, screenshots, "$theme-tasks", normal)
+            harness.state.taskArchive = true
+            capture(harness, evidence, screenshots, "$theme-archive", normal)
+
+            harness.state.navigate(Tab.SETTINGS)
+            capture(harness, evidence, screenshots, "$theme-settings", normal)
+            capture(harness, evidence, screenshots, "$theme-narrow-settings", narrow)
+            harness.state.languagePage = true
+            capture(harness, evidence, screenshots, "$theme-language", normal)
+
+            harness.state.error = "loadFailed"
+            capture(harness, evidence, screenshots, "$theme-error", normal)
+            harness.state.error = null
+
+            harness.state.navigate(Tab.HOME)
+            runBlocking { harness.state.startRecording() }
+            capture(harness, evidence, screenshots, "$theme-recording", normal)
+            capture(harness, evidence, screenshots, "$theme-narrow-recording", narrow)
+            runBlocking { harness.state.pauseRecording() }
+            capture(harness, evidence, screenshots, "$theme-paused", normal)
+
+            // Do not tear down this Compose host inside the test. The native test
+            // process owns it and exits immediately after the matrix; explicit
+            // repeated UIKit host teardown was the source of the previous hang.
         }
 
         assertTrue(screenshots.size == 32, "Expected 32 iOS visual screenshots, got ${screenshots.size}")
@@ -136,36 +140,40 @@ class IosVisualAcceptanceTest {
             put("systemAudioClaim", false)
             put("normalSize", "390x844")
             put("narrowSize", "320x568")
-            putJsonArray("themes") { add(kotlinx.serialization.json.JsonPrimitive("light")); add(kotlinx.serialization.json.JsonPrimitive("dark")) }
-            putJsonArray("screenshots") { screenshots.forEach { add(kotlinx.serialization.json.JsonPrimitive(it)) } }
+            putJsonArray("themes") {
+                add(kotlinx.serialization.json.JsonPrimitive("light"))
+                add(kotlinx.serialization.json.JsonPrimitive("dark"))
+            }
+            putJsonArray("screenshots") {
+                screenshots.forEach { add(kotlinx.serialization.json.JsonPrimitive(it)) }
+            }
         }
         IosPaths.write(IosPaths.child(evidence, "result.json"), report.toString())
     }
 
     private data class Size(val width: Double, val height: Double)
 
-    private fun captureScenario(
+    private fun capture(
+        harness: Harness,
         evidence: String,
         screenshots: MutableList<String>,
         name: String,
         size: Size,
-        theme: String,
-        data: BrainData,
-        configure: StudioState.() -> Unit,
     ) {
-        val harness = harness(data, theme, size)
-        try {
-            harness.state.configure()
-            pump(0.35)
-            val path = IosPaths.child(evidence, "$name.png")
-            screenshot(harness.controller.view, size, path)
-            assertTrue(IosPaths.exists(path), "Screenshot was not written: $name")
-            screenshots += "$name.png"
-        } finally {
-            harness.window.hidden = true
-            harness.controller.view.removeFromSuperview()
-            IosPaths.remove(harness.root)
-        }
+        resize(harness, size)
+        pump(0.25)
+        val path = IosPaths.child(evidence, "$name.png")
+        screenshot(harness.controller.view, size, path)
+        assertTrue(IosPaths.exists(path), "Screenshot was not written: $name")
+        screenshots += "$name.png"
+    }
+
+    private fun resize(harness: Harness, size: Size) {
+        val frame = CGRectMake(0.0, 0.0, size.width, size.height)
+        harness.window.setFrame(frame)
+        harness.controller.view.setFrame(frame)
+        harness.controller.view.setNeedsLayout()
+        harness.controller.view.layoutIfNeeded()
     }
 
     private fun harness(data: BrainData, theme: String, size: Size): Harness {
@@ -193,7 +201,7 @@ class IosVisualAcceptanceTest {
         window.makeKeyAndVisible()
         controller.view.setNeedsLayout()
         controller.view.layoutIfNeeded()
-        pump(0.55)
+        pump(0.45)
         return Harness(root, state, recorder, controller, window)
     }
 
