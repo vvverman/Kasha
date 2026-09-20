@@ -114,7 +114,7 @@ class StudioState(
     suspend fun launch() {
         if (started) return
         started = true
-        action {
+        val launched = action {
             preferences = repository.preferences()
             refresh()
             if (snapshot.projects.isEmpty()) {
@@ -124,7 +124,10 @@ class StudioState(
             pending = hasPendingRecording()
             initialized = true
         }
-        if (!initialized) return
+        if (!launched || !initialized) {
+            started = false
+            return
+        }
         if (pending && current == null) recover()
         else if (preferences.autoRecord && current == null && !pending) startRecording()
     }
