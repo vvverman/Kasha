@@ -30,8 +30,12 @@ internal class IosRepository(
     }
     private val defaults = NSUserDefaults.standardUserDefaults
 
-    private var data: BrainData = readData()
-    private var prefs: Preferences = readPreferences()
+    private var loadedData: BrainData? = null
+    private var loadedPreferences: Preferences? = null
+    private val data: BrainData
+        get() = loadedData ?: readData().also { loadedData = it }
+    private val prefs: Preferences
+        get() = loadedPreferences ?: readPreferences().also { loadedPreferences = it }
     private val intelligence: Intelligence = cloudAi
         ?.let { IosRoutedIntelligence(localIntelligence, it) { prefs } }
         ?: localIntelligence
@@ -244,12 +248,12 @@ internal class IosRepository(
 
     private fun commitData(next: BrainData) {
         IosPaths.write(IosPaths.stateFile, json.encodeToString(next))
-        data = next
+        loadedData = next
     }
 
     private fun commitPreferences(next: Preferences) {
         IosPaths.write(IosPaths.preferencesFile, json.encodeToString(next))
-        prefs = next
+        loadedPreferences = next
     }
 
     private fun <T> readRecoverable(
