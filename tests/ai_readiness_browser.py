@@ -23,6 +23,20 @@ def api(path, value=None):
         return json.load(response)
 
 
+def wait_runtime():
+    deadline = time.monotonic() + 60
+    last_error = None
+    while time.monotonic() < deadline:
+        try:
+            api('health')
+            return
+        except Exception as error:
+            last_error = error
+            time.sleep(0.25)
+    raise RuntimeError('Kasha runtime did not become ready for AI acceptance') from last_error
+
+
+wait_runtime()
 original = api('preferences')
 selection = {'speechToText': 'local.default.stt', 'text': 'local.default.text', 'routing': 'local.default.text'}
 configured = dict(original, language='ru', theme='light', autoRecord=False, ai=selection)
