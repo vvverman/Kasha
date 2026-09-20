@@ -7,8 +7,27 @@ exec > >(tee "$OUT/execution.log") 2>&1
 APP=$(find test-apks -type f -name '*.apk' ! -name '*androidTest*' | head -n 1)
 TEST=$(find test-apks -type f -name '*androidTest*.apk' | head -n 1)
 test -n "$APP" && test -n "$TEST"
-adb root
-adb wait-for-device
+adb_root_ready() {
+    local attempt uid
+    for attempt in 1 2 3 4 5; do
+        adb wait-for-device
+        # adb root перезапускает adbd и на API 35 иногда закрывает transport раньше,
+        # чем клиент получает успешный exit code. Проверяем фактический uid после reconnect.
+        adb root >"$OUT/adb-root-$attempt.txt" 2>&1 || true
+        sleep 1
+        adb wait-for-device || true
+        uid=$(adb shell id -u 2>/dev/null | tr -d '\r' || true)
+        if [ "$uid" = "0" ]; then
+            echo "adb root ready on attempt $attempt"
+            return 0
+        fi
+        sleep 1
+    done
+    cat "$OUT"/adb-root-*.txt >&2 || true
+    echo "Не удалось получить root adbd после 5 попыток" >&2
+    return 1
+}
+adb_root_ready
 collect_diagnostics() {
     adb logcat -d > "$OUT/logcat.txt" 2>&1 || true
     adb shell cat /data/user/0/ru.vrmn.kasha/files/ai-fixtures/phase.txt > "$OUT/phase.txt" 2>&1 || true
