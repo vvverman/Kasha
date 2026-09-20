@@ -75,11 +75,7 @@ jobs:
           python tests/responsive_accessibility_browser.py
           python tests/non_ai_parity_browser.py
           echo 'Non-AI browser acceptance: PASS' >> "$GITHUB_STEP_SUMMARY"
-      # Раздел 6 отложен владельцем. Сценарий выполняется и сохраняет ошибку,
-      # но не подменяет результат обязательной функциональной приёмки.
-      - name: 'DEFERRED: section 6 — AI readiness'
-        id: browser_ai_deferred
-        continue-on-error: true
+      - name: 'Обязательная AI readiness-приёмка в браузере'
         run: |
           export KASHA_HOME="$KASHA_BROWSER_HOME"
           export KASHA_DEMO_AI=1
@@ -88,12 +84,15 @@ jobs:
           PID=$!
           trap 'kill "$PID" 2>/dev/null || true' EXIT
           python tests/ai_readiness_browser.py
-      - name: Отдельный статус отложенного AI-сценария
-        if: always()
-        env:
-          AI_OUTCOME: ${{ steps.browser_ai_deferred.outcome }}
-        run: |
-          printf 'DEFERRED: section 6 — AI readiness outcome: %s. AI acceptance remains open.\n' "$AI_OUTCOME" >> "$GITHUB_STEP_SUMMARY"
+          python - <<'PYAI'
+          import json
+          from pathlib import Path
+          result = json.loads(Path('test-output/ai-readiness/result.json').read_text())
+          assert result.get('passed') is True, result
+          assert len(result.get('checks', [])) >= 5, result
+          print('Web AI readiness acceptance: PASS')
+          PYAI
+          echo 'AI readiness browser acceptance: PASS' >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
