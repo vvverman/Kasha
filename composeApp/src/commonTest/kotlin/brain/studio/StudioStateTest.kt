@@ -13,6 +13,7 @@ class StudioStateTest {
         var prefs = Preferences(autoRecord = false)
         var data = BrainData(projects = listOf(Project("p", "Приложение")))
         var failSave = false
+        var failLoad = false
         var failDiscard = false
         var failCreate = false
         var snapshotGate: CompletableDeferred<Unit>? = null
@@ -31,7 +32,10 @@ class StudioStateTest {
                 tasks = data.tasks,
             )
         }
-        override suspend fun preferences() = prefs
+        override suspend fun preferences(): Preferences {
+            check(!failLoad) { "storageUnavailable" }
+            return prefs
+        }
         override suspend fun savePreferences(value: Preferences) { prefs = value.validated() }
         override suspend fun createProject(draft: ProjectDraft): Project {
             check(!failCreate)
@@ -145,6 +149,24 @@ class StudioStateTest {
         override suspend fun resume() { telemetry = telemetry.copy(phase = "playing") }
         override fun telemetry() = telemetry
         override fun stop() { telemetry = AudioTelemetry() }
+    }
+
+    @Test
+    fun failedStartupCanBeRetriedWithoutCreatingEmptyState() = runTest {
+        val repo = Repo().apply { failLoad = true }
+        val state = StudioState(repo, Recorder(repo), Audio())
+
+        state.launch()
+        assertFalse(state.initialized)
+        assertEquals("actionFailed", state.error)
+        assertEquals(listOf("Приложение"), repo.data.projects.map { it.title })
+
+        repo.failLoad = false
+        state.error = null
+        state.launch()
+
+        assertTrue(state.initialized)
+        assertEquals(listOf("Приложение"), state.snapshot.projects.map { it.title })
     }
 
     @Test
