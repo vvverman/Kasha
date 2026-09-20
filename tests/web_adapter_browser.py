@@ -191,6 +191,52 @@ with sync_playwright() as pw:
         assert page.evaluate('kashaPlatform.start()').startswith('ERROR:')
         page.evaluate('kashaPlatform.stopAudio()')
 
+        wait_capture_idle(recovered['id'])
+        api('captures/' + recovered['id'], method='DELETE')
+
+        # Сервер принимает запись, но браузер теряет ответ. Повтор recovery обязан
+        # вернуть тот же capture id и не создать дубль.
+        assert page.evaluate('kashaPlatform.start()') == 'ok'
+        idempotent_source = None
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            idempotent_source = persisted_recording()
+            if idempotent_source and idempotent_source['chunks'] > 0:
+                break
+            page.wait_for_timeout(100)
+        assert idempotent_source and idempotent_source['chunks'] > 0
+        idempotent_id = idempotent_source['id']
+        lost_receipt = page.evaluate('''async (base) => {
+            const originalFetch = globalThis.fetch;
+            let swallowed = false;
+            globalThis.fetch = async (...args) => {
+                const response = await originalFetch(...args);
+                if (!swallowed && String(args[0]).includes('/api/captures/audio')) {
+                    swallowed = true;
+                    throw new Error('Simulated lost upload receipt');
+                }
+                return response;
+            };
+            try {
+                return await kashaPlatform.stop(base);
+            } finally {
+                globalThis.fetch = originalFetch;
+            }
+        }''', BASE)
+        assert lost_receipt.startswith('ERROR:'), lost_receipt
+        assert page.evaluate('kashaPlatform.pending()') is True
+        accepted = [c for c in api('snapshot')['captures'] if c['id'] == idempotent_id]
+        assert len(accepted) == 1, accepted
+
+        replay_receipt_text = page.evaluate('(base) => kashaPlatform.recover(base)', BASE)
+        assert not replay_receipt_text.startswith('ERROR:'), replay_receipt_text
+        replay_receipt = json.loads(replay_receipt_text)
+        assert replay_receipt['id'] == idempotent_id, replay_receipt
+        assert len([c for c in api('snapshot')['captures'] if c['id'] == idempotent_id]) == 1
+        assert page.evaluate('kashaPlatform.pending()') is False
+        wait_capture_idle(idempotent_id)
+        api('captures/' + idempotent_id, method='DELETE')
+
         assert page.evaluate('kashaPlatform.start()') == 'ok'
         page.wait_for_timeout(1200)
         assert page.evaluate('kashaPlatform.pause()') == 'ok'
