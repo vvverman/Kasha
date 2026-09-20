@@ -97,6 +97,25 @@ with sync_playwright() as pw:
         assert page.evaluate('kashaPlatform.phase()') == 'idle'
         assert page.evaluate('kashaPlatform.pending()') is False
 
+        retry_probe = page.evaluate('''async () => {
+            const proto = IDBDatabase.prototype;
+            const original = proto.transaction;
+            let failed = false;
+            proto.transaction = function(...args) {
+                if (!failed) {
+                    failed = true;
+                    throw new DOMException('Transient storage failure', 'InvalidStateError');
+                }
+                return original.apply(this, args);
+            };
+            try {
+                return {pending: await kashaPlatform.pending(), failed};
+            } finally {
+                proto.transaction = original;
+            }
+        }''')
+        assert retry_probe == {'pending': False, 'failed': True}, retry_probe
+
         empty_left = page.evaluate('''async () => {
             const db = await new Promise((resolve, reject) => {
                 const r = indexedDB.open('kasha-audio-v1', 1);
