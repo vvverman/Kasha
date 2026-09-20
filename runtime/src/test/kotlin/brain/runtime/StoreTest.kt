@@ -4,7 +4,7 @@ import brain.model.CaptureDraftUpdate
 import brain.model.CaptureStatus
 import brain.model.DistributionRequest
 import brain.model.ProjectDraft
-import brain.model.Preferences
+import brain.studio.Preferences
 import brain.model.RuntimeStatus
 import kotlinx.coroutines.runBlocking
 import java.nio.file.Files
