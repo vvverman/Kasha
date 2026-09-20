@@ -72,113 +72,94 @@ internal class IosRepository(
     override suspend fun savePreferences(value: Preferences) {
         val validated = value.validated()
         AiCatalog.validateSelection(validated.ai)
-        prefs = validated
-        persistPreferences()
+        commitPreferences(validated)
     }
 
     override suspend fun createProject(draft: ProjectDraft): Project {
         val projectId = id()
-        data = data.addProject(projectId, now(), draft)
-        persistData()
+        commitData(data.addProject(projectId, now(), draft))
         return data.projects.first { it.id == projectId }
     }
 
     override suspend fun updateProject(id: String, update: ProjectUpdate): Project {
-        data = data.updateProject(id, update, now())
-        persistData()
+        commitData(data.updateProject(id, update, now()))
         return data.projects.first { it.id == id }
     }
 
     override suspend fun pinProject(id: String, pinned: Boolean): Project {
-        data = data.pinProject(id, pinned)
-        persistData()
+        commitData(data.pinProject(id, pinned))
         return data.projects.first { it.id == id }
     }
 
     override suspend fun orderPins(ids: List<String>) {
-        data = data.orderPins(ids)
-        persistData()
+        commitData(data.orderPins(ids))
     }
 
     override suspend fun orderProjects(ids: List<String>) {
-        data = data.orderProjects(ids)
-        persistData()
+        commitData(data.orderProjects(ids))
     }
 
     override suspend fun updateCaptureDraft(id: String, update: CaptureDraftUpdate): Capture {
-        data = data.updateDraft(id, update)
-        persistData()
+        commitData(data.updateDraft(id, update))
         return capture(id)
     }
 
     override suspend fun distribute(id: String, request: DistributionRequest): Note {
         val result = data.distribute(id, request, this.id(), now())
-        data = result.first
-        persistData()
+        commitData(result.first)
         return result.second
     }
 
     override suspend fun distributeTask(id: String, request: TaskDistributionRequest): Task {
         val result = data.distributeTask(id, request, this.id(), now())
-        data = result.first
-        persistData()
+        commitData(result.first)
         return result.second
     }
 
     override suspend fun updateNote(id: String, update: NoteUpdate): Note {
-        data = data.updateNote(id, update, now())
-        persistData()
+        commitData(data.updateNote(id, update, now()))
         return data.notes.first { it.id == id }
     }
 
     override suspend fun pinNote(id: String, pinned: Boolean): Note {
-        data = data.pinNote(id, pinned)
-        persistData()
+        commitData(data.pinNote(id, pinned))
         return data.notes.first { it.id == id }
     }
 
     override suspend fun orderNotePins(projectId: String, ids: List<String>) {
-        data = data.orderNotePins(projectId, ids)
-        persistData()
+        commitData(data.orderNotePins(projectId, ids))
     }
 
     override suspend fun orderNotes(projectId: String, ids: List<String>) {
-        data = data.orderNotes(projectId, ids)
-        persistData()
+        commitData(data.orderNotes(projectId, ids))
     }
 
     override suspend fun updateTask(id: String, update: TaskUpdate): Task {
-        data = data.updateTask(id, update, now())
-        persistData()
+        commitData(data.updateTask(id, update, now()))
         return data.tasks.first { it.id == id }
     }
 
     override suspend fun rescheduleTask(id: String, update: TaskScheduleUpdate): Task {
-        data = data.rescheduleTask(id, update, now())
-        persistData()
+        commitData(data.rescheduleTask(id, update, now()))
         return data.tasks.first { it.id == id }
     }
 
     override suspend fun completeTask(id: String): Task {
-        data = data.completeTask(id, now())
-        persistData()
+        commitData(data.completeTask(id, now()))
         return data.tasks.first { it.id == id }
     }
 
     override suspend fun deleteTask(id: String) {
-        data = data.deleteTask(id)
-        persistData()
+        commitData(data.deleteTask(id))
     }
 
     override suspend fun orderTasks(ids: List<String>) {
-        data = data.orderTasks(ids)
-        persistData()
+        commitData(data.orderTasks(ids))
     }
 
     override suspend fun claimTaskReminders(now: Long, zoneId: String): List<Task> {
         val result = data.claimDueReminders(now, zoneId)
-        data = result.first
-        if (result.second.isNotEmpty()) persistData()
+        if (result.second.isNotEmpty()) commitData(result.first)
         return result.second
     }
 
@@ -227,8 +208,7 @@ internal class IosRepository(
         val current = capture(id)
         current.audioFileName?.let(IosPaths::remove)
         current.compactAudioFileName?.let(IosPaths::remove)
-        data = data.copy(captures = data.captures.filterNot { it.id == id })
-        persistData()
+        commitData(data.copy(captures = data.captures.filterNot { it.id == id }))
     }
 
     override suspend fun createDemo(): Capture = error("Demo mode is disabled in production iOS")
@@ -244,8 +224,7 @@ internal class IosRepository(
             simulated = false,
             audioFinalized = true,
         )
-        data = data.addCapture(capture)
-        persistData()
+        commitData(data.addCapture(capture))
         return capture
     }
 
@@ -256,21 +235,64 @@ internal class IosRepository(
         data.captures.firstOrNull { it.id == id } ?: error("Запись не найдена")
 
     private fun updateCapture(id: String, transform: (Capture) -> Capture): Capture {
-        data = data.updateCapture(id, transform)
-        persistData()
+        commitData(data.updateCapture(id, transform))
         return capture(id)
     }
 
     private fun fail(id: String, status: CaptureStatus, message: String): Capture =
         updateCapture(id) { it.copy(status = status, message = message, audioFinalized = true) }
 
-    private fun persistData() = IosPaths.write(IosPaths.stateFile, json.encodeToString(data))
-    private fun persistPreferences() = IosPaths.write(IosPaths.preferencesFile, json.encodeToString(prefs))
+    private fun commitData(next: BrainData) {
+        IosPaths.write(IosPaths.stateFile, json.encodeToString(next))
+        data = next
+    }
+
+    private fun commitPreferences(next: Preferences) {
+        IosPaths.write(IosPaths.preferencesFile, json.encodeToString(next))
+        prefs = next
+    }
+
+    private fun <T> readRecoverable(
+        path: String,
+        label: String,
+        decode: (String) -> T,
+    ): T? {
+        val backup = IosPaths.backup(path)
+        if (!IosPaths.exists(path) && !IosPaths.exists(backup)) return null
+
+        var primaryFailure: Throwable? = null
+        if (IosPaths.exists(path)) {
+            try {
+                return decode(IosPaths.readRequired(path))
+            } catch (error: Throwable) {
+                primaryFailure = error
+            }
+        }
+
+        if (IosPaths.exists(backup)) {
+            try {
+                val backupText = IosPaths.readRequired(backup)
+                val recovered = decode(backupText)
+                if (IosPaths.exists(path)) {
+                    runCatching { IosPaths.readRequired(path) }.getOrNull()?.let {
+                        runCatching { IosPaths.replace(IosPaths.corrupt(path), it) }
+                    }
+                }
+                IosPaths.replace(path, backupText)
+                return recovered
+            } catch (_: Throwable) {
+                // Обе сохранённые копии непригодны: ниже возвращаем явную ошибку.
+            }
+        }
+
+        throw IllegalStateException("$label повреждены; пустое состояние не создано", primaryFailure)
+    }
 
     private fun readData(): BrainData {
-        IosPaths.read(IosPaths.stateFile)?.let { stored ->
-            runCatching { json.decodeFromString<BrainData>(stored) }.getOrNull()?.let { return it }
-        }
+        readRecoverable(IosPaths.stateFile, "Локальные данные Kasha") {
+            json.decodeFromString<BrainData>(it)
+        }?.let { return it }
+
         defaults.stringForKey("kasha.test.brain.v1")?.let { stored ->
             runCatching { json.decodeFromString<BrainData>(stored) }.getOrNull()?.let {
                 IosPaths.write(IosPaths.stateFile, json.encodeToString(it))
@@ -281,9 +303,10 @@ internal class IosRepository(
     }
 
     private fun readPreferences(): Preferences {
-        IosPaths.read(IosPaths.preferencesFile)?.let { stored ->
-            runCatching { json.decodeFromString<Preferences>(stored).validated() }.getOrNull()?.let { return it }
-        }
+        readRecoverable(IosPaths.preferencesFile, "Настройки Kasha") {
+            json.decodeFromString<Preferences>(it).validated()
+        }?.let { return it }
+
         defaults.stringForKey("kasha.test.preferences.v1")?.let { stored ->
             runCatching { json.decodeFromString<Preferences>(stored).validated() }.getOrNull()?.let {
                 IosPaths.write(IosPaths.preferencesFile, json.encodeToString(it))
@@ -292,4 +315,5 @@ internal class IosRepository(
         }
         return Preferences()
     }
+
 }
