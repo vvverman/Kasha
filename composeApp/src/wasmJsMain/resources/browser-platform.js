@@ -2,28 +2,85 @@
 (() => {
   'use strict';
   let recorder=null,stream=null,player=null,playerLoading=false,writes=Promise.resolve(),stopped=null,context=null,analyser=null;
-  let generation=0,openPromise;
-  const db=()=>openPromise ||= new Promise((resolve,reject)=>{
-    const r=indexedDB.open('kasha-audio-v1',1);
-    r.onupgradeneeded=()=>{r.result.createObjectStore('sessions',{keyPath:'id'});r.result.createObjectStore('chunks',{keyPath:['id','index']});};
-    r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);
+  let generation=0,openPromise=null,openDatabase=null;
+  const resetDb=()=>{
+    try{openDatabase?.close();}catch{}
+    openDatabase=null;
+    openPromise=null;
+  };
+  const db=()=>{
+    if(openPromise)return openPromise;
+    openPromise=new Promise((resolve,reject)=>{
+      const r=indexedDB.open('kasha-audio-v1',1);
+      r.onupgradeneeded=()=>{
+        if(!r.result.objectStoreNames.contains('sessions'))r.result.createObjectStore('sessions',{keyPath:'id'});
+        if(!r.result.objectStoreNames.contains('chunks'))r.result.createObjectStore('chunks',{keyPath:['id','index']});
+      };
+      r.onsuccess=()=>{
+        openDatabase=r.result;
+        openDatabase.onversionchange=resetDb;
+        resolve(openDatabase);
+      };
+      r.onerror=()=>reject(r.error||Error('Audio storage unavailable'));
+      r.onblocked=()=>reject(Error('Audio storage is blocked'));
+    }).catch(error=>{resetDb();throw error;});
+    return openPromise;
+  };
+  const storageRetry=async operation=>{
+    let last;
+    for(let attempt=0;attempt<3;attempt++){
+      try{return await operation();}
+      catch(error){
+        last=error;
+        resetDb();
+        if(attempt<2)await new Promise(resolve=>setTimeout(resolve,25*(attempt+1)));
+      }
+    }
+    throw last;
+  };
+  const all=store=>storageRetry(async()=>{
+    const database=await db();
+    return new Promise((resolve,reject)=>{
+      let tx;
+      try{tx=database.transaction(store);}
+      catch(error){reject(error);return;}
+      const r=tx.objectStore(store).getAll();
+      r.onsuccess=()=>resolve(r.result);
+      r.onerror=()=>reject(r.error||Error('Audio persistence read failed'));
+      tx.onabort=()=>reject(tx.error||Error('Audio persistence read aborted'));
+    });
   });
-  const all=async store=>{
+  const put=(store,value)=>storageRetry(async()=>{
     const database=await db();
-    return new Promise((resolve,reject)=>{const r=database.transaction(store).objectStore(store).getAll();r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
-  };
-  const put=async(store,value)=>{
-    const database=await db();
-    return new Promise((resolve,reject)=>{const tx=database.transaction(store,'readwrite');tx.objectStore(store).put(value);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error||Error('Audio persistence failed'));});
-  };
+    return new Promise((resolve,reject)=>{
+      let tx;
+      try{tx=database.transaction(store,'readwrite');}
+      catch(error){reject(error);return;}
+      tx.objectStore(store).put(value);
+      tx.oncomplete=resolve;
+      tx.onerror=()=>reject(tx.error||Error('Audio persistence failed'));
+      tx.onabort=()=>reject(tx.error||Error('Audio persistence failed'));
+    });
+  });
   const failure=e=>'ERROR:'+(e?.message||String(e));
   const release=()=>{stream?.getTracks().forEach(t=>t.stop());stream=null;analyser=null;context?.close().catch(()=>{});context=null;};
   const removeSession=async id=>{
     if(!id)return;
-    await writes.catch(()=>{});
-    const database=await db();
+    await writes;
     const chunks=(await all('chunks')).filter(x=>x.id===id);
-    await new Promise((resolve,reject)=>{const tx=database.transaction(['sessions','chunks'],'readwrite');tx.objectStore('sessions').delete(id);chunks.forEach(x=>tx.objectStore('chunks').delete([x.id,x.index]));tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error||Error('Audio cleanup failed'));});
+    await storageRetry(async()=>{
+      const database=await db();
+      return new Promise((resolve,reject)=>{
+        let tx;
+        try{tx=database.transaction(['sessions','chunks'],'readwrite');}
+        catch(error){reject(error);return;}
+        tx.objectStore('sessions').delete(id);
+        chunks.forEach(x=>tx.objectStore('chunks').delete([x.id,x.index]));
+        tx.oncomplete=resolve;
+        tx.onerror=()=>reject(tx.error||Error('Audio cleanup failed'));
+        tx.onabort=()=>reject(tx.error||Error('Audio cleanup failed'));
+      });
+    });
   };
   const pendingSession=async()=>{
     if(recorder&&recorder.state!=='inactive')return null;
@@ -31,7 +88,7 @@
     const chunks=await all('chunks');
     for(const saved of sessions){
       if(chunks.some(x=>x.id===saved.id&&x.blob?.size>0))return saved;
-      await removeSession(saved.id).catch(()=>{});
+      await removeSession(saved.id);
     }
     return null;
   };
