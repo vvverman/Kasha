@@ -57,7 +57,32 @@ fun StudioApp(state: StudioState) {
             contentColor = colors.onSurface,
         ) {
             if (!state.initialized) {
-                KashaSplash()
+                if (state.error == null) {
+                    KashaSplash()
+                } else {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Column(
+                            Modifier.fillMaxWidth().widthIn(max = 420.dp).padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Text(
+                                state.tr(state.error!!),
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = colors.onSurface,
+                            )
+                            Spacer(Modifier.height(20.dp))
+                            Action(
+                                state.tr("retry"),
+                                {
+                                    state.error = null
+                                    scope.launch { state.launch() }
+                                },
+                                primary = true,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                    }
+                }
                 return@Surface
             }
             BoxWithConstraints(
