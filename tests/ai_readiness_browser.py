@@ -87,9 +87,14 @@ try:
                 page.wait_for_timeout(100)
             raise AssertionError('Не дождались: ' + label)
 
-        def click_button(label):
-            locator = page.get_by_role('button', name=label, exact=True)
-            wait_for(lambda: visible(locator), label)
+        def click_control(label):
+            def target():
+                for role in ('button', 'tab'):
+                    locator = page.get_by_role(role, name=label, exact=True)
+                    if visible(locator):
+                        return locator
+                return None
+            locator = wait_for(target, label)
             # Семантика Canvas может появиться раньше завершения первого кадра.
             # Ждём отрисовку и передаём раздельные pointer-down/up, как при обычном нажатии.
             page.evaluate('() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))')
@@ -103,7 +108,7 @@ try:
         try:
             page.goto(BASE, wait_until='networkidle', timeout=60000)
             page.locator('canvas').first.wait_for(state='visible')
-            click_button('Настройки')
+            click_control('Настройки')
             wait_for(lambda: len(requests) > 0, 'открытие настроек и вызов контракта готовности')
             wait_for(lambda: 'Движок не запускается' in page.locator('body').aria_snapshot(), 'причина runtime')
             before = page.locator('body').aria_snapshot()
@@ -112,7 +117,7 @@ try:
             assert 'Готово к запуску' not in before, before
             page.screenshot(path=str(OUT / 'not-ready.png'))
             mode['ready'] = True
-            click_button('Проверить снова')
+            click_control('Проверить снова')
             wait_for(lambda: 'Готово к запуску' in page.locator('body').aria_snapshot(), 'новый ответ готовности')
             after = page.locator('body').aria_snapshot()
             assert 'Движок не запускается' not in after, after
