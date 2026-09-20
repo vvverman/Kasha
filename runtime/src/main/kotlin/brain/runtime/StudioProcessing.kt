@@ -20,7 +20,9 @@ class PreferenceStore(private val root: Path) {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
     suspend fun read(): Preferences = mutex.withLock {
-        if (Files.exists(file)) json.decodeFromString<Preferences>(Files.readString(file)).validated() else Preferences()
+        readRecoverableJson(file, "Настройки Kasha") {
+            json.decodeFromString<Preferences>(it).validated()
+        } ?: Preferences()
     }
 
     suspend fun save(value: Preferences) = mutex.withLock {
