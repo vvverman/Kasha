@@ -81,9 +81,7 @@ jobs:
           cp desktopApp/packaging/Установка.txt desktopApp/bundle/common/Установка.txt
           gradle -Pkotlin.compiler.execution.strategy=in-process :desktopApp:createDistributable
           gradle --stop
-      - name: Запуск без зависимостей и сети, проверка DMG
-        env:
-          KASHA_DEFER_AI_ACCEPTANCE: '1'
+      - name: Полная AI-приёмка без зависимостей и сети, проверка DMG
         run: bash desktopApp/packaging/package-and-test.sh
       - uses: actions/upload-artifact@v4
         if: always()
