@@ -96,7 +96,14 @@ fun main(args:Array<String>){
                         val image=java.awt.Robot().createScreenCapture(java.awt.Rectangle(window.locationOnScreen,window.size))
                         javax.imageio.ImageIO.write(image,"png",smokeOutput.resolve("$screen.png").toFile())
                         Files.writeString(smokeOutput.resolve("$screen-ready.txt"),"visible=${window.isShowing}; ${window.width}x${window.height}; Java=${System.getProperty("java.home")}; simulated=${services.simulated}")
-                        delay(200);requestClose()
+                        delay(200)
+                        // Smoke-процесс уже записал evidence. На Linux Compose/AWT может
+                        // оставить служебные event threads после exitApplication(), поэтому
+                        // CI должен завершаться детерминированно после штатного flush/close.
+                        state.flush()
+                        withContext(Dispatchers.IO){services.close()}
+                        runCatching{Runtime.getRuntime().removeShutdownHook(shutdownHook)}
+                        exitProcess(0)
                     }
                 }
                 StudioApp(state)
