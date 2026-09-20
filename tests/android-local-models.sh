@@ -56,6 +56,7 @@ for flag in ('passed', 'nativeWhisper', 'nativeQwen', 'voiceSavedAsNote', 'resta
     assert evidence.get(flag) is True, flag
 assert evidence['externalNetworkReachable'] is False
 assert evidence['routerRoles'] == 3
+assert evidence.get('fixture') == 'synthetic-russian-speech'
 evidence['androidApi'] = int(sys.argv[2])
 path.write_text(json.dumps(evidence, ensure_ascii=False, indent=2))
 print('Реальный локальный AI и сохранение заметки: проверено, Android API', sys.argv[2])
