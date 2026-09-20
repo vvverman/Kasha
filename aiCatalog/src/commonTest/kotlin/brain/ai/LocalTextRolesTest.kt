@@ -32,6 +32,23 @@ class LocalTextRolesTest {
         assertEquals(mapOf("p" to 3), model.rank("Проверить 12 файлов", listOf(Project("p", "Работа"))))
         assertEquals(listOf(AiRole.TEXT, AiRole.TEXT, AiRole.ROUTING), roles)
     }
+    @Test fun rejectedFirstTidyRetriesFromOriginalAndAcceptsSafeSecondAnswer() = immediate {
+        var calls = 0
+        val model = LocalTextRoles { role, prompt, _, _ ->
+            assertEquals(AiRole.TEXT, role)
+            calls++
+            if (calls == 1) {
+                """{"title":"План","text":"Ирина меняла 12 файлов"}"""
+            } else {
+                assertTrue("Если не уверен" in prompt)
+                assertTrue("Ирина не меняла 12 файлов" in prompt)
+                """{"title":"План","text":"Ирина не меняла 12 файлов."}"""
+            }
+        }
+        assertEquals("Ирина не меняла 12 файлов.", model.tidy("Ирина не меняла 12 файлов"))
+        assertEquals(2, calls)
+    }
+
     @Test fun changedNumbersAreRejectedByExistingCoreValidator() = immediate {
         val model = LocalTextRoles { _, _, _, _ -> """{"title":"План","text":"Ирина не меняла 21 файл"}""" }
         assertFailsWith<IllegalArgumentException> { model.tidy("Ирина не меняла 12 файлов") }
