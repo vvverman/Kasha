@@ -92,6 +92,16 @@ jobs:
             :composeApp:iosSimulatorArm64Test \
             2>&1 | tee ios-shared.log
           test -s test-output/ios-local-models/ios-local-models.json
+          python3 - <<'PYAI'
+          import json
+          from pathlib import Path
+          evidence = json.loads(Path('test-output/ios-local-models/ios-local-models.json').read_text())
+          for flag in ('passed', 'nativeWhisper', 'pcm16kAndAac48k', 'nativeQwen', 'sourceUnchanged'):
+              assert evidence.get(flag) is True, flag
+          assert evidence.get('routerRoles') == 3
+          assert evidence.get('networkTransport') is False
+          print('iOS local AI acceptance evidence: PASS')
+          PYAI
           test -s test-output/ios-visual/result.json
       - name: Системная диагностика аудио симулятора
         if: failure()
