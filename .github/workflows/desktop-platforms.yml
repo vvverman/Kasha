@@ -123,21 +123,16 @@ jobs:
           AFTER_REMOVE=$(data_hash)
           test "$BEFORE_REINSTALL" = "$AFTER_REMOVE"
           printf 'before=%s\nafterReinstall=%s\nafterRemove=%s\npassed=true\n' "$BEFORE_REINSTALL" "$AFTER_REINSTALL" "$AFTER_REMOVE" > "$OUT/data-preservation.txt"
-      - name: "DEFERRED: section 6 — Linux and Web AI"
-        id: linux_ai_deferred
-        continue-on-error: true
+      - name: "AI acceptance — Linux and Web local models"
         run: |
           set -euo pipefail
           export PATH="$PWD/desktopApp/bundle/linux/bin:$PATH"
           python3 -m pip install piper-tts==1.4.2
           python3 tests/make-russian-fixture.py
           sudo -E unshare --net bash tests/linux-local-models.sh
-      - name: Сохранить статус отложенного AI и доступ к тестовым журналам
+      - name: Подготовить Linux AI evidence к выгрузке
         if: always()
-        env:
-          AI_OUTCOME: ${{ steps.linux_ai_deferred.outcome }}
         run: |
-          printf 'DEFERRED: section 6 — Linux/Web AI outcome: %s. AI acceptance remains open.\n' "$AI_OUTCOME" >> "$GITHUB_STEP_SUMMARY"
           # Изолированный AI-тест запущен через sudo, его новые файлы принадлежат root.
           # Возвращаем только журналы этого теста владельцу CI; данные приложения не затрагиваются.
           if [ -d test-output/desktop-ai ]; then
@@ -264,9 +259,7 @@ jobs:
           if (!(Test-Path "$dist/windows-install-smoke.log")) { throw 'Windows install smoke log missing' }
           Get-Content "$dist/windows-install-smoke.log"
           Get-Content "$dist/SHA256SUMS.txt"
-      - name: "DEFERRED: section 6 — Windows AI"
-        id: windows_ai_deferred
-        continue-on-error: true
+      - name: "AI acceptance — Windows local models"
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -276,12 +269,6 @@ jobs:
           python tests/make-russian-fixture.py
           if ($LASTEXITCODE -ne 0) { throw 'Speech fixture preparation failed' }
           ./tests/windows-local-models.ps1
-      - name: Отдельный статус отложенного Windows AI
-        if: always()
-        shell: pwsh
-        env:
-          AI_OUTCOME: ${{ steps.windows_ai_deferred.outcome }}
-        run: '"DEFERRED: section 6 — Windows AI outcome: $env:AI_OUTCOME. AI acceptance remains open." | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append'
       - name: Upload Windows diagnostics
         if: always()
         uses: actions/upload-artifact@v4
