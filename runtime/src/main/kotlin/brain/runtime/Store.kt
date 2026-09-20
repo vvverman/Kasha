@@ -28,7 +28,9 @@ class FileBrainStore(val root: Path, private val runtimeStatus: () -> RuntimeSta
         root.createDirectories(); audioRoot.createDirectories()
         require(!Files.isSymbolicLink(stateFile) && !Files.isSymbolicLink(audioRoot))
 
-        state = if (!stateFile.exists()) BrainData() else json.decodeFromString(Files.readString(stateFile))
+        state = readRecoverableJson(stateFile, "Локальные данные Kasha") {
+            json.decodeFromString<BrainData>(it)
+        } ?: BrainData()
         val migrated = state.migrated()
         if (migrated != state) commit(migrated)
 
@@ -187,13 +189,73 @@ class FileBrainStore(val root: Path, private val runtimeStatus: () -> RuntimeSta
     private fun now() = Clock.System.now().toEpochMilliseconds()
 }
 
-internal fun atomicWrite(file: Path, text: String) {
-    val temp = Files.createTempFile(file.parent, ".save-", ".tmp")
+private fun backupPath(file: Path): Path = file.resolveSibling(file.fileName.toString() + ".bak")
+private fun corruptPath(file: Path): Path = file.resolveSibling(file.fileName.toString() + ".corrupt")
+
+private fun readPersistedText(file: Path): String {
+    require(!Files.isSymbolicLink(file)) { "Локальное хранилище Kasha не может быть символической ссылкой" }
+    return Files.readString(file)
+}
+
+internal fun <T> readRecoverableJson(file: Path, label: String, decode: (String) -> T): T? {
+    val backup = backupPath(file)
+    if (!Files.exists(file) && !Files.exists(backup)) return null
+
+    var primaryFailure: Exception? = null
+    if (Files.exists(file)) {
+        try {
+            return decode(readPersistedText(file))
+        } catch (error: Exception) {
+            primaryFailure = error
+        }
+    }
+
+    if (Files.exists(backup)) {
+        try {
+            val backupText = readPersistedText(backup)
+            val recovered = decode(backupText)
+            if (Files.exists(file)) {
+                runCatching { Files.copy(file, corruptPath(file), StandardCopyOption.REPLACE_EXISTING) }
+            }
+            atomicReplace(file, backupText)
+            return recovered
+        } catch (backupFailure: Exception) {
+            primaryFailure?.addSuppressed(backupFailure)
+            if (primaryFailure == null) primaryFailure = backupFailure
+        }
+    }
+
+    throw IllegalStateException("$label повреждены; пустое состояние не создано", primaryFailure)
+}
+
+private fun atomicReplace(file: Path, text: String) {
+    require(!Files.isSymbolicLink(file)) { "Локальное хранилище Kasha не может быть символической ссылкой" }
+    Files.createDirectories(file.parent)
+    val prefix = "." + file.fileName.toString() + "-save-"
+    val temp = Files.createTempFile(file.parent, prefix, ".tmp")
     try {
         FileChannel.open(temp, StandardOpenOption.WRITE).use { channel ->
-            val buffer = ByteBuffer.wrap(text.toByteArray(Charsets.UTF_8)); while (buffer.hasRemaining()) channel.write(buffer); channel.force(true)
+            val buffer = ByteBuffer.wrap(text.toByteArray(Charsets.UTF_8))
+            while (buffer.hasRemaining()) channel.write(buffer)
+            channel.force(true)
         }
-        try { Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE) }
-        catch (_: AtomicMoveNotSupportedException) { Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING) }
-    } finally { Files.deleteIfExists(temp) }
+        try {
+            Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+        } catch (_: AtomicMoveNotSupportedException) {
+            Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING)
+        }
+        runCatching {
+            FileChannel.open(file.parent, StandardOpenOption.READ).use { it.force(true) }
+        }
+    } finally {
+        Files.deleteIfExists(temp)
+    }
+}
+
+internal fun atomicWrite(file: Path, text: String) {
+    if (Files.exists(file)) {
+        val current = readPersistedText(file)
+        atomicReplace(backupPath(file), current)
+    }
+    atomicReplace(file, text)
 }
