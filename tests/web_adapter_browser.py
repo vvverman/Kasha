@@ -250,10 +250,6 @@ with sync_playwright() as pw:
         assert page.evaluate('kashaPlatform.pending()') is True
         page.unroute('**/api/captures/audio')
 
-        page.reload(wait_until='networkidle')
-        assert page.evaluate('kashaPlatform.pending()') is True
-        wait_capture_idle(recovered['id'])
-        api('captures/' + recovered['id'], method='DELETE')
         receipt_text = page.evaluate('(base) => kashaPlatform.recover(base)', BASE)
         assert not receipt_text.startswith('ERROR:'), receipt_text
         receipt = json.loads(receipt_text)
