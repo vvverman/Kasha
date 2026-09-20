@@ -40,10 +40,17 @@ internal object IosPaths {
 
     fun exists(path: String): Boolean = files.fileExistsAtPath(path)
 
-    fun read(path: String): String? = if (!exists(path)) null else
-        NSString.stringWithContentsOfFile(path, NSUTF8StringEncoding, null)?.toString()
+    fun backup(path: String): String = "$path.bak"
+    fun corrupt(path: String): String = "$path.corrupt"
 
-    fun write(path: String, text: String) {
+    fun read(path: String): String? = if (!exists(path)) null else readRequired(path)
+
+    fun readRequired(path: String): String =
+        NSString.stringWithContentsOfFile(path, NSUTF8StringEncoding, null)?.toString()
+            ?: error("Не удалось прочитать локальные данные Kasha")
+
+    /** Атомарная замена без ротации backup — используется только при проверенном recovery. */
+    fun replace(path: String, text: String) {
         val ok = (text as NSString).writeToFile(
             path = path,
             atomically = true,
@@ -51,6 +58,12 @@ internal object IosPaths {
             error = null,
         )
         check(ok) { "Не удалось сохранить локальные данные Kasha" }
+    }
+
+    /** Перед новой версией сохраняем последнюю читаемую копию для crash/corruption recovery. */
+    fun write(path: String, text: String) {
+        if (exists(path)) replace(backup(path), readRequired(path))
+        replace(path, text)
     }
 
     fun move(from: String, to: String) {
