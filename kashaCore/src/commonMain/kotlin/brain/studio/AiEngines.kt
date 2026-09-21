@@ -53,7 +53,7 @@ data class AiSelection(
     companion object {
         const val DEFAULT_STT = "local.default.stt"
         const val DEFAULT_TEXT = "local.default.text"
-        const val DEFAULT_ROUTING = DEFAULT_TEXT
+        const val DEFAULT_ROUTING = "local.default.routing"
     }
 
     fun engineId(role: AiRole): String = when (role) {
