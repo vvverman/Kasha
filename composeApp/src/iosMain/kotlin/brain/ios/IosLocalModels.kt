@@ -1,6 +1,7 @@
 package brain.ios
 
 import brain.ai.LocalTextRoles
+import brain.ai.EmbeddingProjectRouting
 import brain.ai.ModelArtifacts
 import brain.model.Project
 import brain.studio.*
@@ -17,10 +18,17 @@ internal class IosLocalModels(val packages: IosModelPackages, private val native
         }
     suspend fun title(id: String, value: String) = text(id) { it.title(value) }
     suspend fun tidy(id: String, value: String) = text(id) { it.tidy(value) }
-    suspend fun rank(id: String, value: String, projects: List<Project>) = text(id) { it.rank(value, projects) }
+    suspend fun rank(id: String, value: String, projects: List<Project>) =
+        EmbeddingProjectRouting.rank(value, projects) { text ->
+            packages.withModel(id) { model -> native.embed(model, text) }
+        }
 
     suspend fun capability(role: AiRole, id: String, language: String): AiRoleCapability = try {
-        val supported = if (role == AiRole.SPEECH_TO_TEXT) id in ModelArtifacts.speech else id in ModelArtifacts.text
+        val supported = when (role) {
+            AiRole.SPEECH_TO_TEXT -> id in ModelArtifacts.speech
+            AiRole.TEXT -> id in ModelArtifacts.text
+            AiRole.ROUTING -> id in ModelArtifacts.routing
+        }
         val languages = AiCatalog.engine(id)?.languages.orEmpty()
         val supportedLanguage = languages.isEmpty() || language.substringBefore('-').substringBefore('_') in languages
         AiReadiness.local(role, id, supported, supportedLanguage,
