@@ -28,6 +28,7 @@ class StudioState(
     val title: String get() = content.title
     val text: String get() = content.edit.text
     val editRevision: Long get() = content.edit.revision
+    val captureTextVariant: CaptureTextVariant get() = current?.selectedTextVariant ?: CaptureTextVariant.TRANSCRIPTION
 
     var tab by mutableStateOf(Tab.HOME); private set
     var selectedProjectId by mutableStateOf<String?>(null)
@@ -239,10 +240,29 @@ class StudioState(
 
     suspend fun retry() = action { current?.let { capture -> core { retry(capture.id) } } }
 
-    suspend fun tidy() = action {
+    suspend fun selectCaptureTextVariant(variant: CaptureTextVariant) = action {
         val capture = current ?: return@action
-        core { tidy(capture.id) }
+        when (variant) {
+            CaptureTextVariant.TRANSCRIPTION -> core { selectCaptureTextVariant(capture.id, variant) }
+            CaptureTextVariant.NORMALIZATION -> {
+                if (capture.llmApplied && capture.preparedText.isNotBlank()) {
+                    core { selectCaptureTextVariant(capture.id, variant) }
+                } else {
+                    core { tidy(capture.id) }
+                }
+            }
+        }
     }
+
+    suspend fun reprocessCurrentText() = action {
+        val capture = current ?: return@action
+        when (capture.selectedTextVariant) {
+            CaptureTextVariant.TRANSCRIPTION -> core { retry(capture.id) }
+            CaptureTextVariant.NORMALIZATION -> core { tidy(capture.id) }
+        }
+    }
+
+    suspend fun tidy() = selectCaptureTextVariant(CaptureTextVariant.NORMALIZATION)
 
     suspend fun sendToNotes() = action {
         val capture = current ?: return@action
