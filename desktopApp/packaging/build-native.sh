@@ -31,6 +31,7 @@ build_engine() {
 }
 build_engine whisper.cpp "$WHISPER" whisper-cli
 build_engine llama.cpp "$LLAMA" llama-embedding
+build_engine llama.cpp "$LLAMA" llama-completion
 checkout FFmpeg/FFmpeg "$FFMPEG" "$ROOT/ffmpeg"
 (
  cd "$ROOT/ffmpeg"
@@ -55,18 +56,8 @@ for file in "$RES/bin/"*; do
    echo "Внешняя зависимость в $file, выпуск запрещён"; exit 1
  fi
 done
-fetch_model() {
- local name="$1" url="$2" expected="$3" file="$RES/models/$1"
- if [ -f "$file" ] && [ "$(shasum -a 256 "$file" | cut -d ' ' -f1)" = "$expected" ]; then return; fi
- curl -fL --retry 3 --connect-timeout 30 --max-time 1800 "$url" -o "$file.part"
- test "$(shasum -a 256 "$file.part" | cut -d ' ' -f1)" = "$expected"
- mv "$file.part" "$file"
-}
-fetch_model ggml-small.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/90a64d80ea254cf67575b41a5971f972c79f7b45/ggml-small.bin 1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b
-fetch_model Qwen3-4B-Q4_K_M.gguf https://huggingface.co/Qwen/Qwen3-4B-GGUF/resolve/a9a60d009fa7ff9606305047c2bf77ac25dbec49/Qwen3-4B-Q4_K_M.gguf 7485fe6f11af29433bc51cab58009521f205840f5b4ae3a32fa7f92e8534fdf5
-# Лицензия добавлена upstream позднее закреплённого коммита весов; веса не меняем.
-curl -fL --retry 3 https://huggingface.co/Qwen/Qwen3-4B-GGUF/raw/bc640142c66e1fdd12af0bd68f40445458f3869b/LICENSE -o "$RES/licenses/Qwen3-Apache-2.0.txt"
-grep -q 'Apache License' "$RES/licenses/Qwen3-Apache-2.0.txt"
+# Все платформы используют один и тот же закреплённый manifest моделей.
+bash desktopApp/packaging/prepare-models.sh
 cp "$RES/licenses/whisper.cpp.txt" "$RES/licenses/Whisper-model-MIT.txt"
 printf 'Kasha bundles Whisper Large-v3 Turbo Q5 and F2LLM-v2-80M Q8_0.\nFFmpeg is a separate LGPL executable; its source and build configuration are included.\nJava: Eclipse Temurin 21, GPLv2 with Classpath Exception, licenses in runtime/legal.\nCompose/Kotlin/Ktor: Apache-2.0; library notices retained inside their JARs.\n' > "$RES/licenses/NOTICE.txt"
 cp desktopApp/packaging/Установка.txt "$RES/Установка.txt"
