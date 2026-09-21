@@ -1,0 +1,51 @@
+name: Build Kasha Cleanup GGUF
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/build-cleanup-gguf-macos.sh'
+      - '.github/workflows/cleanup-model.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cleanup-model-v1
+  cancel-in-progress: false
+
+jobs:
+  convert:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Convert MLX cleanup model to GGUF
+        run: bash scripts/build-cleanup-gguf-macos.sh "$RUNNER_TEMP/kasha-cleanup"
+      - name: Publish conversion evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kasha-Cleanup-0.6B-GGUF
+          compression-level: 0
+          retention-days: 14
+          path: |
+            ${{ runner.temp }}/kasha-cleanup/output/Kasha-Cleanup-0.6B-Q4_K_M.gguf
+            ${{ runner.temp }}/kasha-cleanup/output/SHA256SUMS.txt
+            ${{ runner.temp }}/kasha-cleanup/output/smoke-output.txt
+            ${{ runner.temp }}/kasha-cleanup/output/python-packages.txt
+            ${{ runner.temp }}/kasha-cleanup/output/NOTICE.txt
+      - name: Publish pinned model release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="kasha-cleanup-0.6b-v1"
+          OUT="$RUNNER_TEMP/kasha-cleanup/output"
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --title "Kasha Cleanup 0.6B v1" --prerelease \
+              --notes "Cross-platform GGUF conversion of NicolaiMTLassen/transcrib-cleanup-0.6b (Apache-2.0), built for Kasha local transcript normalization."
+          fi
+          gh release upload "$TAG" \
+            "$OUT/Kasha-Cleanup-0.6B-Q4_K_M.gguf" "$OUT/SHA256SUMS.txt" "$OUT/NOTICE.txt" --clobber
+          cat "$OUT/SHA256SUMS.txt"
