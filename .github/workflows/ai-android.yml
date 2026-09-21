@@ -1,6 +1,15 @@
 name: Kasha Android AI offline
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'androidApp/**'
+      - 'aiCatalog/**'
+      - 'kashaCore/**'
+      - 'composeApp/**'
+      - 'tests/android-local-models.sh'
+      - '.github/workflows/ai-android.yml'
   pull_request:
     paths:
       - 'androidApp/**'

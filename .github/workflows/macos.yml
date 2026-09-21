@@ -1,7 +1,7 @@
 name: Автономный установщик macOS
 on:
   push:
-    branches: [macos-installer]
+    branches: [main, macos-installer]
   pull_request:
     paths:
       - 'desktopApp/packaging/**'
