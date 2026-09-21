@@ -4,6 +4,7 @@ import android.content.Context
 import brain.ai.KashaAiCatalog
 import brain.ai.ManagedCloudGateway
 import brain.ai.ExternalTextRoles
+import brain.ai.EmbeddingProjectRouting
 import brain.ai.BuiltInAi
 import brain.ai.BuiltInText
 import brain.ai.LocalTextRoles
@@ -68,7 +69,7 @@ internal class AndroidIntelligence(
         val selected = selected(AiRole.ROUTING)
         AiCatalog.cloudProviderId(selected)?.let { return external(it).rank(text, projects) }
         return when (selected) {
-            in ModelArtifacts.text -> textModel(selected).rank(text, projects)
+            in ModelArtifacts.routing -> EmbeddingProjectRouting.rank(text, projects) { value -> llama.embed(selected, value) }
             BuiltInAi.LOCAL_RULES -> BuiltInText.rank(text, projects, language)
             else -> error("androidAiNotConfigured")
         }
@@ -77,14 +78,14 @@ internal class AndroidIntelligence(
     private suspend fun selected(role: AiRole): String {
         val id = preferences().ai.engineId(role)
         check(KashaAiCatalog.supportsSelection(id, role)) { "aiUnavailable" }
-        return KashaAiCatalog.canonicalEngineId(id)
+        return KashaAiCatalog.canonicalEngineId(id, role)
     }
     private fun requireCloud() = cloud ?: error("cloudConnectionUnavailable")
     private fun external(provider: String) = ExternalTextRoles { role, prompt -> requireCloud().generate(provider, role, prompt) }
 
     private fun runtimeReady(id: String): Boolean = when (id) {
         in ModelArtifacts.speech -> AndroidWhisperNative.available
-        in ModelArtifacts.text -> AndroidLlamaNative.available
+        in ModelArtifacts.text, in ModelArtifacts.routing -> AndroidLlamaNative.available
         else -> false
     }
 
