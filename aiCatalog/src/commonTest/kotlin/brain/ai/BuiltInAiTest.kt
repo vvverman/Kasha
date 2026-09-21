@@ -23,7 +23,7 @@ class BuiltInAiTest {
         assertFailsWith<IllegalStateException> { BuiltInAi.requireApple(AiRole.SPEECH_TO_TEXT, BuiltInAi.LOCAL_RULES) }
     }
     @Test fun ordinaryDefaultsAndStoredSelectionAreNotRewritten() {
-        val stored = AiSelection(speechToText = "local.whisper.medium")
+        val stored = AiSelection(speechToText = "local.whisper.small")
         assertEquals(stored, KashaAiCatalog.validateSelection(stored))
         assertEquals(AiSelection.DEFAULT_STT, AiSelection().speechToText)
     }
