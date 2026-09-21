@@ -17,6 +17,7 @@ import kotlinx.coroutines.sync.withLock
 /** Состояние редактирования текущего capture, не отдельный раздел или сущность «Черновики». */
 data class CaptureEditState(
     val captureId: String? = null,
+    val variant: CaptureTextVariant = CaptureTextVariant.TRANSCRIPTION,
     val text: String = "",
     val revision: Long = 0,
     val dirty: Boolean = false,
@@ -644,7 +645,7 @@ class KashaApplication(
         val edit = before.edit
         if (!edit.dirty || capture.status.isWorking) return
         check(edit.captureId == capture.id) { "currentExists" }
-        val saved = repository.updateCaptureDraft(capture.id, CaptureDraftUpdate(text = edit.text))
+        val saved = repository.updateCaptureDraft(capture.id, CaptureDraftUpdate(text = edit.text, variant = edit.variant))
         check(saved.id == capture.id) { "saveFailed" }
         mutableState.update { latest ->
             latest.copy(
@@ -666,7 +667,13 @@ class KashaApplication(
                 transport = if (current?.audioFinalized == true && before.transport.loadedAudioId == null && !before.transport.recording)
                     before.transport.copy(loadedAudioId = current.id) else before.transport,
                 edit = if (edit.captureId == current?.id && edit.dirty) edit else
-                    CaptureEditState(current?.id, current?.textToSave.orEmpty(), edit.revision, dirty = false),
+                    CaptureEditState(
+                        captureId = current?.id,
+                        variant = current?.selectedTextVariant ?: CaptureTextVariant.TRANSCRIPTION,
+                        text = current?.textToSave.orEmpty(),
+                        revision = edit.revision,
+                        dirty = false,
+                    ),
             )
         }
     }
