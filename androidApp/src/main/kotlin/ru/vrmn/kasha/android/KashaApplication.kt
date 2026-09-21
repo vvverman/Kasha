@@ -1,7 +1,6 @@
 package ru.vrmn.kasha.android
 
 import android.app.Application
-import brain.ai.BuiltInAi
 import brain.model.RuntimeStatus
 import brain.studio.Preferences
 import brain.studio.StudioState
@@ -38,7 +37,7 @@ internal class AndroidPlatformRuntime(application: Application) {
                 simulated = false,
                 message = "Android · системное распознавание требует поддерживаемого файлового ввода и установленного языка",
             ) },
-            defaultPreferences = Preferences(ai = BuiltInAi.androidSelection()),
+            defaultPreferences = Preferences(),
         )
     }
     val permissions = AndroidPermissions(application)
