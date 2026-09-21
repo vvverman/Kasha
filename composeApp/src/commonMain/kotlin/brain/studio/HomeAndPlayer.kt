@@ -78,8 +78,8 @@ private fun HomeStateContent(s: StudioState) {
                 }
                 KashaTextTabs(
                     items = listOf(
-                        KashaCopy.text(s.language, "transcription"),
-                        KashaCopy.text(s.language, "normalization"),
+                        KashaCopy.text(s.language, "transcription") ?: "Транскрибация",
+                        KashaCopy.text(s.language, "normalization") ?: "Нормализация",
                     ),
                     selectedIndex = if (s.captureTextVariant == CaptureTextVariant.TRANSCRIPTION) 0 else 1,
                     onSelect = { index ->
@@ -107,7 +107,7 @@ private fun HomeStateContent(s: StudioState) {
             }
             Spacer(Modifier.height(10.dp))
             Action(
-                KashaCopy.text(s.language, "reprocess"),
+                KashaCopy.text(s.language, "reprocess") ?: "Обработать заново",
                 { scope.launch { s.reprocessCurrentText() } },
                 glyph = Glyph.TEXT_PROCESSING,
                 enabled = s.text.isNotBlank() && !s.busy,
