@@ -40,20 +40,20 @@ fetch_model() {
   mv "$file.part" "$file"
 }
 build_tool whisper.cpp "$WHISPER_REV" whisper-cli
-build_tool llama.cpp "$LLAMA_REV" llama-completion
+build_tool llama.cpp "$LLAMA_REV" llama-embedding
 mkdir -p "$ROOT/models"
-fetch_model ggml-small.bin \
-  https://huggingface.co/ggerganov/whisper.cpp/resolve/90a64d80ea254cf67575b41a5971f972c79f7b45/ggml-small.bin \
-  1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b
-fetch_model Qwen3-4B-Q4_K_M.gguf \
-  https://huggingface.co/Qwen/Qwen3-4B-GGUF/resolve/a9a60d009fa7ff9606305047c2bf77ac25dbec49/Qwen3-4B-Q4_K_M.gguf \
-  7485fe6f11af29433bc51cab58009521f205840f5b4ae3a32fa7f92e8534fdf5
+fetch_model ggml-large-v3-turbo-q5_0.bin \
+  https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin \
+  394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2
+fetch_model F2LLM-v2-80M.Q8_0.gguf \
+  https://huggingface.co/mradermacher/F2LLM-v2-80M-GGUF/resolve/main/F2LLM-v2-80M.Q8_0.gguf \
+  fb2a92e51dba7120d5369704502520814775b27c116d27ed039690106bf224ee
 # Пути экранированы для bash, файл доступен только владельцу. Чужие модели не удаляем.
 {
   printf 'export KASHA_WHISPER_CLI=%q\n' "$ROOT/whisper.cpp-$WHISPER_REV/build/bin/whisper-cli"
-  printf 'export KASHA_WHISPER_MODEL=%q\n' "$ROOT/models/ggml-small.bin"
-  printf 'export KASHA_LLAMA_CLI=%q\n' "$ROOT/llama.cpp-$LLAMA_REV/build/bin/llama-completion"
-  printf 'export KASHA_LLAMA_MODEL=%q\n' "$ROOT/models/Qwen3-4B-Q4_K_M.gguf"
+  printf 'export KASHA_WHISPER_MODEL=%q\n' "$ROOT/models/ggml-large-v3-turbo-q5_0.bin"
+  printf 'export KASHA_EMBEDDING_CLI=%q\n' "$ROOT/llama.cpp-$LLAMA_REV/build/bin/llama-embedding"
+  printf 'export KASHA_ROUTING_MODEL=%q\n' "$ROOT/models/F2LLM-v2-80M.Q8_0.gguf"
   printf 'export KASHA_FFMPEG=%q\n' "$(command -v ffmpeg)"
 } > "$ROOT/models.env.tmp"
 mv "$ROOT/models.env.tmp" "$ROOT/models.env"
