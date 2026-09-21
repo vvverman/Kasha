@@ -1,0 +1,33 @@
+name: Kasha release candidate
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/releases/candidate.json'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kasha-release-candidate
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.repository == 'vvverman/Kasha' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Проверить механизм публикации без сети
+        run: python -m unittest discover -s tests -p test_publish_candidate.py -v
+      - name: Дождаться восьми проверок той же ревизии и выпустить предрелиз
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python scripts/publish-candidate.py

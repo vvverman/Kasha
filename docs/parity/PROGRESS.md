@@ -1,116 +1,55 @@
-# Унификация платформ Kasha — итоговый статус
+# Унификация платформ Kasha — итог и выпуск
 
-Дата начала: 14.09.2026.  
-Рабочая ветка: `integration/platform-parity`.  
-Интеграционный PR: **#74**.
+Канон: `docs/SPEC.md`, `docs/design/`, ТЗ «Унификация платформ v1» от 14.09.2026.
 
-Источники требований: `docs/SPEC.md`, нормативные разделы `docs/design/`, ТЗ владельца «Унификация платформ v1» (разделы 1–16, аудит PAR-01…PAR-10).
+## Реализация ТЗ 1–16
 
-## Итог
+Ранее зафиксированный функциональный и автоматизированный проход 1–16 завершён в PR #74. Это не подтверждение испытаний на физическом железе или production-подписи.
 
-По реализации и автоматизированной приёмке ТЗ **1–16 закрыто полностью: 16/16**.
-
-| Раздел | Статус |
+| Раздел | Принятый объём |
 |---|---|
-| 1–5 | DONE |
-| 6 — AI | DONE |
-| 7–11 | DONE |
-| 12 — platform acceptance | DONE для CI / simulator / emulator / собранных пакетов; физическое железо — отдельный manual checklist |
-| 13 — CI + functional acceptance | DONE |
-| 14 — visual acceptance | DONE |
-| 15 — install/reinstall/data preservation | DONE |
-| 16 — final integrated revision | DONE |
+| 1–5 | Общая база, Core/application API, транспорт, fail-closed хранение и восстановление |
+| 6 | AI-контракты, выбранные исполнители, readiness, локальные интеграции и проверки результатов |
+| 7–11 | Общие сценарии и интерфейс; тонкие платформенные адаптеры |
+| 12 | Автоматизированная платформенная приёмка, симуляторы/эмуляторы; физическое железо отдельно |
+| 13–14 | CI, функциональная и визуальная приёмка |
+| 15–16 | Пакеты, переустановка, сохранность данных, интеграционная ревизия |
 
-## Целевая архитектура
+Целевая архитектура: один Core без Compose и конкретных AI-провайдеров; один shared Compose Kasha UI; тонкие iOS/Android/Web/Desktop оболочки. Системные API и упаковка остаются снаружи, продуктовые правила не копируются по ОС. Local-first и защищённое хранение ключей сохраняются.
 
-Подтверждена и реализована схема:
+Хранение использует fail-closed policy: повреждённый/недоступный или пропавший ранее сохранённый документ не становится пустой базой; Retry перечитывает исходные файлы, неуспешная запись не публикуется в памяти, original audio сохраняется. Альтернативная `.bak`-схема PR #75 не вливалась.
 
-- один общий Core с платформонезависимой координацией продуктовых сценариев;
-- один shared Compose Kasha UI;
-- тонкие iOS / Android / Web / Desktop shells и adapters;
-- одинаковые бизнес-правила и продуктовые состояния на платформах;
-- platform-specific код только для системных API и упаковки;
-- local-first граница сохранена;
-- конкретные AI-модели и провайдеры находятся вне Core;
-- изменение общего правила не требует независимой реализации на каждой ОС.
+## Операционный план после реализации — 5 пунктов
 
-## Persistence / recovery — ТЗ 4
+| № | Действие | Статус |
+|---|---|---|
+| 1 | Сверить PR #75 с интеграцией | Выполнено: #75 закрыт без merge как superseded |
+| 2 | Обновить статусы ТЗ и PR | Выполнено |
+| 3 | Перевести #74 из draft и влить в main | Выполнено; merge `34e037a400bef3b549edcaeefe3fba555a5038fb` |
+| 4 | Полная CI-матрица на main | Выполнено на `d78645451adbff4adf04a0f1e4717b68488a6018`: 8/8 SUCCESS |
+| 5 | Версии, release/tag, пакеты и production-подпись | В работе: подготовлен выпуск 1.2.0-rc.1; новый SHA требует своей матрицы. Подпись и физическая приёмка не выполнены |
 
-Закрыто более поздней fail-closed реализацией:
+### Подтверждённая матрица main (пункт 4)
 
-- corrupt/unreadable/missing committed state или preferences не превращаются в пустую базу;
-- новая установка отличима от пропавшего существующего хранилища;
-- interrupted atomic write блокирует destructive migration/reconcile;
-- Retry перечитывает исходные данные после исправления;
-- original audio не удаляется при неуспешном startup/recovery;
-- failed durable write не публикует новое состояние в памяти;
-- Web проверяет реальную IndexedDB, abort/open failures, restart, повреждённый chunk journal и повтор recovery;
-- Android/iOS/JVM/Desktop покрыты отдельными storage failure/recovery тестами.
+| Workflow | Run | Результат |
+|---|---|---|
+| Kotlin Multiplatform | 35601938858 | SUCCESS |
+| Kasha Desktop Adapters | 35601938753 | SUCCESS |
+| Android shell verification | 35601938838 | SUCCESS |
+| Kasha iOS Shared | 35601938775 | SUCCESS |
+| Kasha iOS SideStore | 35601938772 | SUCCESS |
+| Автономный установщик macOS | 35601938811 | SUCCESS |
+| Kasha Desktop Windows Linux | 35601938818 | SUCCESS |
+| Kasha Android AI offline | 35601938872 | SUCCESS |
 
-PR #75 с ранней альтернативной `.bak`-схемой закрыт как superseded и не смешивается с текущим recovery policy.
+Все результаты относятся к одному SHA `d78645451adbff4adf04a0f1e4717b68488a6018`. Они не переносятся на новые исходники автоматически.
 
-## AI — ТЗ 6
+### Пункт 5 — выпуск
 
-Раздел закрыт.
+Android приведён к версии 1.2.0 (ранее 1.1.4), `versionCode` увеличен до 2; Desktop/iOS сохраняют 1.2.0. Продуктовые экраны, правила и данные не меняются.
 
-Реализованы и проверены:
+`.github/releases/candidate.json` задаёт RC-тег. `Kasha release candidate` ждёт все восемь успешных push-workflow своей ревизии, публикует только их артефакты и проверяет SHA-256. Большие установщики делятся на проверяемые части; для macOS предусмотрен сборщик на штатных системных инструментах. Нельзя заменять уже опубликованный тег или пакет другой ревизии.
 
-- независимые STT / TEXT / ROUTING роли;
-- выбранный engine id соответствует фактическому исполнителю, без скрытой подмены;
-- local/native/cloud readiness через общий capability contract;
-- реальные локальные Whisper/Qwen интеграции;
-- Android real-model execution на API 26 и API 35 без внешней сети;
-- iOS native model integration tests;
-- Desktop/Web используют общий JVM/runtime путь;
-- cloud privacy/consent и secure secret boundaries;
-- проверка смысловой сохранности текста: числа, отрицания и факты не должны незаметно меняться;
-- при отклонённом AI-редактировании один безопасный retry строится заново из исходного текста, а не из ошибочного ответа модели.
+Факт завершения публикации устанавливается по успешному workflow и GitHub Release, а не по наличию этого документа. Подробности: `docs/releases/1.2.0-rc.1.md`.
 
-Последний code head перед документальным обновлением:  
-`f8a268a45d28934b02559d6d186d3964d3e18f05` — `test(ai): cover safe retry after rejected local edit — ТЗ 6/16`.
-
-## Последняя полная CI-матрица code head
-
-На `f8a268a45d28934b02559d6d186d3964d3e18f05` все 8 workflow завершились **SUCCESS**:
-
-1. Kotlin Multiplatform;
-2. Kasha Desktop Adapters;
-3. Android shell verification;
-4. Kasha iOS Shared;
-5. Kasha iOS SideStore;
-6. Автономный установщик macOS;
-7. Kasha Desktop Windows Linux;
-8. Kasha Android AI offline.
-
-Документальные изменения после этого head не изменяют product/runtime code; после merge требуется новая контрольная CI-матрица уже на `main`.
-
-## Functional / visual / package acceptance
-
-Проверены:
-
-- Web production Wasm/runtime, MediaRecorder, HTMLAudio, recovery, sorting, responsive/accessibility, light/dark;
-- Android API 26/35: recorder/player, pause/resume/seek, mutual exclusion, Keystore, reminders, shared UI, reinstall data preservation;
-- iOS: shared/native lifecycle и playback tests, SideStore/IPA packaging, production plist, shared visual matrix;
-- Desktop: macOS/Windows/Linux adapters, реальные packages/installers, общий UI;
-- visual acceptance для общих экранов и light/dark;
-- reinstall/data preservation для Android, Windows и Linux.
-
-## Что не считается автоматизированно проверенным
-
-Это не незакрытые пункты общего ТЗ, а отдельная manual hardware/release acceptance:
-
-- физический iPhone/Android microphone;
-- AirPods/Bluetooth route change;
-- реальный телефонный interruption;
-- lock-screen/background на физическом устройстве;
-- финальные Developer ID / App Store / Android production credentials;
-- production signing/notarization и публикация релиза.
-
-## Следующие операционные действия
-
-1. Обновить статус PR #74 и перевести его из draft.
-2. Влить `integration/platform-parity` в `main`.
-3. Прогнать полную CI-матрицу на итоговом `main`.
-4. После зелёного `main` подготовить release/version/tag и production signing/notarization там, где доступны реальные credentials.
-5. Провести отдельный manual hardware checklist.
-
+Остаток production-поставки: настоящие release credentials и подтверждённые signing/notarization. Ручная аппаратная приёмка — физический микрофон, звонки, Bluetooth/AirPods, background/lock-screen — ведётся отдельно.

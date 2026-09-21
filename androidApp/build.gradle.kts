@@ -27,8 +27,8 @@ android {
         minSdk = 26
         targetSdk = 37
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        versionCode = 1
-        versionName = "1.1.4"
+        versionCode = 2
+        versionName = "1.2.0"
         // Одна STL для обоих JNI-движков; Gradle упаковывает её вместе с APK/AAB.
         externalNativeBuild {
             cmake { arguments.add("-DANDROID_STL=c++_shared") }
@@ -69,7 +69,6 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.kotlinx.coroutines.core)
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:${libs.versions.coroutines.get()}")
-    implementation(libs.kotlinx.serialization.json)
 
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test:runner:1.7.0")
