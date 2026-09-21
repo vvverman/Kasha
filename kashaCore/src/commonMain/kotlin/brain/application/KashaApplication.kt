@@ -581,6 +581,12 @@ class KashaApplication(
         repository.reprocess(captureId)
     }
 
+    suspend fun retranscribe(captureId: String): Capture = mutate {
+        requireCurrent(captureId)
+        flushUnlocked()
+        repository.retranscribe(captureId)
+    }
+
     suspend fun tidy(captureId: String): Capture = mutate {
         requireCurrent(captureId)
         flushUnlocked()
