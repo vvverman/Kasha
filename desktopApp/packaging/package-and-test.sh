@@ -125,7 +125,7 @@ import json, os, pathlib, platform
 out=pathlib.Path('macos-output')
 dmg=out/os.environ['KASHA_DMG_NAME']
 report={'passed':True,'file':dmg.name,'bytes':dmg.stat().st_size,'architecture':platform.machine(),
-        'macOS':platform.mac_ver()[0],'bundledJava':True,'bundledModels':['Whisper Small','Qwen3-4B Q4_K_M'],
+        'macOS':platform.mac_ver()[0],'bundledJava':True,'bundledModels':['Whisper Large-v3 Turbo Q5','Kasha Cleanup 0.6B','F2LLM-v2-80M Q8_0'],
         'externalNetworkDeniedDuringInference':True,'developerIdSigned':False,'notarized':False,
         'microphoneHardwareTested':False,'ui':(out/'home-ready.txt').read_text(),
         'acceptanceScope':'non-AI' if os.environ.get('KASHA_DEFER_AI_ACCEPTANCE') == '1' else 'full',
