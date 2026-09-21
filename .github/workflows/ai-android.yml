@@ -10,6 +10,7 @@ on:
       - 'composeApp/**'
       - 'tests/android-local-models.sh'
       - '.github/workflows/ai-android.yml'
+      - '.github/ci/full-matrix.trigger'
   pull_request:
     paths:
       - 'androidApp/**'
@@ -18,6 +19,7 @@ on:
       - 'composeApp/**'
       - 'tests/android-local-models.sh'
       - '.github/workflows/ai-android.yml'
+      - '.github/ci/full-matrix.trigger'
   workflow_dispatch:
 
 permissions:

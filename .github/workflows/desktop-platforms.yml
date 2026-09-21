@@ -13,6 +13,7 @@ on:
       - 'tests/windows-local-models.ps1'
       - 'tests/real_models.py'
       - '.github/workflows/desktop-platforms.yml'
+      - '.github/ci/full-matrix.trigger'
   push:
     branches: [main]
     paths:
@@ -26,6 +27,7 @@ on:
       - 'tests/windows-local-models.ps1'
       - 'tests/real_models.py'
       - '.github/workflows/desktop-platforms.yml'
+      - '.github/ci/full-matrix.trigger'
   workflow_dispatch:
 
 permissions:

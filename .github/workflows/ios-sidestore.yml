@@ -11,6 +11,7 @@ on:
       - 'scripts/check-local-only.py'
       - 'scripts/make-sidestore-source.py'
       - '.github/workflows/ios-sidestore.yml'
+      - '.github/ci/full-matrix.trigger'
   push:
     branches: [main]
     paths:
@@ -22,6 +23,7 @@ on:
       - 'scripts/check-local-only.py'
       - 'scripts/make-sidestore-source.py'
       - '.github/workflows/ios-sidestore.yml'
+      - '.github/ci/full-matrix.trigger'
   workflow_dispatch:
     inputs:
       version:

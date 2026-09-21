@@ -12,6 +12,7 @@ on:
       - 'scripts/prepare-fonts.py'
       - 'docs/design/assets/fonts/**'
       - '.github/workflows/desktop-adapters.yml'
+      - '.github/ci/full-matrix.trigger'
   push:
     branches: [main]
     paths:
@@ -24,6 +25,7 @@ on:
       - 'scripts/prepare-fonts.py'
       - 'docs/design/assets/fonts/**'
       - '.github/workflows/desktop-adapters.yml'
+      - '.github/ci/full-matrix.trigger'
   workflow_dispatch:
 
 permissions:
