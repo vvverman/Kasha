@@ -13,7 +13,7 @@ class DesktopInferenceRunner(
         val name = java.nio.file.Path.of(command.first()).fileName.toString()
         val options = when (name) {
             "whisper-cli" -> listOf("--no-gpu")
-            "llama-completion" -> listOf("--n-gpu-layers", "0", "--device", "none")
+            "llama-completion", "llama-embedding" -> listOf("--n-gpu-layers", "0", "--device", "none")
             else -> emptyList()
         }
         println("Самопроверка: запуск $name на CPU")
