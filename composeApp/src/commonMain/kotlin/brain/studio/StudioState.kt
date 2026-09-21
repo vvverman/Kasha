@@ -256,7 +256,7 @@ class StudioState(
     suspend fun reprocessCurrentText() = action {
         val capture = current ?: return@action
         when (capture.selectedTextVariant) {
-            CaptureTextVariant.TRANSCRIPTION -> core { retry(capture.id) }
+            CaptureTextVariant.TRANSCRIPTION -> core { retranscribe(capture.id) }
             CaptureTextVariant.NORMALIZATION -> core { tidy(capture.id) }
         }
     }
