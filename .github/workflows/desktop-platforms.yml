@@ -90,8 +90,8 @@ jobs:
           test -x desktopApp/bundle/linux/bin/whisper-cli
           test -x desktopApp/bundle/linux/bin/llama-completion
           test -x desktopApp/bundle/linux/bin/ffmpeg
-          test -s desktopApp/bundle/common/models/ggml-small.bin
-          test -s desktopApp/bundle/common/models/Qwen3-4B-Q4_K_M.gguf
+          test -s desktopApp/bundle/common/models/ggml-large-v3-turbo-q5_0.bin
+          test -s desktopApp/bundle/common/models/F2LLM-v2-80M.Q8_0.gguf
           find desktopApp/build/compose/binaries/main -type f \( -name '*.deb' -o -name '*.rpm' \) -print | tee linux-packages.txt
           test "$(wc -l < linux-packages.txt)" -ge 2
       - name: Установка DEB и матрица настоящего общего UI
