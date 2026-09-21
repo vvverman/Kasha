@@ -47,7 +47,17 @@ class RoutedStudioIntelligence(
         if (projects.isEmpty()) return emptyMap()
         val selected = selectedEngine(AiRole.ROUTING)
         val provider = AiCatalog.cloudProviderId(selected)
-        return if (provider == null) local(selected, AiRole.ROUTING) { it.rank(text, projects, language) } else external(provider).rank(text, projects)
+        if (provider != null) return external(provider).rank(text, projects)
+        val descriptor = AiCatalog.engine(selected) ?: error("Неизвестный локальный AI engine: $selected")
+        require(descriptor.supports(AiRole.ROUTING))
+        return packages.withModel(descriptor.id) { model ->
+            LocalEmbeddingRouting(
+                cli = env["KASHA_EMBEDDING_CLI"] ?: error("runtimeUnavailable"),
+                model = model,
+                root = root,
+                runner = runner,
+            ).rank(text, projects)
+        }
     }
 
     private fun external(provider: String) = brain.ai.ExternalTextRoles { role, prompt -> cloud.generate(provider, role, prompt) }
@@ -62,7 +72,8 @@ class RoutedStudioIntelligence(
         return packages.withModel(descriptor.id) { model ->
             val configured = when (role) {
                 AiRole.SPEECH_TO_TEXT -> env + ("KASHA_WHISPER_MODEL" to model.toString())
-                AiRole.TEXT, AiRole.ROUTING -> env + ("KASHA_LLAMA_MODEL" to model.toString())
+                AiRole.TEXT -> env + ("KASHA_LLAMA_MODEL" to model.toString())
+                AiRole.ROUTING -> error("Routing uses LocalEmbeddingRouting")
             }
             action(LocalStudioIntelligence(configured, root, runner))
         }
