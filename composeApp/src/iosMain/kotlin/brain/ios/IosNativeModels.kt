@@ -19,8 +19,12 @@ internal class IosNativeModels(
     }
     private val speech by lazy { Library("KashaWhisper", frameworks, "kasha_whisper_run") }
     private val text by lazy { Library("KashaLlama", frameworks, "kasha_llama_run") }
-    fun available(role: AiRole): Boolean =
-        (if (role == AiRole.SPEECH_TO_TEXT) speech else text).function != null
+    private val embedding by lazy { Library("KashaLlama", frameworks, "kasha_llama_embed") }
+    fun available(role: AiRole): Boolean = when (role) {
+        AiRole.SPEECH_TO_TEXT -> speech.function != null
+        AiRole.TEXT -> text.function != null
+        AiRole.ROUTING -> embedding.function != null
+    }
 
     suspend fun transcribe(model: String, source: String, language: String): String = withContext(Dispatchers.Default) {
         val function = speech.function?.reinterpret<CFunction<(
@@ -41,6 +45,20 @@ internal class IosNativeModels(
         call { ref, status -> memScoped {
             function(model.cstr.ptr, prompt.cstr.ptr, tokens, 4, abort, ref, status)
         } }
+    }
+
+    suspend fun embed(model: String, value: String): FloatArray = withContext(Dispatchers.Default) {
+        require('\u0000' !in value && value.isNotBlank()) { "aiUnavailable" }
+        val function = embedding.function?.reinterpret<CFunction<(
+            CPointer<ByteVar>?, CPointer<ByteVar>?, Int,
+            CPointer<CFunction<(COpaquePointer?) -> Int>>?, COpaquePointer?, CPointer<IntVar>?
+        ) -> CPointer<ByteVar>?>>() ?: error("runtimeUnavailable")
+        val raw = call { ref, status -> memScoped {
+            function(model.cstr.ptr, value.cstr.ptr, 4, abort, ref, status)
+        } }
+        raw.split(',').map { it.toFloat() }.toFloatArray().also {
+            check(it.isNotEmpty()) { "aiUnavailable" }
+        }
     }
 
     private suspend fun call(invoke: (COpaquePointer, CPointer<IntVar>) -> CPointer<ByteVar>?): String {
