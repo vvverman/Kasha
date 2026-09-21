@@ -11,6 +11,9 @@ internal object AndroidLlamaNative {
 
     external fun generate(model: String, prompt: ByteArray,
         tokens: Int, threads: Int, signal: AndroidLlamaCancellation): ByteArray
+
+    external fun embed(model: String, text: ByteArray,
+        threads: Int, signal: AndroidLlamaCancellation): FloatArray
 }
 
 /** Читается JNI также во время загрузки весов и вычисления токена. */
