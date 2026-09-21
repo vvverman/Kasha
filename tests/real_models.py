@@ -48,7 +48,7 @@ else: raise AssertionError('Сервис не запустился')
 
 preferences = api('preferences')
 selection = preferences['ai']
-assert selection == {'speechToText': 'local.default.stt', 'text': 'local.default.text', 'routing': 'local.default.text'}
+assert selection == {'speechToText': 'local.default.stt', 'text': 'local.default.text', 'routing': 'local.default.routing'}
 api('preferences', dict(preferences, language='ru', autoRecord=False), method='PUT')
 capabilities = api('ai/capabilities', selection)
 assert len(capabilities) == 3 and all(value['executable'] for value in capabilities), capabilities
@@ -94,7 +94,7 @@ assert api('preferences')['ai'] == selection
 note = api('captures/' + cid + '/distribute', {'projectId':projects[0]['id']})
 assert note == api('captures/' + cid + '/distribute', {'projectId':projects[0]['id']})
 result = {'passed':True, 'speech':'Piper ru_RU-irina-medium, синтезированная речь, не живой микрофон',
-          'whisper':'small','llm':'Qwen3-4B Q4_K_M (без режима рассуждений)',
+          'whisper':'large-v3-turbo-q5_0','normalizer':'Kasha Cleanup 0.6B','routing':'F2LLM-v2-80M Q8_0',
           'elapsedSeconds':round(time.monotonic()-started,2), 'transcript':c['transcript'],
           'preparedText':c['preparedText'],'title':c['title'], 'relevance':c['relevance'],
           'projectScores':{p['title']:c['relevance'][p['id']] for p in projects if not p['id']==projects[2]['id']},
