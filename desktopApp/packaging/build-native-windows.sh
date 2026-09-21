@@ -38,7 +38,7 @@ build_engine() {
 }
 
 build_engine whisper.cpp "$WHISPER" whisper-cli
-build_engine llama.cpp "$LLAMA" llama-completion
+build_engine llama.cpp "$LLAMA" llama-embedding
 
 # Windows Installer не принимает отдельные файлы >= 2 GiB. Используем штатный
 # формат sharded GGUF из того же pinned llama.cpp; runtime открывает первый shard.
