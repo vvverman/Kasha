@@ -7,6 +7,13 @@ mkdir -p "$OUT"
 exec > >(tee "$OUT/package.log") 2>&1
 RES="$APP/Contents/app/resources"
 test -f "$RES/demo-mode.txt"
+VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist")
+export KASHA_TEST_DMG="Kasha-Test-${VERSION}-macOS-arm64.dmg"
+# Нет весов и inference-движков, но запись и проигрывание остаются настоящими.
+if find "$RES" -type f \( -name '*.gguf' -o -name 'ggml-*.bin' -o -name '*whisper*.dylib' -o -name '*llama*.dylib' \) | grep -q .; then
+    echo 'В тестовой сборке обнаружены запрещённые AI-ресурсы' >&2
+    exit 1
+fi
 test ! -d "$RES/models"
 test ! -e "$RES/bin/whisper-cli"
 test ! -e "$RES/bin/llama-completion"
@@ -31,21 +38,21 @@ STAGE="$OUT/volume"
 mkdir -p "$STAGE"
 mv "$APP" "$STAGE/Kasha Test.app"
 ln -s /Applications "$STAGE/Applications"
-cp docs/TEST_BUILD.md "$STAGE/Прочитать.md"
-hdiutil create -volname 'Kasha Test' -srcfolder "$STAGE" -ov -format UDZO "$OUT/Kasha-Test-1.1.4-macOS-arm64.dmg"
-hdiutil verify "$OUT/Kasha-Test-1.1.4-macOS-arm64.dmg"
+cp docs/TEST_BUILD.md "$STAGE/Прочитать.txt"
+hdiutil create -volname 'Kasha Test' -srcfolder "$STAGE" -ov -format UDZO "$OUT/${KASHA_TEST_DMG}"
+hdiutil verify "$OUT/${KASHA_TEST_DMG}"
 mkdir -p "$OUT/mounted"
-hdiutil attach -nobrowse -readonly -mountpoint "$OUT/mounted" "$OUT/Kasha-Test-1.1.4-macOS-arm64.dmg"
+hdiutil attach -nobrowse -readonly -mountpoint "$OUT/mounted" "$OUT/${KASHA_TEST_DMG}"
 codesign --verify --deep --strict "$OUT/mounted/Kasha Test.app"
 test -x "$OUT/mounted/Kasha Test.app/Contents/app/resources/bin/ffmpeg"
 test ! -d "$OUT/mounted/Kasha Test.app/Contents/app/resources/models"
 hdiutil detach "$OUT/mounted"
-(cd "$OUT" && shasum -a 256 Kasha-Test-1.1.4-macOS-arm64.dmg > SHA256SUMS.txt)
+(cd "$OUT" && shasum -a 256 "${KASHA_TEST_DMG}" > SHA256SUMS.txt)
 python3 - <<'PY'
-import pathlib,json,platform
-p=pathlib.Path('studio-output');dmg=p/'Kasha-Test-1.1.4-macOS-arm64.dmg'
+import pathlib,json,platform,os
+p=pathlib.Path('studio-output');dmg=p/os.environ['KASHA_TEST_DMG']
 r={'passed':True,'file':dmg.name,'bytes':dmg.stat().st_size,'arch':platform.machine(),'macOS':platform.mac_ver()[0],
- 'simulatedAI':True,'modelFiles':0,'bundledJava':True,'notarized':False,'physicalMicrophoneTested':False,
+ 'sourceCommit':os.environ.get('GITHUB_SHA'),'simulatedAI':True,'modelFiles':0,'bundledJava':True,'notarized':False,'physicalMicrophoneTested':False,
  'selfTest':json.loads((p/'self-test/self-test.json').read_text())}
 assert dmg.stat().st_size < 500*1024*1024
 (p/'BUILD-REPORT.json').write_text(json.dumps(r,ensure_ascii=False,indent=2))

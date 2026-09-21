@@ -1,7 +1,7 @@
 name: Kasha Test — интерфейс без нейросетей
 on:
   push:
-    branches: [studio-test]
+    branches: [studio-test, preview/macos-no-ai-20260921]
   workflow_dispatch:
 permissions:
   contents: read
@@ -44,11 +44,8 @@ jobs:
       - name: Kasha Core, общий UI и macOS
         run: |
           set -o pipefail
-          gradle -Pkotlin.compiler.execution.strategy=in-process --continue \
-            :kashaCore:jvmTest \
-            :kashaCore:compileKotlinIosArm64 \
-            :composeApp:jvmTest \
-            :composeApp:compileKotlinIosArm64 \
+          gradle -PdemoBuild=true -Pkotlin.compiler.execution.strategy=in-process \
+            :kashaCore:jvmTest :aiCatalog:jvmTest :composeApp:jvmTest \
             :runtime:test :desktopApp:test :desktopApp:jar 2>&1 | tee studio-compile.log
       - uses: actions/cache/restore@v4
         id: audio-cache
@@ -92,5 +89,6 @@ jobs:
           retention-days: 30
           if-no-files-found: error
           path: |
-            studio-output/Kasha-Test-1.1.4-macOS-arm64.dmg
+            studio-output/Kasha-Test-*-macOS-arm64.dmg
             studio-output/SHA256SUMS.txt
+            studio-output/BUILD-REPORT.json
