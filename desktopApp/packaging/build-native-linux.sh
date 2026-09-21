@@ -38,6 +38,7 @@ build_engine() {
 
 build_engine whisper.cpp "$WHISPER" whisper-cli
 build_engine llama.cpp "$LLAMA" llama-embedding
+build_engine llama.cpp "$LLAMA" llama-completion
 
 checkout FFmpeg/FFmpeg "$FFMPEG" "$ROOT/ffmpeg"
 (
