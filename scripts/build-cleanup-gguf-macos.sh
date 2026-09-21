@@ -23,8 +23,10 @@ python3 -m venv "$VENV"
 "$VENV/bin/pip" freeze > "$OUT/python-packages.txt"
 
 rm -rf "$DEQUANT"
+# mlx-lm при сохранении требует полный локальный snapshot, включая README/.gitattributes.
+SOURCE="$("$VENV/bin/python" -c 'from huggingface_hub import snapshot_download; print(snapshot_download("NicolaiMTLassen/transcrib-cleanup-0.6b"))')"
 "$VENV/bin/mlx_lm.convert" \
-  --hf-path "$MODEL" \
+  --hf-path "$SOURCE" \
   --mlx-path "$DEQUANT" \
   --dequantize \
   --dtype bfloat16
