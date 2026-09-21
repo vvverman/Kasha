@@ -99,7 +99,7 @@ for path in (ROOT / 'kashaCore').rglob('*.kt'):
         errors.append(f'API key leaked into unrelated Core file: {rel}')
 
 for fragment in (
-    'Whisper Small', 'Qwen 4B', 'Gemma 4B',
+    'Whisper Large-v3 Turbo Q5', 'Transcrib Cleanup 0.6B', 'F2LLM-v2 80M',
     'CloudProviderDescriptor("openai"', 'CloudProviderDescriptor("anthropic"',
     'CloudProviderDescriptor("gemini"', 'CloudProviderDescriptor("openrouter"',
 ):
