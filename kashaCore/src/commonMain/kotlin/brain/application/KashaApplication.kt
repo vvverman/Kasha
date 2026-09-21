@@ -484,6 +484,22 @@ class KashaApplication(
         }
     }
 
+    suspend fun selectCaptureTextVariant(captureId: String, variant: CaptureTextVariant): Capture = commands.withLock {
+        requireCurrent(captureId)
+        flushUnlocked()
+        val current = requireCurrent(captureId)
+        if (current.selectedTextVariant != variant) {
+            val value = when (variant) {
+                CaptureTextVariant.TRANSCRIPTION -> current.transcript
+                CaptureTextVariant.NORMALIZATION -> current.preparedText
+            }
+            require(value.isNotBlank()) { "emptyText" }
+            repository.updateCaptureDraft(captureId, CaptureDraftUpdate(text = value, variant = variant))
+            refreshUnlocked()
+        }
+        requireCurrent(captureId)
+    }
+
     suspend fun flush() = commands.withLock { flushUnlocked() }
 
     suspend fun savePreferences(value: Preferences) = updatePreferences { value }
