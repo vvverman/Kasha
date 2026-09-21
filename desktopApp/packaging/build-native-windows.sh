@@ -40,21 +40,6 @@ build_engine() {
 build_engine whisper.cpp "$WHISPER" whisper-cli
 build_engine llama.cpp "$LLAMA" llama-embedding
 
-# Windows Installer не принимает отдельные файлы >= 2 GiB. Используем штатный
-# формат sharded GGUF из того же pinned llama.cpp; runtime открывает первый shard.
-LLAMA_DIR="$ROOT/llama.cpp"
-cmake --build "$LLAMA_DIR/build" -j 3 --target llama-gguf-split
-rm -f "$RES/models"/Qwen3-4B-Q4_K_M-*-of-*.gguf
-"$LLAMA_DIR/build/bin/llama-gguf-split.exe" --split-max-size 1500M \
-  "$COMMON/models/Qwen3-4B-Q4_K_M.gguf" "$RES/models/Qwen3-4B-Q4_K_M"
-mapfile -t QWEN_SHARDS < <(find "$RES/models" -maxdepth 1 -type f -name 'Qwen3-4B-Q4_K_M-*-of-*.gguf' -print | sort)
-test "${#QWEN_SHARDS[@]}" -ge 2
-for shard in "${QWEN_SHARDS[@]}"; do
-  size=$(wc -c < "$shard")
-  test "$size" -lt 2000000000
-  echo "Qwen shard: $(basename "$shard") ($size bytes)"
-done
-
 checkout FFmpeg/FFmpeg "$FFMPEG" "$ROOT/ffmpeg"
 (
   cd "$ROOT/ffmpeg"
