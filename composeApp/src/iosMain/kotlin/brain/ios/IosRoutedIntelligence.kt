@@ -20,7 +20,7 @@ internal class IosRoutedIntelligence(
 
     override suspend fun transcribe(file: String, language: String, example: String): String {
         val selected = selectedEngine(AiRole.SPEECH_TO_TEXT)
-        val modelId = KashaAiCatalog.canonicalEngineId(selected)
+        val modelId = KashaAiCatalog.canonicalEngineId(selected, AiRole.SPEECH_TO_TEXT)
         if (modelId in ModelArtifacts.speech && models != null) return models.transcribe(modelId, file, language)
         val provider = AiCatalog.cloudProviderId(selected)
         return if (provider == null) {
@@ -33,7 +33,7 @@ internal class IosRoutedIntelligence(
 
     override suspend fun title(text: String, language: String): String {
         val selected = selectedEngine(AiRole.TEXT)
-        val modelId = KashaAiCatalog.canonicalEngineId(selected)
+        val modelId = KashaAiCatalog.canonicalEngineId(selected, AiRole.TEXT)
         if (modelId in ModelArtifacts.text && models != null) return models.title(modelId, text)
         val provider = AiCatalog.cloudProviderId(selected)
         if (provider == null) {
@@ -45,7 +45,7 @@ internal class IosRoutedIntelligence(
 
     override suspend fun tidy(text: String, language: String): String {
         val selected = selectedEngine(AiRole.TEXT)
-        val modelId = KashaAiCatalog.canonicalEngineId(selected)
+        val modelId = KashaAiCatalog.canonicalEngineId(selected, AiRole.TEXT)
         if (modelId in ModelArtifacts.text && models != null) return models.tidy(modelId, text)
         val provider = AiCatalog.cloudProviderId(selected)
         if (provider != null) return external(provider).tidy(text)
@@ -56,8 +56,8 @@ internal class IosRoutedIntelligence(
     override suspend fun rank(text: String, projects: List<Project>, language: String): Map<String, Int> {
         if (projects.isEmpty()) return emptyMap()
         val selected = selectedEngine(AiRole.ROUTING)
-        val modelId = KashaAiCatalog.canonicalEngineId(selected)
-        if (modelId in ModelArtifacts.text && models != null) return models.rank(modelId, text, projects)
+        val modelId = KashaAiCatalog.canonicalEngineId(selected, AiRole.ROUTING)
+        if (modelId in ModelArtifacts.routing && models != null) return models.rank(modelId, text, projects)
         val provider = AiCatalog.cloudProviderId(selected)
         if (provider != null) return external(provider).rank(text, projects)
         BuiltInAi.requireApple(AiRole.ROUTING, selected)
@@ -75,8 +75,8 @@ internal class IosRoutedIntelligence(
                     !KashaAiCatalog.supportsSelection(id, role) -> AiReadiness.blocked(role, id, "platformUnavailable")
                     provider != null -> cloud?.capability(role, id, provider)
                         ?: AiReadiness.blocked(role, id, "platformUnavailable")
-                    KashaAiCatalog.canonicalEngineId(id) in ModelArtifacts.packages && models != null ->
-                        models.capability(role, KashaAiCatalog.canonicalEngineId(id), language).copy(selectedEngineId = id)
+                    KashaAiCatalog.canonicalEngineId(id, role) in ModelArtifacts.packages && models != null ->
+                        models.capability(role, KashaAiCatalog.canonicalEngineId(id, role), language).copy(selectedEngineId = id)
                     !BuiltInAi.supportsApple(role, id) -> AiReadiness.blocked(role, id, "platformUnavailable")
                     role == AiRole.SPEECH_TO_TEXT -> local.capability(language)
                     else -> AiRoleCapability(role, id, true)
