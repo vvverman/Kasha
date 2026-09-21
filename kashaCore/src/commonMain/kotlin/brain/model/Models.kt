@@ -53,6 +53,8 @@ import kotlinx.serialization.Serializable
     val completed: Boolean get() = completedAt != null
 }
 
+@Serializable enum class CaptureTextVariant { TRANSCRIPTION, NORMALIZATION }
+
 @Serializable enum class CaptureStatus {
     RECORDING, QUEUED, TRANSCRIBING, COMPACTING, POLISHING, READY, NEEDS_MODEL, FAILED;
     val isWorking: Boolean get() = this in setOf(RECORDING, QUEUED, TRANSCRIBING, COMPACTING, POLISHING)
@@ -64,6 +66,7 @@ import kotlinx.serialization.Serializable
     val title: String = "Новая запись",
     val transcript: String = "",
     val preparedText: String = "",
+    val selectedTextVariant: CaptureTextVariant = CaptureTextVariant.TRANSCRIPTION,
     val status: CaptureStatus = CaptureStatus.QUEUED,
     val message: String = "",
     val audioFileName: String? = null,
@@ -85,7 +88,10 @@ import kotlinx.serialization.Serializable
     val inputSha256: String = "",
     val audioFinalized: Boolean = false,
 ) {
-    val textToSave: String get() = if (draftEdited) preparedText else preparedText.ifBlank { transcript }
+    val textToSave: String get() = when (selectedTextVariant) {
+        CaptureTextVariant.TRANSCRIPTION -> transcript
+        CaptureTextVariant.NORMALIZATION -> preparedText.ifBlank { transcript }
+    }
     val isInbox: Boolean get() = noteId == null && taskId == null
 }
 
@@ -110,7 +116,11 @@ import kotlinx.serialization.Serializable
 @Serializable data class PinRequest(val pinned: Boolean)
 @Serializable data class PinOrderRequest(val ids: List<String>)
 @Serializable data class OrderRequest(val ids: List<String>)
-@Serializable data class CaptureDraftUpdate(val title: String = "", val text: String)
+@Serializable data class CaptureDraftUpdate(
+    val title: String = "",
+    val text: String,
+    val variant: CaptureTextVariant = CaptureTextVariant.TRANSCRIPTION,
+)
 @Serializable data class NoteUpdate(val title: String = "", val body: String)
 @Serializable data class TaskUpdate(val text: String)
 @Serializable data class TaskScheduleUpdate(val dueAt: Long, val reminderRepeat: ReminderRepeat)
