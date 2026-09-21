@@ -8,85 +8,50 @@ import brain.studio.*
  */
 object KashaAiCatalog {
     private const val CLOUD_PREFIX = "cloud:"
+    private val legacyTextIds = setOf("local.qwen3.4b", "local.qwen.8b")
     private val legacyIds = mapOf(
         "local.whisper.small" to AiSelection.DEFAULT_STT,
-        "local.qwen3.4b" to AiSelection.DEFAULT_TEXT,
     )
 
     val engines: List<AiEngineDescriptor> = listOf(
         AiEngineDescriptor(
             id = AiSelection.DEFAULT_STT,
-            name = "Whisper Small",
+            name = "Whisper Large-v3 Turbo Q5",
             provider = "OpenAI / whisper.cpp",
             roles = setOf(AiRole.SPEECH_TO_TEXT),
             locality = AiLocality.LOCAL,
-            version = "small",
-            approximateSizeMb = 500,
+            version = "large-v3-turbo q5_0",
+            approximateSizeMb = 574,
             languages = Languages.codes,
             defaultInstalled = true,
             installable = true,
-            description = "Базовая локальная транскрибация",
-        ),
-        AiEngineDescriptor(
-            id = "local.whisper.medium",
-            name = "Whisper Medium",
-            provider = "OpenAI / whisper.cpp",
-            roles = setOf(AiRole.SPEECH_TO_TEXT),
-            locality = AiLocality.LOCAL,
-            version = "medium",
-            approximateSizeMb = 1500,
-            languages = Languages.codes,
-            installable = true,
-            description = "Точнее, но тяжелее",
-        ),
-        AiEngineDescriptor(
-            id = "local.whisper.large-v3",
-            name = "Whisper Large v3",
-            provider = "OpenAI / whisper.cpp",
-            roles = setOf(AiRole.SPEECH_TO_TEXT),
-            locality = AiLocality.LOCAL,
-            version = "large-v3",
-            approximateSizeMb = 3100,
-            languages = Languages.codes,
-            installable = true,
-            description = "Максимальная локальная точность",
+            description = "Основная локальная транскрибация Kasha",
         ),
         AiEngineDescriptor(
             id = AiSelection.DEFAULT_TEXT,
-            name = "Qwen 4B",
-            provider = "Qwen / llama.cpp",
-            roles = setOf(AiRole.TEXT, AiRole.ROUTING),
+            name = "Transcrib Cleanup 0.6B",
+            provider = "NicolaiMTLassen",
+            roles = setOf(AiRole.TEXT),
             locality = AiLocality.LOCAL,
-            version = "4B Q4",
-            approximateSizeMb = 2500,
+            version = "0.6B · 4-bit",
+            approximateSizeMb = 347,
+            languages = listOf("ru", "en", "de", "uk", "pt", "da"),
+            defaultInstalled = false,
+            installable = false,
+            description = "Узкая модель нормализации транскриптов; без чат-функций",
+        ),
+        AiEngineDescriptor(
+            id = AiSelection.DEFAULT_ROUTING,
+            name = "F2LLM-v2 80M",
+            provider = "CodeFuse / llama.cpp",
+            roles = setOf(AiRole.ROUTING),
+            locality = AiLocality.LOCAL,
+            version = "80M Q8_0",
+            approximateSizeMb = 91,
             languages = Languages.codes,
             defaultInstalled = true,
             installable = true,
-            description = "Базовая локальная модель Kasha",
-        ),
-        AiEngineDescriptor(
-            id = "local.gemma.4b",
-            name = "Gemma 4B",
-            provider = "Google / llama.cpp",
-            roles = setOf(AiRole.TEXT, AiRole.ROUTING),
-            locality = AiLocality.LOCAL,
-            version = "4B Q4",
-            approximateSizeMb = 3000,
-            languages = Languages.codes,
-            installable = false,
-            description = "Доступна после принятия условий модели Google",
-        ),
-        AiEngineDescriptor(
-            id = "local.qwen.8b",
-            name = "Qwen 8B",
-            provider = "Qwen / llama.cpp",
-            roles = setOf(AiRole.TEXT, AiRole.ROUTING),
-            locality = AiLocality.LOCAL,
-            version = "8B Q4",
-            approximateSizeMb = 5000,
-            languages = Languages.codes,
-            installable = true,
-            description = "Более тяжёлая локальная модель",
+            description = "Embedding-модель для подбора проектов",
         ),
     ) + BuiltInAi.engines
 
@@ -99,7 +64,11 @@ object KashaAiCatalog {
         CloudProviderDescriptor("custom", "Custom endpoint", AiRole.entries.toSet(), endpointRequired = true, description = "Собственный API-адаптер"),
     )
 
-    fun canonicalEngineId(id: String): String = legacyIds[id] ?: id
+    fun canonicalEngineId(id: String, role: AiRole? = null): String = when {
+        id in legacyTextIds && role == AiRole.ROUTING -> AiSelection.DEFAULT_ROUTING
+        id in legacyTextIds -> AiSelection.DEFAULT_TEXT
+        else -> legacyIds[id] ?: id
+    }
     fun engine(id: String): AiEngineDescriptor? = engines.firstOrNull { it.id == canonicalEngineId(id) }
     fun enginesFor(role: AiRole): List<AiEngineDescriptor> = engines.filter { it.supports(role) }
     fun provider(id: String): CloudProviderDescriptor? = cloudProviders.firstOrNull { it.id == id }
@@ -115,7 +84,7 @@ object KashaAiCatalog {
     } else null
 
     fun supportsSelection(engineId: String, role: AiRole): Boolean {
-        engine(engineId)?.let { return it.supports(role) }
+        engines.firstOrNull { it.id == canonicalEngineId(engineId, role) }?.let { return it.supports(role) }
         val provider = cloudProviderId(engineId)?.let(::provider) ?: return false
         return cloudRole(engineId) == role && role in provider.roles
     }
