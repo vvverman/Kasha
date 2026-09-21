@@ -40,12 +40,15 @@ class CaptureWorkflow(private val intelligence: Intelligence) {
 
     suspend fun finish(capture: Capture, projects: List<Project>, language: String): Capture {
         require(capture.isInbox)
-        val original = capture.textToSave
-        val ranking = rankOrFallback(original, projects, language)
+        val original = capture.transcript
         return capture.copy(
             title = NoteText.title(original),
-            relevance = ranking.scores,
-            rankingApplied = ranking.applied,
+            preparedText = "",
+            selectedTextVariant = brain.model.CaptureTextVariant.TRANSCRIPTION,
+            draftEdited = false,
+            llmApplied = false,
+            relevance = emptyMap(),
+            rankingApplied = false,
             status = CaptureStatus.READY,
             message = "",
             simulated = intelligence.simulated,
@@ -54,7 +57,7 @@ class CaptureWorkflow(private val intelligence: Intelligence) {
 
     suspend fun tidy(capture: Capture, language: String): Capture {
         require(capture.isInbox && !capture.status.isWorking)
-        val original = capture.textToSave
+        val original = capture.transcript
         val text = intelligence.tidy(original, language)
         require(text.isNotBlank())
         require(text.length >= original.trim().length / 2) { "Модель слишком сильно сократила текст. Оставлен исходный текст" }
@@ -63,6 +66,7 @@ class CaptureWorkflow(private val intelligence: Intelligence) {
         return capture.copy(
             title = NoteText.title(text),
             preparedText = text,
+            selectedTextVariant = brain.model.CaptureTextVariant.NORMALIZATION,
             draftEdited = true,
             llmApplied = true,
             rankingApplied = false,
