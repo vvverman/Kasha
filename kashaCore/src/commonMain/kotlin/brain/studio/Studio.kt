@@ -43,6 +43,8 @@ interface StudioRepository : BrainRepository {
     val simulated: Boolean
     suspend fun preferences(): Preferences
     suspend fun savePreferences(value: Preferences)
+    /** Принудительно запускает STT заново. Реализация обязана не переиспользовать старый transcript. */
+    suspend fun retranscribe(id: String): Capture = reprocess(id)
     suspend fun tidy(id: String): Capture
     suspend fun rank(id: String): Capture
     suspend fun discard(id: String)
