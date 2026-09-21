@@ -122,12 +122,11 @@ class StudioState(
 
     private fun reconcileContentPresentation(previous: Capture?) {
         val c = current
-        if (c != null && previous?.status?.isWorking == true && !c.status.isWorking && c.status == CaptureStatus.READY && autoRouteFor != c.id) {
+        // Завершение STT всегда остаётся на экране результата. Routing запускается
+        // только явным действием «В заметки», после того как пользователь выбрал
+        // транскрибацию или нормализацию.
+        if (c != null && previous?.status?.isWorking == true && !c.status.isWorking && c.status == CaptureStatus.READY) {
             autoRouteFor = c.id
-            if (preferences.autoRoute) {
-                choosingProject = true
-                targetProjectId = null
-            }
         }
     }
 
