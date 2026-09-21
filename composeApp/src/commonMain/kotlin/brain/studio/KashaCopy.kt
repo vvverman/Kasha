@@ -7,6 +7,9 @@ tasks|Задачи|Tasks|Tareas|Tâches|Aufgaben|Завдання|Задачы|�
 task|Задача|Task|Tarea|Tâche|Aufgabe|Завдання|Задача|Тапсырма
 note|Заметка|Note|Nota|Note|Notiz|Нотатка|Нататка|Жазба
 noteText|Текст заметки|Note text|Texto de la nota|Texte de la note|Notiztext|Текст нотатки|Тэкст нататкі|Жазба мәтіні
+transcription|Транскрибация|Transcription|Transcripción|Transcription|Transkription|Транскрипція|Транскрыпцыя|Транскрипция
+normalization|Нормализация|Normalization|Normalización|Normalisation|Normalisierung|Нормалізація|Нармалізацыя|Нормализация
+reprocess|Обработать заново|Process again|Procesar de nuevo|Retraiter|Erneut verarbeiten|Обробити знову|Апрацаваць зноў|Қайта өңдеу
 sendToNotes|В заметки|To notes|A notas|Vers les notes|Zu Notizen|У нотатки|У нататкі|Жазбаларға
 sendToTasks|В задачи|To tasks|A tareas|Vers les tâches|Zu Aufgaben|У завдання|У задачы|Тапсырмаларға
 noTasks|Пока нет задач|No tasks yet|Aún no hay tareas|Aucune tâche|Noch keine Aufgaben|Поки немає завдань|Пакуль няма задач|Әзірге тапсырма жоқ
