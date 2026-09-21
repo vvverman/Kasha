@@ -29,4 +29,22 @@ internal class AndroidLlama(private val packages: AndroidWhisperPackages) {
                 }
             }
         }
+    suspend fun embed(engine: String, text: String): FloatArray =
+        execution.withLock {
+            check(AndroidLlamaNative.available) { "androidAiNotConfigured" }
+            packages.withModel(engine) { model ->
+                withContext(Dispatchers.IO) {
+                    val value = AndroidLlamaNative.embed(
+                        model.absolutePath,
+                        text.toByteArray(Charsets.UTF_8),
+                        Runtime.getRuntime().availableProcessors().coerceIn(1, 4),
+                        AndroidLlamaCancellation(currentCoroutineContext()[Job]),
+                    )
+                    currentCoroutineContext().ensureActive()
+                    check(value.isNotEmpty()) { "aiUnavailable" }
+                    value
+                }
+            }
+        }
+
 }
