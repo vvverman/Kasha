@@ -166,13 +166,30 @@ data class BrainData(
 
     fun updateDraft(id: String, update: CaptureDraftUpdate): BrainData = updateCapture(id) { old ->
         require(!old.status.isWorking && old.isInbox) { "Дождитесь обработки. Сохранённый источник изменять нельзя" }
-        old.copy(
-            title = NoteText.title(update.text),
-            preparedText = update.text,
-            draftEdited = true,
-            relevance = emptyMap(),
-            rankingApplied = false,
-        )
+        val value = update.text.trimEnd()
+        when (update.variant) {
+            CaptureTextVariant.TRANSCRIPTION -> {
+                val changed = value != old.transcript
+                old.copy(
+                    title = NoteText.title(value),
+                    transcript = value,
+                    preparedText = if (changed) "" else old.preparedText,
+                    selectedTextVariant = CaptureTextVariant.TRANSCRIPTION,
+                    draftEdited = old.draftEdited || changed,
+                    llmApplied = if (changed) false else old.llmApplied,
+                    relevance = emptyMap(),
+                    rankingApplied = false,
+                )
+            }
+            CaptureTextVariant.NORMALIZATION -> old.copy(
+                title = NoteText.title(value),
+                preparedText = value,
+                selectedTextVariant = CaptureTextVariant.NORMALIZATION,
+                draftEdited = true,
+                relevance = emptyMap(),
+                rankingApplied = false,
+            )
+        }
     }
 
     fun distribute(id: String, request: DistributionRequest, newNoteId: String, now: Long): Pair<BrainData, Note> {
