@@ -130,6 +130,42 @@ fun KashaIconButton(label: String, glyph: Glyph, onClick: () -> Unit, modifier: 
 }
 
 @Composable
+fun KashaTextTabs(
+    items: List<String>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val k = KashaTheme.colors
+    Row(
+        modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(k.secondaryFill).padding(3.dp),
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        items.forEachIndexed { index, label ->
+            val selected = index == selectedIndex
+            val interactions = remember(label) { MutableInteractionSource() }
+            val hovered by interactions.collectIsHoveredAsState()
+            val shape = RoundedCornerShape(11.dp)
+            val background = when {
+                selected -> k.surfaceHighest
+                hovered -> k.overlayHover
+                else -> Color.Transparent
+            }
+            Text(
+                label,
+                Modifier.weight(1f).heightIn(min = 42.dp).clip(shape).background(background)
+                    .hoverable(interactions)
+                    .clickable(interactionSource = interactions, indication = null, role = Role.Tab) { onSelect(index) }
+                    .padding(horizontal = 12.dp, vertical = 11.dp),
+                style = MaterialTheme.typography.labelMedium,
+                color = if (selected) k.textPrimary else k.textSecondary,
+                textAlign = TextAlign.Center,
+            )
+        }
+    }
+}
+
+@Composable
 fun KashaQuietButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
     val k = KashaTheme.colors
     val interactions = remember { MutableInteractionSource() }
