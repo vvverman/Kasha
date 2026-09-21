@@ -12,9 +12,12 @@ class StudioStateTest {
         override val simulated = true
         var prefs = Preferences(autoRecord = false)
         var data = BrainData(projects = listOf(Project("p", "Приложение")))
+        var failRead = false
         var failSave = false
         var failDiscard = false
         var failCreate = false
+        var failPreferences = false
+        var preferencesGate: CompletableDeferred<Unit>? = null
         var snapshotGate: CompletableDeferred<Unit>? = null
         private var projectIndex = 1
         private var noteIndex = 1
@@ -31,8 +34,15 @@ class StudioStateTest {
                 tasks = data.tasks,
             )
         }
-        override suspend fun preferences() = prefs
-        override suspend fun savePreferences(value: Preferences) { prefs = value.validated() }
+        override suspend fun preferences(): Preferences {
+            check(!failRead) { "Storage is unavailable" }
+            return prefs
+        }
+        override suspend fun savePreferences(value: Preferences) {
+            preferencesGate?.await()
+            check(!failPreferences)
+            prefs = value.validated()
+        }
         override suspend fun createProject(draft: ProjectDraft): Project {
             check(!failCreate)
             val id = "p${++projectIndex}"
@@ -145,6 +155,26 @@ class StudioStateTest {
         override suspend fun resume() { telemetry = telemetry.copy(phase = "playing") }
         override fun telemetry() = telemetry
         override fun stop() { telemetry = AudioTelemetry() }
+    }
+
+    @Test fun startupReadFailureHasSpecificMessageAndRetriesTheSameRepository() = runTest {
+        val repo = Repo()
+        val original = repo.data
+        val state = StudioState(repo, Recorder(repo), Audio())
+        repo.failRead = true
+        repeat(2) {
+            state.error = null
+            state.launch()
+            assertFalse(state.initialized)
+            assertEquals("loadFailed", state.error)
+            assertEquals(original, repo.data)
+        }
+        repo.failRead = false
+        state.error = null
+        state.launch()
+        assertTrue(state.initialized)
+        assertNull(state.error)
+        assertEquals(original, repo.data)
     }
 
     @Test
@@ -350,4 +380,80 @@ class StudioStateTest {
         assertTrue(Copy.keys().size > 60)
         for (key in Copy.keys()) for (lang in Languages.codes) assertTrue(Copy.text(lang, key).isNotBlank())
     }
+    @Test
+    fun overlappingPreferenceChangesKeepAllFieldsAfterReload() = runTest {
+        val repo = Repo(); val state = StudioState(repo, Recorder(repo), Audio()); state.launch()
+        repo.preferencesGate = CompletableDeferred()
+        val theme = async { state.updatePreferences { it.copy(theme = "dark") } }; runCurrent()
+        val language = async { state.updatePreferences { it.copy(language = "de") } }; runCurrent()
+        val quality = async { state.updatePreferences { it.copy(quality = 3) } }; runCurrent()
+        repo.preferencesGate!!.complete(Unit)
+        assertTrue(theme.await()); assertTrue(language.await()); assertTrue(quality.await())
+        val reloaded = StudioState(repo, Recorder(repo), Audio()); reloaded.launch()
+        assertEquals("dark", reloaded.preferences.theme)
+        assertEquals("de", reloaded.preferences.language)
+        assertEquals(3, reloaded.preferences.quality)
+    }
+
+    @Test
+    fun preferenceChangeIsNotDroppedWhileContentActionIsBusy() = runTest {
+        val repo = Repo(); val state = StudioState(repo, Recorder(repo), Audio()); state.launch()
+        repo.snapshotGate = CompletableDeferred()
+        val creating = async { state.createProject("Ещё проект", "") }; runCurrent()
+        assertTrue(state.busy)
+        val setting = async { state.updatePreferences { it.copy(language = "en") } }; runCurrent()
+        repo.snapshotGate!!.complete(Unit)
+        assertTrue(creating.await()); assertTrue(setting.await())
+        assertEquals("en", repo.prefs.language)
+    }
+
+    @Test
+    fun overlappingAiRoleChoicesDoNotResetOtherRole() = runTest {
+        val repo = Repo(); val state = StudioState(repo, Recorder(repo), Audio()); state.launch()
+        val routing = state.preferences.ai.routing
+        repo.preferencesGate = CompletableDeferred()
+        val speech = async { state.updatePreferences { it.copy(ai = it.ai.with(AiRole.SPEECH_TO_TEXT, "test.stt")) } }; runCurrent()
+        val text = async { state.updatePreferences { it.copy(ai = it.ai.with(AiRole.TEXT, "test.text")) } }; runCurrent()
+        repo.preferencesGate!!.complete(Unit)
+        assertTrue(speech.await()); assertTrue(text.await())
+        assertEquals("test.stt", repo.prefs.ai.speechToText)
+        assertEquals("test.text", repo.prefs.ai.text)
+        assertEquals(routing, repo.prefs.ai.routing)
+    }
+
+    @Test
+    fun failedPreferenceChangeKeepsConfirmedValueAndCanBeRetried() = runTest {
+        val repo = Repo(); val state = StudioState(repo, Recorder(repo), Audio()); state.launch()
+        repo.failPreferences = true
+        assertFalse(state.updatePreferences { it.copy(theme = "dark") })
+        assertEquals("system", repo.prefs.theme)
+        assertEquals("system", state.preferences.theme)
+        assertEquals("saveFailed", state.error)
+        repo.failPreferences = false
+        assertTrue(state.updatePreferences { it.copy(theme = "dark") })
+        assertEquals("dark", state.preferences.theme)
+    }
+
+    @Test
+    fun enablingAutoRecordInSettingsDoesNotStartMicrophone() = runTest {
+        val repo = Repo(); val recorder = Recorder(repo); val state = StudioState(repo, recorder, Audio()); state.launch()
+        assertTrue(state.updatePreferences { it.copy(autoRecord = true) })
+        assertEquals(0, recorder.starts)
+        state.launch()
+        assertEquals(0, recorder.starts)
+    }
+
+    @Test
+    fun leavingPreferenceCallerDoesNotCancelOwnedSave() = runTest {
+        val repo = Repo(); val state = StudioState(repo, Recorder(repo), Audio()); state.launch()
+        state.attachActionScope(backgroundScope)
+        repo.preferencesGate = CompletableDeferred()
+        val caller = launch { state.updatePreferences { it.copy(language = "kk") } }; runCurrent()
+        caller.cancelAndJoin()
+        repo.preferencesGate!!.complete(Unit); runCurrent()
+        assertEquals("kk", repo.prefs.language)
+        assertEquals("kk", state.preferences.language)
+        state.detachActionScope(backgroundScope)
+    }
+
 }

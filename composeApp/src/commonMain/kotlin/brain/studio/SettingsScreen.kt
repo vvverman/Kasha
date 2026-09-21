@@ -23,7 +23,7 @@ internal fun SettingsScreen(s: StudioState) {
     }
 
     fun save(transform: (Preferences) -> Preferences) {
-        scope.launch { s.savePreferences(transform(s.preferences)) }
+        scope.launch { s.updatePreferences(transform) }
     }
 
     if (s.languagePage) {
@@ -52,7 +52,7 @@ internal fun SettingsScreen(s: StudioState) {
                     0f..3f,
                     2,
                     s.tr("quality"),
-                    { save { it.copy(quality = quality.toInt()) } },
+                    { val value = quality.toInt(); save { it.copy(quality = value) } },
                 )
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(s.tr("economy"), style = MaterialTheme.typography.labelSmall, color = c.onSurfaceVariant)
@@ -70,7 +70,7 @@ internal fun SettingsScreen(s: StudioState) {
                     1f..2f,
                     3,
                     s.tr("savedSpeed"),
-                    { save { it.copy(savedSpeed = (round(speed * 4) / 4).toDouble()) } },
+                    { val value = (round(speed * 4) / 4).toDouble(); save { it.copy(savedSpeed = value) } },
                 )
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     listOf("1×", "1,5×", "2×").forEach { Text(it, style = MaterialTheme.typography.labelSmall, color = c.onSurfaceVariant) }
@@ -106,9 +106,20 @@ internal fun SettingsScreen(s: StudioState) {
         Text(s.tr("appearance"), style = MaterialTheme.typography.titleSmall)
         Spacer(Modifier.height(10.dp))
         KashaPanel(Modifier.fillMaxWidth(), padding = 16.dp) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                listOf("system", "light", "dark").forEach { theme ->
-                    Action(s.tr(theme), { save { it.copy(theme = theme) } }, primary = p.theme == theme, modifier = Modifier.weight(1f))
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                val themes = listOf("system", "light", "dark")
+                if (actionsFit(maxWidth, themes.map(s::tr), gap = 6.dp)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        themes.forEach { theme ->
+                            Action(s.tr(theme), { save { it.copy(theme = theme) } }, primary = p.theme == theme, modifier = Modifier.weight(1f))
+                        }
+                    }
+                } else {
+                    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        themes.forEach { theme ->
+                            Action(s.tr(theme), { save { it.copy(theme = theme) } }, primary = p.theme == theme, modifier = Modifier.fillMaxWidth())
+                        }
+                    }
                 }
             }
             Spacer(Modifier.height(12.dp))

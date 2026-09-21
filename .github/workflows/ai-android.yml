@@ -1,0 +1,121 @@
+name: Kasha Android AI offline
+
+on:
+  pull_request:
+    paths:
+      - 'androidApp/**'
+      - 'aiCatalog/**'
+      - 'kashaCore/**'
+      - 'composeApp/**'
+      - 'tests/android-local-models.sh'
+      - '.github/workflows/ai-android.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-ai-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test-apks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+      - name: Build the application and real JNI integration test
+        run: |
+          set -euo pipefail
+          python -m pip install fonttools==4.59.2
+          python scripts/prepare-fonts.py
+          gradle -Pandroid.injected.build.abi=x86_64 :androidApp:assembleDebug :androidApp:assembleDebugAndroidTest 2>&1 | tee android-ai-build.log
+      - name: Prepare exact APK files for the emulator jobs
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from shutil import copyfile
+          from zipfile import ZipFile
+          files = sorted(Path('androidApp/build').rglob('*.apk'))
+          print('Produced APK files:', *files, sep='\n')
+          app = [p for p in files if 'androidtest' not in p.as_posix().lower()]
+          tests = [p for p in files if 'androidtest' in p.as_posix().lower()]
+          assert len(app) == 1, f'Expected one application APK, found {app}'
+          assert len(tests) == 1, f'Expected one instrumentation APK, found {tests}'
+          output = Path('android-ai-apks')
+          output.mkdir(exist_ok=True)
+          copyfile(app[0], output / 'Kasha-debug.apk')
+          copyfile(tests[0], output / 'Kasha-debug-androidTest.apk')
+          with ZipFile(output / 'Kasha-debug.apk') as archive:
+              for name in ('libkasha_whisper.so', 'libkasha_llama.so', 'libc++_shared.so'):
+                  assert f'lib/x86_64/{name}' in archive.namelist(), name
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-ai-build-${{ github.sha }}
+          path: android-ai-build.log
+          retention-days: 7
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-ai-apks-${{ github.sha }}
+          path: android-ai-apks/*.apk
+          if-no-files-found: error
+          retention-days: 7
+
+  offline-models:
+    needs: test-apks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [26, 35]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/download-artifact@v4
+        with:
+          name: android-ai-apks-${{ github.sha }}
+          path: test-apks
+      - uses: actions/cache@v4
+        with:
+          path: desktopApp/bundle/common/models
+          key: kasha-android-ai-fixtures-v1-${{ hashFiles('desktopApp/packaging/prepare-models.sh') }}
+      - name: Prepare verified models, synthetic speech and KVM
+        run: |
+          set -euo pipefail
+          bash desktopApp/packaging/prepare-models.sh
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+          python -m venv .android-ai-python
+          .android-ai-python/bin/pip install piper-tts==1.4.2
+          .android-ai-python/bin/python tests/make-russian-fixture.py
+          sudo chmod 666 /dev/kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api }}
+          target: google_apis
+          arch: x86_64
+          cores: 4
+          ram-size: 6144M
+          heap-size: 512M
+          disk-size: 12G
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          script: bash tests/android-local-models.sh ${{ matrix.api }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-ai-api${{ matrix.api }}-${{ github.sha }}
+          path: test-output/android-ai/
+          retention-days: 14

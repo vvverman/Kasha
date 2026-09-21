@@ -28,7 +28,7 @@ class MacKeychainSecretStore(
 
     override suspend fun get(id: String): String? = withContext(Dispatchers.IO) {
         if (!available) return@withContext null
-        val result = run(
+        val result = runSecretProcess(
             listOf("/usr/bin/security", "find-generic-password", "-s", service, "-a", id, "-w"),
             null,
             allowFailure = true,
@@ -41,7 +41,7 @@ class MacKeychainSecretStore(
         require(value.isNotBlank())
         // security(1) не предоставляет stdin-вариант для add-generic-password. Аргументы никогда
         // не логируются Kasha; сам секрет сразу сохраняется Keychain и нигде больше не живёт.
-        val result = run(
+        val result = runSecretProcess(
             listOf("/usr/bin/security", "add-generic-password", "-U", "-s", service, "-a", id, "-w", value),
             null,
             allowFailure = false,
@@ -51,7 +51,7 @@ class MacKeychainSecretStore(
     }
 
     override suspend fun remove(id: String) = withContext(Dispatchers.IO) {
-        if (available) run(
+        if (available) runSecretProcess(
             listOf("/usr/bin/security", "delete-generic-password", "-s", service, "-a", id),
             null,
             allowFailure = true,
@@ -69,14 +69,14 @@ class LinuxSecretServiceStore : SecureSecretStore {
 
     override suspend fun get(id: String): String? = withContext(Dispatchers.IO) {
         if (!available) return@withContext null
-        val result = run(listOf("secret-tool", "lookup", "service", "kasha-ai", "provider", id), null, true)
+        val result = runSecretProcess(listOf("secret-tool", "lookup", "service", "kasha-ai", "provider", id), null, true)
         result.takeIf { it.first == 0 }?.second?.trimEnd()?.takeIf(String::isNotBlank)
     }
 
     override suspend fun put(id: String, value: String) = withContext(Dispatchers.IO) {
         check(available)
         require(value.isNotBlank())
-        run(
+        runSecretProcess(
             listOf("secret-tool", "store", "--label=Kasha AI", "service", "kasha-ai", "provider", id),
             value,
             allowFailure = false,
@@ -85,7 +85,7 @@ class LinuxSecretServiceStore : SecureSecretStore {
     }
 
     override suspend fun remove(id: String) = withContext(Dispatchers.IO) {
-        if (available) run(listOf("secret-tool", "clear", "service", "kasha-ai", "provider", id), null, true)
+        if (available) runSecretProcess(listOf("secret-tool", "clear", "service", "kasha-ai", "provider", id), null, true)
         Unit
     }
 }
@@ -95,11 +95,12 @@ fun platformSecretStore(): SecureSecretStore {
     return when {
         os.contains("mac") -> MacKeychainSecretStore()
         os.contains("linux") -> LinuxSecretServiceStore()
+        os.contains("windows") -> WindowsDpapiSecretStore()
         else -> UnsupportedSecretStore
     }
 }
 
-private fun run(command: List<String>, stdin: String?, allowFailure: Boolean): Pair<Int, String> {
+internal fun runSecretProcess(command: List<String>, stdin: String?, allowFailure: Boolean): Pair<Int, String> {
     val process = ProcessBuilder(command).redirectErrorStream(true).start()
     if (stdin != null) {
         process.outputStream.bufferedWriter(StandardCharsets.UTF_8).use { it.write(stdin) }

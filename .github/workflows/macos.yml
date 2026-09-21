@@ -2,6 +2,10 @@ name: Автономный установщик macOS
 on:
   push:
     branches: [macos-installer]
+  pull_request:
+    paths:
+      - 'desktopApp/packaging/**'
+      - '.github/workflows/macos.yml'
   workflow_dispatch:
 permissions:
   contents: read
@@ -10,6 +14,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   macos:
+    if: github.event_name != 'pull_request' || github.head_ref == 'integration/platform-parity'
     runs-on: macos-15
     timeout-minutes: 60
     steps:
@@ -76,7 +81,7 @@ jobs:
           cp desktopApp/packaging/Установка.txt desktopApp/bundle/common/Установка.txt
           gradle -Pkotlin.compiler.execution.strategy=in-process :desktopApp:createDistributable
           gradle --stop
-      - name: Запуск без зависимостей и сети, проверка DMG
+      - name: Полная AI-приёмка без зависимостей и сети, проверка DMG
         run: bash desktopApp/packaging/package-and-test.sh
       - uses: actions/upload-artifact@v4
         if: always()
@@ -90,6 +95,10 @@ jobs:
             macos-output/*.txt
             macos-output/*.log
             macos-output/*.png
+            macos-output/visual/*.png
+            macos-output/visual/*.json
+            macos-output/visual/*.txt
+            macos-output/visual/*.log
             macos-output/self-test/*.json
             macos-output/self-test/*.log
             desktopApp/build/compose/logs

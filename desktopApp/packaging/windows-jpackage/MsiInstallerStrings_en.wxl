@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- jpackage's en-us localization overrides Product/@Codepage. Keep both
+     installer database settings at Windows Cyrillic for WiX 3 compatibility.
+     This does not change the application's UTF-8 text or shared UI languages. -->
+<WixLocalization Culture="en-us" xmlns="http://schemas.microsoft.com/wix/2006/localization" Codepage="1251">
+  <String Id="message.install.dir.exist">The folder [INSTALLDIR] already exists. Install to this folder?</String>
+  <String Id="MainFeatureTitle">Kasha</String>
+  <String Id="DowngradeErrorMessage">A newer version of [ProductName] is installed. Downgrades are disabled.</String>
+  <String Id="DisallowUpgradeErrorMessage">An earlier version of [ProductName] is installed. Upgrades are disabled.</String>
+  <String Id="ShortcutPromptDlg_Title">[ProductName] Setup</String>
+  <String Id="ShortcutPromptDlgTitle">{\WixUI_Font_Title}Shortcuts</String>
+  <String Id="ShortcutPromptDlgBannerBitmap">WixUI_Bmp_Banner</String>
+  <String Id="ShortcutPromptDlgDescription">Choose where to add shortcuts.</String>
+  <String Id="ShortcutPromptDlgDesktopShortcutControlLabel">Add desktop shortcuts</String>
+  <String Id="ShortcutPromptDlgStartMenuShortcutControlLabel">Add Start menu shortcuts</String>
+  <String Id="InstallDirNotEmptyDlg_Title">[ProductName] Setup</String>
+  <String Id="ContextMenuCommandLabel">Open with [ProductName]</String>
+</WixLocalization>

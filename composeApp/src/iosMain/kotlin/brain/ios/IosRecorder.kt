@@ -208,13 +208,18 @@ internal class IosRecorder(
         val finalPath = IosPaths.child(IosPaths.audio, pendingId)
         val pendingPath = exactPendingPath(pendingId)
 
-        // Повтор одного recovery не создаёт второй Capture.
+        // Повтор одного recovery не создаёт второй Capture. Если metadata уже опубликована,
+        // недостающий final можно восстановить из exact pending. При двух копиях ничего
+        // автоматически не удаляем: одинаковый id не доказывает одинаковые байты.
         repository.snapshot().captures.firstOrNull { it.audioFileName == finalPath }?.let { existing ->
-            pendingPath?.let(IosPaths::remove) // только точный duplicate того же session id
+            if (!IosPaths.exists(finalPath) && pendingPath != null) IosPaths.move(pendingPath, finalPath)
             return existing
         }
 
         val orphanFinal = finalPath.takeIf(IosPaths::exists)
+        if (orphanFinal != null && pendingPath != null) {
+            error("Conflicting pending audio copies; both preserved")
+        }
         val source = orphanFinal ?: pendingPath ?: error("No pending audio")
         val metadata = IosAudioRecovery.inspect(source)
         var moved = false
@@ -230,9 +235,6 @@ internal class IosRecorder(
                 durationSeconds = metadata.durationSeconds,
                 waveform = metadata.waveform,
             )
-            // Если после старого/прерванного recovery одновременно осталась pending-копия,
-            // удаляем только файл с тем же exact id после подтверждённого Capture.
-            pendingPath?.takeIf { IosPaths.exists(it) }?.let(IosPaths::remove)
             scope.launch { repository.reprocess(capture.id) }
             capture
         } catch (error: Throwable) {

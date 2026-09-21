@@ -1,11 +1,14 @@
 [versions]
 kotlin = "2.4.20"
-compose = "1.12.0"
+# 1.12.0 loses Web semantics after Dialog/Popup disposal (upstream #3298).
+# Keep this prerelease explicit until a stable version contains the same fix.
+compose = "1.13.0-alpha01"
 ktor = "3.5.2"
 serialization = "1.11.0"
 coroutines = "1.11.0"
 datetime = "0.7.1"
 androidGradlePlugin = "9.1.1"
+androidxActivity = "1.13.0"
 
 [libraries]
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
@@ -20,7 +23,9 @@ ktor-server-netty = { module = "io.ktor:ktor-server-netty", version.ref = "ktor"
 ktor-server-content-negotiation = { module = "io.ktor:ktor-server-content-negotiation", version.ref = "ktor" }
 ktor-server-cors = { module = "io.ktor:ktor-server-cors", version.ref = "ktor" }
 ktor-server-status-pages = { module = "io.ktor:ktor-server-status-pages", version.ref = "ktor" }
+ktor-server-partial-content = { module = "io.ktor:ktor-server-partial-content", version.ref = "ktor" }
 ktor-server-test-host = { module = "io.ktor:ktor-server-test-host", version.ref = "ktor" }
+androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidxActivity" }
 
 [plugins]
 kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
@@ -29,3 +34,4 @@ kotlinSerialization = { id = "org.jetbrains.kotlin.plugin.serialization", versio
 composeMultiplatform = { id = "org.jetbrains.compose", version.ref = "compose" }
 composeCompiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 androidKotlinMultiplatformLibrary = { id = "com.android.kotlin.multiplatform.library", version.ref = "androidGradlePlugin" }
+androidApplication = { id = "com.android.application", version.ref = "androidGradlePlugin" }

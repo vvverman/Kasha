@@ -1,0 +1,302 @@
+name: Kasha Desktop Windows Linux
+
+on:
+  pull_request:
+    paths:
+      - 'kashaCore/**'
+      - 'aiCatalog/**'
+      - 'composeApp/**'
+      - 'runtime/**'
+      - 'desktopApp/**'
+      - 'scripts/check-*.py'
+      - 'tests/linux-local-models.sh'
+      - 'tests/windows-local-models.ps1'
+      - 'tests/real_models.py'
+      - '.github/workflows/desktop-platforms.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'kashaCore/**'
+      - 'aiCatalog/**'
+      - 'composeApp/**'
+      - 'runtime/**'
+      - 'desktopApp/**'
+      - 'scripts/check-*.py'
+      - 'tests/linux-local-models.sh'
+      - 'tests/windows-local-models.ps1'
+      - 'tests/real_models.py'
+      - '.github/workflows/desktop-platforms.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-packages-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+          cache-read-only: false
+      - name: Общие архитектурные границы
+        run: |
+          python3 scripts/check-ai-boundary.py
+          python3 scripts/check-brand-boundary.py
+          python3 scripts/check-local-only.py
+          python3 scripts/check-ui-boundary.py
+      - name: Linux build tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y build-essential cmake ninja-build curl git file rpm fakeroot
+      - uses: actions/cache@v4
+        id: linux-native
+        with:
+          path: |
+            desktopApp/bundle/common
+            desktopApp/bundle/linux
+          key: kasha-linux-x64-native-${{ hashFiles('desktopApp/packaging/prepare-models.sh', 'desktopApp/packaging/build-native-linux.sh') }}
+      - name: Native AI engines and models
+        if: steps.linux-native.outputs.cache-hit != 'true'
+        run: bash desktopApp/packaging/build-native-linux.sh
+      - name: Tests and Linux app
+        run: |
+          set -euo pipefail
+          export PATH="$PWD/desktopApp/bundle/linux/bin:$PATH"
+          command -v ffmpeg
+          ffmpeg -version | head -n 1
+          python3 -m pip install fonttools==4.59.2
+          python3 scripts/prepare-fonts.py
+          gradle :kashaCore:jvmTest :aiCatalog:jvmTest :composeApp:jvmTest :runtime:test :desktopApp:test 2>&1 | tee linux-tests.log
+          gradle :runtime:installDist :desktopApp:createDistributable 2>&1 | tee linux-package.log
+      - name: Linux installer packages
+        run: |
+          set -euo pipefail
+          gradle :desktopApp:packageDistributionForCurrentOS 2>&1 | tee -a linux-package.log
+      - name: Verify packaged native resources
+        run: |
+          test -x desktopApp/bundle/linux/bin/whisper-cli
+          test -x desktopApp/bundle/linux/bin/llama-completion
+          test -x desktopApp/bundle/linux/bin/ffmpeg
+          test -s desktopApp/bundle/common/models/ggml-small.bin
+          test -s desktopApp/bundle/common/models/Qwen3-4B-Q4_K_M.gguf
+          find desktopApp/build/compose/binaries/main -type f \( -name '*.deb' -o -name '*.rpm' \) -print | tee linux-packages.txt
+          test "$(wc -l < linux-packages.txt)" -ge 2
+      - name: Установка DEB и матрица настоящего общего UI
+        run: |
+          set -euo pipefail
+          sudo apt-get install -y xvfb xauth
+          # Headless runner: подготовить стандартные каталоги меню до postinst пакета.
+          sudo install -d -m 755 /usr/share/applications /usr/share/desktop-directories
+          DEB=$(find desktopApp/build/compose/binaries/main -type f -name '*.deb' | head -n 1)
+          test -n "$DEB"
+          PACKAGE=$(dpkg-deb -f "$DEB" Package)
+          sudo apt-get install -y "$PWD/$DEB"
+          APP=$(dpkg-query -L "$PACKAGE" | grep '/bin/Kasha$' | head -n 1)
+          test -x "$APP"
+          OUT="$PWD/test-output/linux-visual"
+          mkdir -p "$OUT"
+          export KASHA_HOME="$OUT/data"
+          timeout 120 xvfb-run -a -s '-screen 0 1680x1050x24' "$APP" --ui-smoke "$OUT" matrix > "$OUT/run.log" 2>&1
+          test -s "$OUT/visual-result.json"
+          test -s "$OUT/matrix-ready.txt"
+          data_hash() {
+            find "$KASHA_HOME" -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1
+          }
+          BEFORE_REINSTALL=$(data_hash)
+          # Повторная установка того же DEB не должна менять пользовательские данные.
+          sudo dpkg -i "$DEB"
+          AFTER_REINSTALL=$(data_hash)
+          test "$BEFORE_REINSTALL" = "$AFTER_REINSTALL"
+          sudo dpkg --remove "$PACKAGE"
+          test -s "$KASHA_HOME/brain.json"
+          AFTER_REMOVE=$(data_hash)
+          test "$BEFORE_REINSTALL" = "$AFTER_REMOVE"
+          printf 'before=%s\nafterReinstall=%s\nafterRemove=%s\npassed=true\n' "$BEFORE_REINSTALL" "$AFTER_REINSTALL" "$AFTER_REMOVE" > "$OUT/data-preservation.txt"
+      - name: "AI acceptance — Linux and Web local models"
+        run: |
+          set -euo pipefail
+          export PATH="$PWD/desktopApp/bundle/linux/bin:$PATH"
+          python3 -m pip install piper-tts==1.4.2
+          python3 tests/make-russian-fixture.py
+          sudo -E unshare --net bash tests/linux-local-models.sh
+      - name: Подготовить Linux AI evidence к выгрузке
+        if: always()
+        run: |
+          # Изолированный AI-тест запущен через sudo, его новые файлы принадлежат root.
+          # Возвращаем только журналы этого теста владельцу CI; данные приложения не затрагиваются.
+          if [ -d test-output/desktop-ai ]; then
+            sudo chown -R "$(id -u):$(id -g)" test-output/desktop-ai
+          fi
+      - name: Upload Linux diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kasha-linux-diagnostics-${{ github.sha }}
+          retention-days: 7
+          if-no-files-found: ignore
+          path: |
+            linux-tests.log
+            linux-package.log
+            linux-packages.txt
+            test-output/linux-visual/*.png
+            test-output/linux-visual/*.json
+            test-output/linux-visual/*.txt
+            test-output/linux-visual/*.log
+            test-output/desktop-ai/
+            test-output/real-models/*.json
+            desktopApp/build/compose/logs/**
+            desktopApp/build/test-results/**
+            runtime/build/test-results/**
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Kasha-Linux-x64
+          compression-level: 0
+          retention-days: 14
+          if-no-files-found: error
+          path: |
+            desktopApp/build/compose/binaries/main/**/*.deb
+            desktopApp/build/compose/binaries/main/**/*.rpm
+            linux-packages.txt
+
+  windows:
+    runs-on: windows-2025
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+          cache-read-only: false
+      - name: Общие архитектурные границы
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($script in @('check-ai-boundary.py', 'check-brand-boundary.py', 'check-local-only.py', 'check-ui-boundary.py')) {
+            python "scripts/$script"
+            if ($LASTEXITCODE -ne 0) { throw "Architecture check failed: $script" }
+          }
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            git
+            curl
+            make
+            gzip
+            tar
+            file
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+      - name: Windows installer tools
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+      - uses: actions/cache@v4
+        id: windows-native
+        with:
+          path: |
+            desktopApp/bundle/common
+            desktopApp/bundle/windows
+          key: kasha-windows-x64-native-${{ hashFiles('desktopApp/packaging/prepare-models.sh', 'desktopApp/packaging/build-native-windows.sh') }}
+      - name: Native AI engines and models
+        if: steps.windows-native.outputs.cache-hit != 'true'
+        shell: msys2 {0}
+        run: bash desktopApp/packaging/build-native-windows.sh
+      - name: Retain verified Windows native build before runtime checks
+        if: steps.windows-native.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            desktopApp/bundle/common
+            desktopApp/bundle/windows
+          key: kasha-windows-x64-native-${{ hashFiles('desktopApp/packaging/prepare-models.sh', 'desktopApp/packaging/build-native-windows.sh') }}
+      - name: Tests
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:Path = "$pwd\desktopApp\bundle\windows\bin;$env:Path"
+          $ffmpegVersion = & ffmpeg.exe -version 2>&1
+          $ffmpegExitCode = $LASTEXITCODE
+          if ($ffmpegExitCode -ne 0) { throw "Bundled ffmpeg failed with exit code $ffmpegExitCode" }
+          $ffmpegVersion | Select-Object -First 1
+          python -m pip install fonttools==4.59.2
+          if ($LASTEXITCODE -ne 0) { throw "pip failed with exit code $LASTEXITCODE" }
+          python scripts/prepare-fonts.py
+          if ($LASTEXITCODE -ne 0) { throw "font preparation failed with exit code $LASTEXITCODE" }
+          gradle :kashaCore:jvmTest :aiCatalog:jvmTest :composeApp:jvmTest :runtime:test :desktopApp:test 2>&1 | Tee-Object -FilePath windows-tests.log
+          if ($LASTEXITCODE -ne 0) { throw "desktop tests failed with exit code $LASTEXITCODE" }
+      - name: Windows MSI CAB and EXE packaging
+        shell: pwsh
+        run: |
+          ./desktopApp/packaging/package-windows.ps1 2>&1 | Tee-Object -FilePath windows-package.log
+          if ($LASTEXITCODE -ne 0) { throw "Windows packaging failed with exit code $LASTEXITCODE" }
+      - name: Verify Windows packages
+        shell: pwsh
+        run: |
+          $dist = "desktopApp/build/windows-dist"
+          $msi = @(Get-ChildItem "$dist/msi" -Filter '*.msi' -File)
+          $cabs = @(Get-ChildItem "$dist/msi" -Filter '*.cab' -File)
+          $exe = @(Get-ChildItem "$dist/exe" -Filter '*.exe' -File)
+          if ($msi.Count -ne 1) { throw 'Windows MSI missing' }
+          if ($cabs.Count -lt 2) { throw 'Windows split CAB payload missing' }
+          if ($exe.Count -ne 1) { throw 'Windows self-contained EXE missing' }
+          if (!(Test-Path "$dist/windows-install-smoke.log")) { throw 'Windows install smoke log missing' }
+          Get-Content "$dist/windows-install-smoke.log"
+          Get-Content "$dist/SHA256SUMS.txt"
+      - name: "AI acceptance — Windows local models"
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:Path = "$pwd\desktopApp\bundle\windows\bin;$env:Path"
+          python -m pip install piper-tts==1.4.2
+          if ($LASTEXITCODE -ne 0) { throw 'Speech fixture dependency failed' }
+          python tests/make-russian-fixture.py
+          if ($LASTEXITCODE -ne 0) { throw 'Speech fixture preparation failed' }
+          ./tests/windows-local-models.ps1
+      - name: Upload Windows diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kasha-windows-diagnostics-${{ github.sha }}
+          retention-days: 7
+          if-no-files-found: ignore
+          path: |
+            windows-tests.log
+            windows-package.log
+            test-output/desktop-ai/
+            desktopApp/build/windows-dist/windows-install-smoke.log
+            desktopApp/build/windows-dist/visual/*.png
+            desktopApp/build/windows-dist/visual/*.json
+            desktopApp/build/windows-dist/visual/*.txt
+            desktopApp/build/windows-dist/visual/*.log
+            desktopApp/build/compose/logs/**
+            desktopApp/build/test-results/**
+            runtime/build/test-results/**
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Kasha-Windows-x64
+          compression-level: 0
+          retention-days: 14
+          if-no-files-found: error
+          path: |
+            desktopApp/build/windows-dist/msi/*.msi
+            desktopApp/build/windows-dist/msi/*.cab
+            desktopApp/build/windows-dist/exe/*.exe
+            desktopApp/build/windows-dist/windows-packages.txt
+            desktopApp/build/windows-dist/SHA256SUMS.txt

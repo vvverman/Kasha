@@ -2,15 +2,42 @@
 (() => {
   'use strict';
   let recorder=null,stream=null,player=null,playerLoading=false,writes=Promise.resolve(),stopped=null,context=null,analyser=null;
-  let generation=0,openPromise;
-  const db=()=>openPromise ||= new Promise((resolve,reject)=>{
-    const r=indexedDB.open('kasha-audio-v1',1);
-    r.onupgradeneeded=()=>{r.result.createObjectStore('sessions',{keyPath:'id'});r.result.createObjectStore('chunks',{keyPath:['id','index']});};
-    r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);
-  });
+  let generation=0,openPromise,activeSessionId=null,recordingOperation=null,lastCancelledId=null,cancelAudioLoad=null;
+  const db=()=>{
+    if(openPromise)return openPromise;
+    const opening=new Promise((resolve,reject)=>{
+      const r=indexedDB.open('kasha-audio-v1',1);
+      let abandoned=false;
+      const fail=error=>{abandoned=true;reject(error||Error('Audio storage unavailable'));};
+      r.onupgradeneeded=()=>{r.result.createObjectStore('sessions',{keyPath:'id'});r.result.createObjectStore('chunks',{keyPath:['id','index']});};
+      r.onerror=()=>fail(r.error);
+      r.onblocked=()=>fail(Error('Audio storage blocked by another tab'));
+      r.onsuccess=()=>{if(abandoned)r.result.close();else resolve(r.result);};
+    });
+    const retryable=opening.then(database=>{
+      const invalidate=()=>{if(openPromise===retryable)openPromise=null;};
+      database.onclose=invalidate;
+      database.onversionchange=()=>{invalidate();database.close();};
+      return database;
+    }).catch(error=>{
+      // Cache only a live connection: Retry must not reuse a rejected open promise.
+      if(openPromise===retryable)openPromise=null;
+      throw error;
+    });
+    openPromise=retryable;
+    return retryable;
+  };
   const all=async store=>{
     const database=await db();
-    return new Promise((resolve,reject)=>{const r=database.transaction(store).objectStore(store).getAll();r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
+    return new Promise((resolve,reject)=>{
+      const tx=database.transaction(store),r=tx.objectStore(store).getAll();
+      // A successful request can still belong to an aborted transaction.
+      // Never reconcile/delete a journal using such an incomplete read.
+      r.onerror=()=>reject(r.error||Error('Audio read failed'));
+      tx.oncomplete=()=>resolve(r.result);
+      tx.onerror=()=>reject(tx.error||Error('Audio read failed'));
+      tx.onabort=()=>reject(tx.error||Error('Audio read aborted'));
+    });
   };
   const put=async(store,value)=>{
     const database=await db();
@@ -25,22 +52,40 @@
     const chunks=(await all('chunks')).filter(x=>x.id===id);
     await new Promise((resolve,reject)=>{const tx=database.transaction(['sessions','chunks'],'readwrite');tx.objectStore('sessions').delete(id);chunks.forEach(x=>tx.objectStore('chunks').delete([x.id,x.index]));tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error||Error('Audio cleanup failed'));});
   };
-  const pendingSession=async()=>{
-    if(recorder&&recorder.state!=='inactive')return null;
+  const pendingSessions=async()=>{
+    const protectedId=activeSessionId;
+    const result=[];
     const sessions=(await all('sessions')).sort((a,b)=>a.created-b.created);
     const chunks=await all('chunks');
     for(const saved of sessions){
-      if(chunks.some(x=>x.id===saved.id&&x.blob?.size>0))return saved;
-      await removeSession(saved.id).catch(()=>{});
+      // A scan started before getUserMedia/IndexedDB completed must not delete the live journal.
+      if(saved.id===protectedId||saved.id===activeSessionId)continue;
+      // Listing is read-only: another tab may not have committed its first chunk yet.
+      // A successful empty read is not permission to delete the source journal.
+      // A damaged chunk still represents user data, not an empty journal.
+      // Surface it for recovery/error handling; upload validates before sending.
+      if(chunks.some(x=>x.id===saved.id)||(saved.expectedChunks!==undefined&&saved.expectedChunks!==0))result.push(saved);
     }
-    return null;
+    return result;
   };
-  const upload=async base=>{
+  const pendingSession=async()=>(await pendingSessions())[0]||null;
+  const upload=async(base,pendingId)=>{
     await writes;
-    const saved=await pendingSession();
-    if(!saved)throw Error('No pending recording');
-    const chunks=(await all('chunks')).filter(x=>x.id===saved.id&&x.blob?.size>0).sort((a,b)=>a.index-b.index);
-    if(!chunks.length){await removeSession(saved.id);throw Error('No audio samples');}
+    const sessions=await pendingSessions();
+    const saved=pendingId?sessions.find(s=>s.id===pendingId):(sessions.length===1?sessions[0]:null);
+    if(!saved)throw Error('Expected one matching pending recording');
+    const chunks=(await all('chunks')).filter(x=>x.id===saved.id).sort((a,b)=>a.index-b.index);
+    // Счётчик записывается до Blob: пропавший последний фрагмент также обнаружим.
+    // Старые журналы без счётчика сохраняют совместимость и проверку индексов.
+    if(saved.expectedChunks!==undefined&&(!Number.isSafeInteger(saved.expectedChunks)||saved.expectedChunks<0||chunks.length!==saved.expectedChunks)){
+      throw Error('Audio journal is incomplete or corrupt; original fragments preserved');
+    }
+    if(!chunks.length)throw Error('No audio samples');
+    // Recorder indices start at zero. Never acknowledge/upload a filtered subset:
+    // a gap or malformed payload would silently truncate audio and cleanup its source.
+    if(chunks.some((chunk,index)=>!Number.isSafeInteger(chunk.index)||chunk.index!==index||!(chunk.blob instanceof Blob)||chunk.blob.size===0)){
+      throw Error('Audio journal is incomplete or corrupt; original fragments preserved');
+    }
     const blob=new Blob(chunks.map(x=>x.blob),{type:saved.mime});
     const form=new FormData();const ext=saved.mime.includes('mp4')?'m4a':saved.mime.includes('ogg')?'ogg':'webm';
     form.append('audio',blob,'capture.'+ext);
@@ -50,7 +95,19 @@
     await removeSession(saved.id);
     return text;
   };
-  const stopAudio=()=>{generation++;playerLoading=false;player?.pause();player=null;};
+  const releaseAudio=own=>{
+    if(!own)return;
+    own.onloadedmetadata=null;own.onerror=null;
+    try{own.pause();}catch{}
+    // Сбрасываем загрузку и ожидающие play-promises, а не только ссылку адаптера.
+    try{own.removeAttribute('src');own.load();}catch{}
+  };
+  const stopAudio=()=>{
+    generation++;
+    const own=player;player=null;playerLoading=false;
+    const cancel=cancelAudioLoad;cancelAudioLoad=null;cancel?.();
+    releaseAudio(own);
+  };
   globalThis.kashaPlatform={
     baseUrl:()=>location.port==='8080'?'http://127.0.0.1:8787':location.origin,
     consent:async()=>{
@@ -69,7 +126,12 @@
       }catch{return false;}
     },
     pending:async()=>Boolean(await pendingSession()),
-    phase:()=>recorder?.state==='recording'?'recording':recorder?.state==='paused'?'paused':'idle',
+    pendingRecordings:async()=>{try{return JSON.stringify((await pendingSessions()).map(s=>({id:s.id,createdAt:s.created})));}catch(e){return failure(e);}},
+    sessionState:()=>{
+      const phase=recorder?.state==='recording'?'RECORDING':recorder?.state==='paused'?'PAUSED':activeSessionId&&recordingOperation!=='starting'?'FINALIZING':'IDLE';
+      return JSON.stringify({phase,activeSessionId:phase==='IDLE'?null:activeSessionId});
+    },
+    phase:()=>JSON.parse(globalThis.kashaPlatform.sessionState()).phase.toLowerCase(),
     level:()=>{
       if(!analyser||recorder?.state!=='recording')return 0;
       const values=new Float32Array(analyser.fftSize);analyser.getFloatTimeDomainData(values);
@@ -77,28 +139,39 @@
       return Math.max(0,Math.min(1,Math.sqrt(sum/values.length)*5));
     },
     start:async()=>{
+      if(recordingOperation)return failure(Error('Recording operation in progress'));
+      if(recorder&&recorder.state!=='inactive')return 'ok';
+      recordingOperation='starting';
       let sessionId=null;
       try{
-        if(recorder&&recorder.state!=='inactive')return 'ok';
         if(await pendingSession())throw Error('Recover pending audio first');
         if(player&&!player.ended)throw Error('Stop playback first');
         if(!navigator.mediaDevices?.getUserMedia||!globalThis.MediaRecorder)throw Error('Microphone unavailable');
         stream=await navigator.mediaDevices.getUserMedia({audio:true});
         const mime=['audio/webm;codecs=opus','audio/mp4','audio/ogg;codecs=opus'].find(t=>MediaRecorder.isTypeSupported(t));
         const own=new MediaRecorder(stream,mime?{mimeType:mime}:undefined);recorder=own;
-        const id=crypto.randomUUID();sessionId=id;let index=0,total=0,persistError=null;
-        await put('sessions',{id,mime:own.mimeType||mime||'audio/webm',created:Date.now()});
+        const id=crypto.randomUUID();sessionId=id;activeSessionId=id;let index=0,total=0,persistError=null;
+        const session={id,mime:own.mimeType||mime||'audio/webm',created:Date.now(),expectedChunks:0};
+        await put('sessions',session);
         context=new (globalThis.AudioContext||globalThis.webkitAudioContext)();
         analyser=context.createAnalyser();analyser.fftSize=1024;context.createMediaStreamSource(stream).connect(analyser);
         await context.resume().catch(()=>{});
         writes=Promise.resolve();
         own.ondataavailable=e=>{
           if(!e.data?.size)return;
-          const chunk={id,index:index++,blob:e.data};writes=writes.then(()=>put('chunks',chunk)).catch(e=>{persistError=e;});
+          const chunk={id,index:index++,blob:e.data};
+          writes=writes.then(async()=>{
+            await put('sessions',{...session,expectedChunks:chunk.index+1});
+            await put('chunks',chunk);
+          }).catch(e=>{persistError=e;});
           total+=e.data.size;if(total>=60*1024*1024&&own.state!=='inactive')own.stop();
         };
         stopped=new Promise((resolve,reject)=>{
-          own.onstop=async()=>{release();await writes;persistError?reject(persistError):resolve();};
+          own.onstop=async()=>{
+            release();await writes;
+            if(recorder===own){recorder=null;activeSessionId=null;}
+            persistError?reject(persistError):resolve();
+          };
           own.onerror=event=>{
             persistError=event?.error||Error('Recording failed');
             if(own.state!=='inactive'){
@@ -108,37 +181,105 @@
         });stopped.catch(()=>{});own.start(500);
         try{localStorage.setItem('kasha.mic-consent','yes');}catch{}
         return 'ok';
-      }catch(e){release();recorder=null;stopped=null;if(sessionId)await removeSession(sessionId).catch(()=>{});return failure(e);}
+      }catch(e){release();recorder=null;activeSessionId=null;stopped=null;if(sessionId)await removeSession(sessionId).catch(()=>{});return failure(e);}
+      finally{recordingOperation=null;}
     },
     pause:()=>{try{if(recorder?.state!=='recording')throw Error('Not recording');recorder.pause();return 'ok';}catch(e){return failure(e);}},
     resume:()=>{try{if(recorder?.state!=='paused')throw Error('Not paused');recorder.resume();return 'ok';}catch(e){return failure(e);}},
     stop:async base=>{
+      if(recordingOperation)return failure(Error('Recording operation in progress'));
+      const id=activeSessionId;
+      if(!id||!recorder||recorder.state==='inactive')return failure(Error('Not recording'));
+      recordingOperation='finalizing';
       try{
-        if(recorder?.state!=='inactive')recorder?.stop();
+        recorder.stop();
         await stopped;
-        recorder=null;stopped=null;
-        return await upload(base);
+        recorder=null;activeSessionId=null;stopped=null;
+        return await upload(base,id);
+      }catch(e){return failure(e);}
+      finally{recordingOperation=null;}
+    },
+    recover:async(base,id)=>{
+      if(recordingOperation||activeSessionId)return failure(Error('Recording operation in progress'));
+      recordingOperation='recovering';
+      try{return await upload(base,id);}catch(e){return failure(e);}
+      finally{recordingOperation=null;}
+    },
+    cancel:async id=>{
+      if(recordingOperation)return failure(Error('Recording operation in progress'));
+      if(!activeSessionId&&lastCancelledId===id)return 'ok';
+      if(!id||id!==activeSessionId||!recorder||recorder.state==='inactive')return failure(Error('Recording changed'));
+      recordingOperation='cancelling';
+      try{
+        recorder.stop();
+        // Deletion was explicit: a failed chunk write must not prevent deleting this journal.
+        await stopped.catch(()=>{});
+        await removeSession(id);
+        recorder=null;activeSessionId=null;stopped=null;lastCancelledId=id;
+        return 'ok';
+      }catch(e){return failure(e);}
+      finally{recordingOperation=null;}
+    },
+    discardPending:async id=>{
+      if(recordingOperation||activeSessionId)return failure(Error('Recording operation in progress'));
+      recordingOperation='discarding';
+      try{
+        if(!id||(await pendingSessions()).every(s=>s.id!==id))throw Error('Pending recording changed');
+        await removeSession(id);return 'ok';
+      }catch(e){return failure(e);}
+      finally{recordingOperation=null;}
+    },
+    play:async(url,from,rate)=>{
+      let own=null;
+      try{
+        if(activeSessionId||recordingOperation==='starting')throw Error('Stop recording first');
+        stopAudio();const ownGeneration=generation;own=new Audio();player=own;playerLoading=true;
+        own.preservesPitch=true;
+        await new Promise((resolve,reject)=>{
+          let settled=false;
+          const finish=error=>{
+            if(settled)return;settled=true;clearTimeout(timeout);
+            own.onloadedmetadata=null;
+            if(cancelAudioLoad===cancel)cancelAudioLoad=null;
+            error?reject(error):resolve();
+          };
+          const cancel=()=>finish(Error('Playback cancelled'));
+          const timeout=setTimeout(()=>finish(Error('Audio load timeout')),15000);
+          cancelAudioLoad=cancel;
+          own.onloadedmetadata=()=>finish();
+          own.onerror=()=>{
+            finish(Error('Audio unavailable'));
+            if(player===own)stopAudio();
+          };
+          own.src=url;
+        });
+        if(generation!==ownGeneration||player!==own)throw Error('Playback cancelled');
+        // Загрузка src сбрасывает playbackRate: применяем выбор после метаданных.
+        own.playbackRate=rate;
+        own.currentTime=Math.max(0,Math.min(Number.isFinite(own.duration)?own.duration:from,from));
+        await own.play();
+        if(generation!==ownGeneration||player!==own)throw Error('Playback cancelled');
+        playerLoading=false;return 'ok';
       }catch(e){
-        if(recorder?.state==='inactive')recorder=null;
-        stopped=null;
+        // Ошибка старой загрузки не меняет состояние уже выбранного нового источника.
+        if(own&&player===own)stopAudio();else releaseAudio(own);
         return failure(e);
       }
     },
-    recover:async base=>{try{return await upload(base);}catch(e){return failure(e);}},
-    play:async(url,from,rate)=>{
-      try{
-        if(recorder&&recorder.state!=='inactive')throw Error('Stop recording first');
-        stopAudio();const ownGeneration=generation;const own=new Audio();player=own;playerLoading=true;own.preservesPitch=true;own.playbackRate=rate;
-        await new Promise((resolve,reject)=>{
-          const timeout=setTimeout(()=>reject(Error('Audio load timeout')),15000);
-          own.onloadedmetadata=()=>{clearTimeout(timeout);resolve();};own.onerror=()=>{clearTimeout(timeout);reject(Error('Audio unavailable'));};own.src=url;
-        });
-        if(generation!==ownGeneration)throw Error('Playback cancelled');
-        own.currentTime=Math.max(0,Math.min(Number.isFinite(own.duration)?own.duration:from,from));await own.play();playerLoading=false;return 'ok';
-      }catch(e){playerLoading=false;return failure(e);}
-    },
     pauseAudio:()=>{player?.pause();return 'ok';},
-    resumeAudio:async()=>{try{if(recorder&&recorder.state!=='inactive')throw Error('Stop recording first');await player?.play();return 'ok';}catch(e){return failure(e);}},
+    resumeAudio:async()=>{
+      const own=player,ownGeneration=generation;
+      try{
+        if(activeSessionId||recordingOperation==='starting')throw Error('Stop recording first');
+        if(!own||playerLoading)throw Error('Playback unavailable');
+        await own.play();
+        if(generation!==ownGeneration||player!==own)throw Error('Playback cancelled');
+        return 'ok';
+      }catch(e){
+        if(own&&player===own)stopAudio();else releaseAudio(own);
+        return failure(e);
+      }
+    },
     seekAudio:seconds=>{
       try{
         if(!player||playerLoading||player.ended)throw Error('Playback unavailable');

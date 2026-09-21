@@ -5,12 +5,12 @@ import re
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-SCOPES = [ROOT / 'kashaCore', ROOT / 'aiCatalog', ROOT / 'composeApp', ROOT / 'runtime', ROOT / 'desktopApp']
+SCOPES = [ROOT / 'kashaCore', ROOT / 'aiCatalog', ROOT / 'composeApp', ROOT / 'runtime', ROOT / 'desktopApp', ROOT / 'androidApp']
 SKIP = {'build', 'test', 'commonTest', 'node_modules'}
 
 # Эти сервисы нарушают продуктовую границу независимо от AI-настроек.
 FORBIDDEN_GLOBAL = re.compile(
-    r'(firebase|firestore|supabase|sentry|segment\.io|amplitude|mixpanel|appcenter|'
+    r'(firebase|firestore|supabase|sentry|segment\.io|(?:com[.:/]amplitude|amplitude(?:\.com|[-:]android|[-:]kotlin)|AmplitudeClient)|mixpanel|appcenter|'
     r'\bicloud\b|\bcloudkit\b)',
     re.IGNORECASE,
 )
@@ -23,6 +23,8 @@ EXTERNAL_AI_ENDPOINT = re.compile(
     re.IGNORECASE,
 )
 ALLOWED_EXTERNAL_AI_PREFIXES = (
+    'aiCatalog/src/commonMain/kotlin/brain/ai/external/',
+    'androidApp/src/main/kotlin/brain/android/external/',
     'runtime/src/main/kotlin/brain/runtime/ai/external/',
     'desktopApp/src/main/kotlin/brain/desktop/ai/external/',
     'composeApp/src/iosMain/kotlin/brain/ios/external/',

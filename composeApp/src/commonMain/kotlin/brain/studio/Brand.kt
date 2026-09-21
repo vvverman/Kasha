@@ -21,7 +21,7 @@ fun KashaBrandSlot(
     contentDescription: String? = "Kasha",
 ) {
     Icon(
-        painter = painterResource(if (solid) Res.drawable.kasha_logo_solid else Res.drawable.kasha_logo),
+        painter = painterResource(if (solid) Res.drawable.kasha_logo_solid_vector else Res.drawable.kasha_logo_vector),
         contentDescription = contentDescription,
         modifier = modifier,
         tint = MaterialTheme.colorScheme.onSurface,

@@ -1,6 +1,8 @@
 package brain.studio
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
@@ -57,7 +59,9 @@ fun StudioApp(state: StudioState) {
             contentColor = colors.onSurface,
         ) {
             if (!state.initialized) {
-                KashaSplash()
+                InitializationContent(state) {
+                    scope.launch { state.error = null; state.launch() }
+                }
                 return@Surface
             }
             BoxWithConstraints(
@@ -76,14 +80,14 @@ fun StudioApp(state: StudioState) {
                 }
                 val shellMaxWidth = if (desktop) 1440.dp else Dp.Unspecified
 
-                Box(
-                    Modifier.fillMaxSize().then(if (shellMaxWidth != Dp.Unspecified) Modifier.widthIn(max = shellMaxWidth) else Modifier)
-                        .align(Alignment.TopCenter).padding(horizontal = horizontalPadding),
+                BoxWithConstraints(
+                    Modifier.then(if (shellMaxWidth != Dp.Unspecified) Modifier.widthIn(max = shellMaxWidth) else Modifier)
+                        .fillMaxSize().align(Alignment.TopCenter).padding(horizontal = horizontalPadding),
                 ) {
                     if (desktop) {
                         DesktopShell(state, wide)
                     } else {
-                        MobileShell(state, width)
+                        MobileShell(state, width, maxWidth)
                     }
                 }
                 ModalHost(state, scope)
@@ -116,7 +120,7 @@ private fun DesktopShell(state: StudioState, wide: Boolean) {
         Column(Modifier.weight(1f).fillMaxHeight()) {
             AppHeader(state)
             Box(
-                Modifier.weight(1f).fillMaxWidth().then(if (wide) Modifier.widthIn(max = 1160.dp) else Modifier),
+                Modifier.weight(1f).then(if (wide) Modifier.widthIn(max = 1160.dp) else Modifier).fillMaxWidth(),
             ) { AppContent(state) }
             GlobalPlayer(state)
             Spacer(Modifier.height(16.dp))
@@ -125,11 +129,11 @@ private fun DesktopShell(state: StudioState, wide: Boolean) {
 }
 
 @Composable
-private fun MobileShell(state: StudioState, width: Dp) {
+private fun MobileShell(state: StudioState, width: Dp, contentWidth: Dp) {
     val density = LocalDensity.current
     val textMeasurer = rememberTextMeasurer()
     val labels = remember(state.language) { navEntries.map { navLabel(state, it.key) } }
-    val navWidth = minOf(width, 560.dp)
+    val navWidth = minOf(contentWidth, 560.dp)
     val itemLabelWidthPx = with(density) { ((navWidth - 28.dp) / 4 - 12.dp).coerceAtLeast(1.dp).toPx() }
     val labelOverflow = labels.any { label ->
         textMeasurer.measure(label, style = MaterialTheme.typography.labelSmall, maxLines = 1).size.width > itemLabelWidthPx
@@ -142,7 +146,7 @@ private fun MobileShell(state: StudioState, width: Dp) {
     }
     Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
         Column(
-            Modifier.weight(1f).fillMaxWidth().then(if (contentMax != Dp.Unspecified) Modifier.widthIn(max = contentMax) else Modifier),
+            Modifier.weight(1f).then(if (contentMax != Dp.Unspecified) Modifier.widthIn(max = contentMax) else Modifier).fillMaxWidth(),
         ) {
             AppHeader(state)
             Box(Modifier.weight(1f).fillMaxWidth()) { AppContent(state) }
@@ -152,7 +156,7 @@ private fun MobileShell(state: StudioState, width: Dp) {
         val navLayout = if (gridNav) KashaNavigationLayout.Grid else KashaNavigationLayout.Bottom
         KashaNavigationSurface(
             navLayout,
-            Modifier.fillMaxWidth().widthIn(max = 560.dp).padding(bottom = 8.dp),
+            Modifier.widthIn(max = 560.dp).fillMaxWidth().padding(bottom = 8.dp),
         ) {
             KashaAdaptiveNavigationItems(gridNav, Modifier.fillMaxWidth()) {
                 navEntries.forEach { entry ->
@@ -200,42 +204,34 @@ private fun AppContent(state: StudioState) {
 
 @Composable
 private fun ModalHost(state: StudioState, scope: CoroutineScope) {
+    val deletion = state.deleteConfirmation
     when {
         state.error != null -> KashaModal(onDismiss = { state.error = null }) {
             Text(state.tr(state.error!!), style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(24.dp))
             Action(state.tr("ok"), { state.error = null }, primary = true, modifier = Modifier.fillMaxWidth())
         }
-        state.confirmDelete && state.recording -> KashaModal(onDismiss = { state.confirmDelete = false }) {
-            ConfirmationContent(
-                state.tr("deleteTitle"), state.tr("deleteBody"), state.tr("delete"), state.tr("cancel"),
-                {
-                    scope.launch {
-                        if (state.cancelActiveRecording()) state.confirmDelete = false
-                    }
-                },
-                { state.confirmDelete = false },
-            )
-        }
-        state.confirmDelete && state.selectedTaskId != null -> {
-            val taskId = state.selectedTaskId!!
-            KashaModal(onDismiss = { state.confirmDelete = false }) {
+        deletion != null -> KashaModal(onDismiss = { state.dismissDeletion(deletion) }) {
+            if (deletion is DeleteConfirmation.Task) {
                 Text(KashaCopy.text(state.language, "deleteTask") ?: state.tr("delete"), style = MaterialTheme.typography.headlineMedium)
                 Spacer(Modifier.height(28.dp))
                 Action(
                     state.tr("delete"),
-                    { scope.launch { if (state.deleteTask(taskId)) state.confirmDelete = false } },
+                    { scope.launch { state.confirmDeletion(deletion) } },
                     primary = true,
+                    enabled = !state.busy,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                QuietAction(state.tr("cancel"), { state.confirmDelete = false }, Modifier.align(Alignment.CenterHorizontally))
+                QuietAction(state.tr("cancel"), { state.dismissDeletion(deletion) }, Modifier.align(Alignment.CenterHorizontally))
+            } else {
+                ConfirmationContent(
+                    state.tr("deleteTitle"), state.tr("deleteBody"), state.tr("delete"),
+                    state.tr(if (deletion is DeleteConfirmation.Recording && deletion.resumeOnKeep) "resume" else "cancel"),
+                    { scope.launch { state.confirmDeletion(deletion) } },
+                    { scope.launch { state.keepDeletionTarget(deletion) } },
+                    enabled = !state.busy && !state.controlBusy,
+                )
             }
-        }
-        state.confirmDelete -> KashaModal(onDismiss = { state.confirmDelete = false }) {
-            ConfirmationContent(
-                state.tr("deleteTitle"), state.tr("deleteBody"), state.tr("delete"), state.tr("cancel"),
-                { scope.launch { state.discard() } }, { state.confirmDelete = false },
-            )
         }
         state.confirmListenId != null -> KashaModal(onDismiss = { state.confirmListenId = null }) {
             ConfirmationContent(
@@ -249,7 +245,7 @@ private fun ModalHost(state: StudioState, scope: CoroutineScope) {
 @Composable
 private fun KashaModal(onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
     Dialog(onDismissRequest = onDismiss) {
-        KashaPanel(Modifier.fillMaxWidth().widthIn(max = 520.dp), padding = 24.dp, content = content)
+        KashaPanel(Modifier.widthIn(max = 520.dp).fillMaxWidth().verticalScroll(rememberScrollState()), padding = 24.dp, content = content)
     }
 }
 
@@ -266,11 +262,11 @@ internal fun Heading(title: String, back: (() -> Unit)? = null, backLabel: Strin
 }
 
 @Composable
-private fun ColumnScope.ConfirmationContent(title: String, body: String, confirm: String, cancel: String, onConfirm: () -> Unit, onCancel: () -> Unit) {
+private fun ColumnScope.ConfirmationContent(title: String, body: String, confirm: String, cancel: String, onConfirm: () -> Unit, onCancel: () -> Unit, enabled: Boolean = true) {
     Text(title, style = MaterialTheme.typography.headlineMedium)
     Spacer(Modifier.height(18.dp))
     Text(body, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     Spacer(Modifier.height(28.dp))
-    Action(confirm, onConfirm, primary = true, modifier = Modifier.fillMaxWidth())
+    Action(confirm, onConfirm, primary = true, enabled = enabled, modifier = Modifier.fillMaxWidth())
     QuietAction(cancel, onCancel, Modifier.align(Alignment.CenterHorizontally))
 }
