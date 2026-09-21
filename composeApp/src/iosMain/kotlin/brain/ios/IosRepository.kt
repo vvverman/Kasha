@@ -292,7 +292,7 @@ internal class IosRepository(
         val data = (storedData ?: legacyData)?.let { json.decodeFromString<BrainData>(it) } ?: BrainData()
         val preferences = (storedPreferences ?: legacyPreferences)
             ?.let { json.decodeFromString<Preferences>(it).validated() }
-            ?: Preferences(ai = BuiltInAi.appleSelection())
+            ?: Preferences()
         // Никаких recovery/migration записей до успешного чтения и разбора ОБОИХ документов.
         if (storedData != null) markKnown(stateMarker)
         if (storedPreferences != null) markKnown(preferencesMarker)
