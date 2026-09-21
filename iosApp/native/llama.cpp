@@ -1,5 +1,8 @@
 #include "llama.h"
 #include <algorithm>
+#include <cmath>
+#include <sstream>
+#include <iomanip>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -97,4 +100,86 @@ extern "C" __attribute__((visibility("default"))) char *kasha_llama_run(
         if (!text) throw std::bad_alloc();
         *status = 0; return text;
     } catch (const std::exception &error) { return strdup(error.what()); }
+}
+
+
+extern "C" __attribute__((visibility("default"))) char *kasha_llama_embed(
+    const char *path, const char *text, int threads, Cancel callback, void *data, int *status) {
+    *status = 1;
+    try {
+        if (!path || !text || strlen(text) == 0 || strlen(text) > 1024 * 1024)
+            throw std::runtime_error("aiUnavailable");
+        Cancellation cancel{callback, data}; cancel.check();
+        static std::once_flag initialized;
+        std::call_once(initialized, [] {
+            llama_log_set([](ggml_log_level, const char *, void *) {}, nullptr);
+            llama_backend_init();
+        });
+        auto mp = llama_model_default_params();
+        mp.n_gpu_layers = 0;
+        mp.progress_callback = [](float, void *value) { return !Cancellation::aborted(value); };
+        mp.progress_callback_user_data = &cancel;
+        std::unique_ptr<llama_model, decltype(&llama_model_free)> model(
+            llama_model_load_from_file(path, mp), llama_model_free);
+        cancel.check();
+        if (!model) throw std::runtime_error("aiUnavailable");
+        auto *vocab = llama_model_get_vocab(model.get());
+        std::vector<llama_token> tokens;
+        append(tokens, vocab, text, false);
+        if (tokens.empty() || tokens.size() > 8192) throw std::runtime_error("aiUnavailable");
+
+        auto cp = llama_context_default_params();
+        cp.n_ctx = static_cast<uint32_t>(std::max<size_t>(tokens.size(), 32));
+        cp.n_batch = cp.n_ubatch = static_cast<uint32_t>(tokens.size());
+        cp.n_threads = cp.n_threads_batch = std::clamp(threads, 1, 4);
+        cp.embeddings = true;
+        cp.pooling_type = LLAMA_POOLING_TYPE_MEAN;
+        cp.attention_type = LLAMA_ATTENTION_TYPE_NON_CAUSAL;
+        cp.abort_callback = Cancellation::aborted;
+        cp.abort_callback_data = &cancel;
+        std::unique_ptr<llama_context, decltype(&llama_free)> context(
+            llama_init_from_model(model.get(), cp), llama_free);
+        if (!context) throw std::runtime_error("aiUnavailable");
+
+        llama_batch batch = llama_batch_init(static_cast<int32_t>(tokens.size()), 0, 1);
+        for (int32_t i = 0; i < static_cast<int32_t>(tokens.size()); ++i) {
+            batch.token[i] = tokens[i];
+            batch.pos[i] = i;
+            batch.n_seq_id[i] = 1;
+            batch.seq_id[i][0] = 0;
+            batch.logits[i] = 1;
+        }
+        batch.n_tokens = static_cast<int32_t>(tokens.size());
+        cancel.check();
+        if (llama_decode(context.get(), batch) < 0) {
+            llama_batch_free(batch);
+            throw std::runtime_error("aiUnavailable");
+        }
+        const float *embedding = llama_get_embeddings_seq(context.get(), 0);
+        const int dimensions = llama_model_n_embd_out(model.get());
+        if (!embedding || dimensions <= 0 || dimensions > 65536) {
+            llama_batch_free(batch);
+            throw std::runtime_error("aiUnavailable");
+        }
+        double norm = 0.0;
+        for (int i = 0; i < dimensions; ++i) norm += embedding[i] * embedding[i];
+        norm = std::sqrt(norm);
+        if (!(norm > 0.0)) {
+            llama_batch_free(batch);
+            throw std::runtime_error("aiUnavailable");
+        }
+        std::ostringstream output;
+        output << std::setprecision(8);
+        for (int i = 0; i < dimensions; ++i) {
+            if (i) output << ',';
+            output << static_cast<float>(embedding[i] / norm);
+        }
+        llama_batch_free(batch);
+        auto *result = strdup(output.str().c_str());
+        if (!result) throw std::bad_alloc();
+        *status = 0;
+        return result;
+    } catch (const std::exception &error) {
+        return strdup(error.what());
+    }
 }
