@@ -18,9 +18,13 @@ internal suspend fun androidRoleCapabilities(
     var states: List<AiPackageState>? = null
     return AiRole.entries.map { role ->
         val selectedId = selection.engineId(role)
-        val id = KashaAiCatalog.canonicalEngineId(selectedId)
+        val id = KashaAiCatalog.canonicalEngineId(selectedId, role)
         try {
-            val local = if (role == AiRole.SPEECH_TO_TEXT) id in ModelArtifacts.speech else id in ModelArtifacts.text
+            val local = when (role) {
+                AiRole.SPEECH_TO_TEXT -> id in ModelArtifacts.speech
+                AiRole.TEXT -> id in ModelArtifacts.text
+                AiRole.ROUTING -> id in ModelArtifacts.routing
+            }
             when {
                 !KashaAiCatalog.supportsSelection(selectedId, role) -> AiReadiness.blocked(role, selectedId, "platformUnavailable")
                 AiCatalog.cloudProviderId(id) != null -> cloud(role, selectedId, AiCatalog.cloudProviderId(id)!!)
