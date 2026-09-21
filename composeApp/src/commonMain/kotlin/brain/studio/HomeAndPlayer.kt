@@ -14,6 +14,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.*
 import androidx.compose.ui.unit.*
 import brain.model.CaptureStatus
+import brain.model.CaptureTextVariant
 import kotlinx.coroutines.launch
 
 @Composable
@@ -75,6 +76,18 @@ private fun HomeStateContent(s: StudioState) {
                     Action(s.tr("retry"), { scope.launch { s.retry() } }, enabled = !s.busy, modifier = Modifier.fillMaxWidth())
                     Spacer(Modifier.height(16.dp))
                 }
+                KashaTextTabs(
+                    items = listOf(
+                        KashaCopy.text(s.language, "transcription"),
+                        KashaCopy.text(s.language, "normalization"),
+                    ),
+                    selectedIndex = if (s.captureTextVariant == CaptureTextVariant.TRANSCRIPTION) 0 else 1,
+                    onSelect = { index ->
+                        val variant = if (index == 0) CaptureTextVariant.TRANSCRIPTION else CaptureTextVariant.NORMALIZATION
+                        scope.launch { s.selectCaptureTextVariant(variant) }
+                    },
+                )
+                Spacer(Modifier.height(14.dp))
                 KashaNoteText(
                     value = s.text,
                     onValueChange = s::editText,
@@ -94,8 +107,8 @@ private fun HomeStateContent(s: StudioState) {
             }
             Spacer(Modifier.height(10.dp))
             Action(
-                s.tr("tidy"),
-                { scope.launch { s.tidy() } },
+                KashaCopy.text(s.language, "reprocess"),
+                { scope.launch { s.reprocessCurrentText() } },
                 glyph = Glyph.TEXT_PROCESSING,
                 enabled = s.text.isNotBlank() && !s.busy,
                 modifier = Modifier.fillMaxWidth(),
