@@ -19,20 +19,15 @@ fetch_model() {
   mv "$file.part" "$file"
 }
 
-fetch_model ggml-small.bin \
-  https://huggingface.co/ggerganov/whisper.cpp/resolve/90a64d80ea254cf67575b41a5971f972c79f7b45/ggml-small.bin \
-  1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b
-fetch_model Qwen3-4B-Q4_K_M.gguf \
-  https://huggingface.co/Qwen/Qwen3-4B-GGUF/resolve/a9a60d009fa7ff9606305047c2bf77ac25dbec49/Qwen3-4B-Q4_K_M.gguf \
-  7485fe6f11af29433bc51cab58009521f205840f5b4ae3a32fa7f92e8534fdf5
-
-curl -fL --retry 3 \
-  https://huggingface.co/Qwen/Qwen3-4B-GGUF/raw/bc640142c66e1fdd12af0bd68f40445458f3869b/LICENSE \
-  -o "$COMMON/licenses/Qwen3-Apache-2.0.txt"
-grep -q 'Apache License' "$COMMON/licenses/Qwen3-Apache-2.0.txt"
+fetch_model ggml-large-v3-turbo-q5_0.bin \
+  https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin \
+  394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2
+fetch_model F2LLM-v2-80M.Q8_0.gguf \
+  https://huggingface.co/mradermacher/F2LLM-v2-80M-GGUF/resolve/main/F2LLM-v2-80M.Q8_0.gguf \
+  fb2a92e51dba7120d5369704502520814775b27c116d27ed039690106bf224ee
 
 printf '%s\n' \
-  'Kasha bundles unmodified Whisper Small and Qwen3-4B Q4_K_M.' \
+  'Kasha bundles Whisper Large-v3 Turbo Q5 and F2LLM-v2-80M Q8_0 for local speech recognition and project routing.' \
   'Native whisper.cpp, llama.cpp and FFmpeg executables are platform-specific resources.' \
   'FFmpeg is distributed under LGPL; source revision/build configuration are retained by each platform build.' \
   'Java: Eclipse Temurin 21, GPLv2 with Classpath Exception, licenses in runtime/legal.' \
