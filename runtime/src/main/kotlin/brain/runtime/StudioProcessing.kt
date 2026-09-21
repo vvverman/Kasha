@@ -238,6 +238,24 @@ class StudioDiskRepository(
     override suspend fun orderTasks(ids: List<String>) { withContext(Dispatchers.IO) { store.orderTasks(ids) } }
     override suspend fun claimTaskReminders(now: Long, zoneId: String) = withContext(Dispatchers.IO) { store.claimTaskReminders(now, zoneId) }
     override suspend fun reprocess(id: String) = withContext(Dispatchers.IO) { processor.enqueue(id, scope) }
+    override suspend fun retranscribe(id: String): Capture = withContext(Dispatchers.IO) {
+        val current = store.capture(id) ?: error("Запись не найдена")
+        require(current.isInbox && !current.status.isWorking)
+        store.updateCapture(id) {
+            it.copy(
+                transcript = "",
+                preparedText = "",
+                selectedTextVariant = CaptureTextVariant.TRANSCRIPTION,
+                draftEdited = false,
+                llmApplied = false,
+                rankingApplied = false,
+                relevance = emptyMap(),
+                status = CaptureStatus.QUEUED,
+                message = "",
+            )
+        }
+        processor.enqueue(id, scope)
+    }
     override suspend fun tidy(id: String) = withContext(Dispatchers.IO) { processor.tidy(id) }
     override suspend fun rank(id: String) = withContext(Dispatchers.IO) { processor.rank(id) }
     override suspend fun discard(id: String) { withContext(Dispatchers.IO) { store.discard(id) } }
