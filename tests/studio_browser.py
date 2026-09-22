@@ -226,7 +226,8 @@ with sync_playwright() as pw:
         appended_capture = ready()
         field('Текст заметки', addition)
         wait(lambda: (c := current()) and c['id'] == appended_capture['id'] and
-             c['preparedText'] == addition and c['draftEdited'], 'автосохранение дополнения')
+             c['transcript'] == addition and c['selectedTextVariant'] == 'TRANSCRIPTION' and
+             not c['preparedText'] and not c['llmApplied'] and c['draftEdited'], 'автосохранение дополнения в транскрибации')
         button('В заметки')
         click('button', re.compile(r'^Твой первый проект'))
         click_card('Новое название из первой строки')
