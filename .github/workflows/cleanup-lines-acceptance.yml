@@ -9,7 +9,10 @@ on:
       - aiCatalog/src/commonMain/kotlin/brain/ai/LocalTextRoles.kt
       - aiCatalog/src/commonTest/kotlin/brain/ai/LocalCleanupPartsTest.kt
       - runtime/src/main/kotlin/brain/runtime/LocalLlm.kt
+      - runtime/src/main/kotlin/brain/runtime/LocalEmbeddingRouting.kt
       - runtime/src/test/kotlin/brain/runtime/CleanupLinesAcceptanceTest.kt
+      - runtime/src/test/kotlin/brain/runtime/EmbeddingCliAcceptanceTest.kt
+      - runtime/src/test/kotlin/brain/runtime/LocalEmbeddingRoutingTest.kt
       - runtime/build.gradle.kts
       - .github/workflows/cleanup-lines-acceptance.yml
   workflow_dispatch:
@@ -38,7 +41,7 @@ jobs:
           key: kasha-macos-arm64-bundle-${{ hashFiles('desktopApp/packaging/build-native.sh') }}
       - if: steps.native.outputs.cache-hit != 'true'
         run: bash desktopApp/packaging/build-native.sh
-      - name: Общие контракты и настоящий JVM Cleanup на закреплённых весах
+      - name: Общие контракты и настоящие Cleanup и routing на закреплённых весах
         run: |
           export KASHA_CLEANUP_ACCEPTANCE=1
           export KASHA_CLEANUP_BUNDLE="$PWD/desktopApp/bundle/common"

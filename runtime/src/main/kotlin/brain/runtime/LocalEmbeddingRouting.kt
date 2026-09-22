@@ -1,65 +1,63 @@
 package brain.runtime
 
+import brain.ai.EmbeddingProjectRouting
 import brain.model.Project
 import kotlinx.serialization.json.*
 import java.nio.file.Files
 import java.nio.file.Path
-import kotlin.math.roundToInt
+import java.util.UUID
 
-/** Узкий локальный routing: F2LLM embeddings + cosine, без генеративной LLM. */
+/** Тонкий CLI-адаптер; подготовка запросов и cosine общие с нативными платформами. */
 class LocalEmbeddingRouting(
     private val cli: String,
     private val model: Path,
     private val root: Path,
     private val runner: CommandRunner,
 ) {
-    suspend fun rank(text: String, projects: List<Project>): Map<String, Int> {
-        if (projects.isEmpty()) return emptyMap()
-        val source = embedding(brain.ai.EmbeddingProjectRouting.query(text))
-        return projects.associate { project ->
-            val document = buildString {
-                append(project.title.trim())
-                project.description.trim().takeIf { it.isNotEmpty() }?.let { append("\n"); append(it) }
-                project.instruction.trim().takeIf { it.isNotEmpty() }?.let { append("\n"); append(it) }
-            }
-            project.id to cosineScore(source, embedding(document))
-        }
-    }
+    suspend fun rank(text: String, projects: List<Project>): Map<String, Int> =
+        EmbeddingProjectRouting.rank(text, projects, ::embedding)
 
-    private suspend fun embedding(text: String): DoubleArray {
+    private suspend fun embedding(text: String): FloatArray {
         require(text.isNotBlank()) { "emptyText" }
         val directory = Files.createTempDirectory(root, ".embedding-request-")
         val prompt = directory.resolve("input.txt")
         try {
             Files.writeString(prompt, text)
+            // По умолчанию CLI разбивает запрос по \n и возвращает вектор каждой строки.
+            // Служебный разделитель отсутствует во всём тексте: запрос/проект — один вектор.
+            var separator: String
+            do { separator = "KASHA_EMBEDDING_${UUID.randomUUID()}" } while (separator in text)
             val raw = runner.run(
                 listOf(
-                    cli,
-                    "-m", model.toString(),
-                    "--pooling", "last",
-                    "--embd-normalize", "2",
-                    "--embd-output-format", "array",
-                    "--log-disable",
-                    "--file", prompt.toString(),
-                    "-t", "4",
+                    cli, "-m", model.toString(),
+                    "--pooling", "last", "--embd-normalize", "2",
+                    "--embd-output-format", "array", "--embd-separator", separator,
+                    // JSON в закреплённом llama.cpp печатается через LOG уровня 0.
+                    // --log-disable подавляет и данные, поэтому оставляем машинный вывод.
+                    "--verbosity", "0", "--log-colors", "off",
+                    "--no-log-prefix", "--no-log-timestamps",
+                    "--no-escape", "--file", prompt.toString(), "-t", "4",
                 ),
                 300,
             ).trim()
-            val rootJson = Json.parseToJsonElement(raw).jsonArray
-            val vector = rootJson.firstOrNull()?.jsonArray
-                ?: error("Embedding-модель вернула пустой вектор")
+            require(raw.isNotEmpty()) { "Embedding-модель вернула пустой ответ" }
+            val vectors = Json.parseToJsonElement(raw) as? JsonArray
+                ?: error("Embedding-модель вернула неверный формат")
+            require(vectors.size == 1) { "Ожидался один embedding для полного текста" }
+            val vector = vectors.single() as? JsonArray
+                ?: error("Embedding-модель вернула неверный формат вектора")
             require(vector.isNotEmpty()) { "Embedding-модель вернула пустой вектор" }
-            return DoubleArray(vector.size) { index -> vector[index].jsonPrimitive.double }
+            val values = FloatArray(vector.size) { index ->
+                val component = vector[index] as? JsonPrimitive
+                require(component != null && !component.isString) { "Некорректная компонента embedding" }
+                val number = component.floatOrNull
+                require(number != null && number.isFinite()) { "Некорректная компонента embedding" }
+                number
+            }
+            require(values.any { it != 0f }) { "Embedding-модель вернула нулевой вектор" }
+            return values
         } finally {
             directory.toFile().deleteRecursively()
         }
-    }
-
-    private fun cosineScore(a: DoubleArray, b: DoubleArray): Int {
-        require(a.size == b.size && a.isNotEmpty()) { "Некорректный embedding" }
-        // --embd-normalize 2 даёт L2-normalized vectors, поэтому dot == cosine.
-        var dot = 0.0
-        for (i in a.indices) dot += a[i] * b[i]
-        return (dot.coerceIn(0.0, 1.0) * 4.0).roundToInt().coerceIn(0, 4)
     }
 }
