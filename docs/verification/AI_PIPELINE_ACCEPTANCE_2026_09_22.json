@@ -1,0 +1,198 @@
+{
+  "date": "2026-09-22",
+  "repository": "vvverman/Kasha",
+  "latestCodeCommit": "99226cc3ecfa3e77b131fda1ef4569658f6f8407",
+  "overallStatus": "automated_acceptance_passed",
+  "evidence": {
+    "macos": {
+      "commit": "0d8dca27b524fbf47d0f4f01feda937309d3dc44",
+      "runId": 35757676516,
+      "artifactId": 10707844856,
+      "archiveSha256": "815082e44c41d3b8255851fce8caa1a1fe810b3eb13859a4e0edacc6089d22fe",
+      "selfTest": {
+        "passed": true,
+        "os": "Mac OS X",
+        "arch": "aarch64",
+        "inferenceDevice": "CPU",
+        "llmApplied": true,
+        "rankingApplied": true,
+        "applicationRouter": true,
+        "externalNetworkReachable": false,
+        "diskRecovery": true,
+        "sourcesPreserved": true,
+        "fixtureUnchanged": true
+      },
+      "workflowConclusion": "success"
+    },
+    "windows": {
+      "commit": "74ddb1ef437135066e2b081ffcf3f110d1240fa4",
+      "runId": 35757408846,
+      "artifactId": 10709852522,
+      "archiveSha256": "71db6af0b53f68ccd0315e772cce05caf4969bea0f14b1829a5430bd863b2e7f",
+      "selfTest": {
+        "passed": true,
+        "os": "Windows Server 2025",
+        "arch": "amd64",
+        "inferenceDevice": "CPU",
+        "llmApplied": true,
+        "rankingApplied": true,
+        "applicationRouter": true,
+        "externalNetworkReachable": false,
+        "diskRecovery": true,
+        "sourcesPreserved": true,
+        "fixtureUnchanged": true
+      },
+      "installationData": {
+        "passed": true,
+        "sha256BeforeReinstallAndRemoval": "179dda176620f5fb42b9a260690079a824112605d7498962332f1b90f0467161"
+      },
+      "workflowConclusion": "success"
+    },
+    "linux": {
+      "commit": "74ddb1ef437135066e2b081ffcf3f110d1240fa4",
+      "runId": 35757408846,
+      "artifactId": 10709202265,
+      "archiveSha256": "ca978bcfaa1600327f7ac79a08ac9cb67c43b667709e856535da33089f97c404",
+      "selfTest": {
+        "passed": true,
+        "os": "Linux",
+        "arch": "amd64",
+        "inferenceDevice": "CPU",
+        "llmApplied": true,
+        "rankingApplied": true,
+        "applicationRouter": true,
+        "externalNetworkReachable": false,
+        "diskRecovery": true,
+        "sourcesPreserved": true,
+        "fixtureUnchanged": true
+      },
+      "installationData": {
+        "passed": true,
+        "sha256BeforeReinstallAndRemoval": "cc0e9fddec023de33c2567b8ac61d6f8c4b7294826b5586e815631aa37317503"
+      },
+      "workflowConclusion": "success"
+    },
+    "web": {
+      "commit": "0d8dca27b524fbf47d0f4f01feda937309d3dc44",
+      "runId": 35757676681,
+      "artifactId": 10709560225,
+      "archiveSha256": "617fb6a432e9324c410fddd787762daedf7f876dc4b99287bc25dc8e68189504",
+      "xmlTests": { "tests": 444, "failures": 0, "errors": 0, "skipped": 11 },
+      "textVariants": {
+        "passed": true,
+        "checks": [
+          "после STT нет автоматической нормализации или routing",
+          "первое открытие нормализации запускает только TEXT; ответ позже 30 секунд принят",
+          "переключение вкладок использует сохранённую нормализацию",
+          "повтор нормализации не запускает STT",
+          "повтор транскрибации вызывает отдельный STT и сбрасывает устаревшие результаты",
+          "новая нормализация использует повторно распознанный текст"
+        ],
+        "demoAi": true
+      },
+      "workflowConclusion": "success"
+    },
+    "cleanupRouting": {
+      "commit": "74ddb1ef437135066e2b081ffcf3f110d1240fa4",
+      "runId": 35757408997,
+      "artifactId": 10709070198,
+      "archiveSha256": "13ce98283d34e367424dde75b17599df0517ee666cc2c3ea0ed8d8b6692e6bb2",
+      "xmlTests": { "tests": 333, "failures": 0, "errors": 0, "skipped": 0 },
+      "workflowConclusion": "success"
+    },
+    "androidUnits": {
+      "commit": "0d8dca27b524fbf47d0f4f01feda937309d3dc44",
+      "runId": 35757676523,
+      "artifactId": 10709567520,
+      "archiveSha256": "2adfe0e0ed185df3433cb97695761613b85334ede3a6a63ac82f1e1e4740e87f",
+      "xmlTests": { "tests": 51, "failures": 0, "errors": 0, "skipped": 0 },
+      "workflowConclusion": "success"
+    },
+    "android26": {
+      "commit": "0d8dca27b524fbf47d0f4f01feda937309d3dc44",
+      "runId": 35757676473,
+      "artifactId": 10709548108,
+      "archiveSha256": "de909c286e9c1f8d2e7e4c53fbfc43609f23f4caf45f81dec39f172c78d17788",
+      "report": {
+        "passed": true, "nativeWhisper": true, "nativeCleanup": true,
+        "nativeRouting": true, "routerRoles": 3, "voiceSavedAsNote": true,
+        "restartPreserved": true, "sourceUnchanged": true,
+        "externalNetworkReachable": false, "fixture": "synthetic-russian-speech", "androidApi": 26
+      },
+      "workflowConclusion": "success"
+    },
+    "android35": {
+      "commit": "0d8dca27b524fbf47d0f4f01feda937309d3dc44",
+      "runId": 35757676473,
+      "artifactId": 10710207413,
+      "archiveSha256": "92c9602fba381f8d78dc0ee0e95e36569e9c6d5bb3bd6f205c3e02868bb65395",
+      "report": {
+        "passed": true, "nativeWhisper": true, "nativeCleanup": true,
+        "nativeRouting": true, "routerRoles": 3, "voiceSavedAsNote": true,
+        "restartPreserved": true, "sourceUnchanged": true,
+        "externalNetworkReachable": false, "fixture": "synthetic-russian-speech", "androidApi": 35
+      },
+      "workflowConclusion": "success"
+    },
+    "androidUI26": {
+      "commit": "0d8dca27b524fbf47d0f4f01feda937309d3dc44",
+      "runId": 35757676523,
+      "artifactId": 10709073436,
+      "archiveSha256": "5d101ea0421a09b25bd916288303b2d7be5c676dc0f42db50f5a96083236544b",
+      "report": { "passed": true, "androidApi": 26, "physicalDevice": false, "aiInferenceAcceptance": false, "reportedChecks": 22 },
+      "workflowConclusion": "success"
+    },
+    "androidUI35": {
+      "commit": "0d8dca27b524fbf47d0f4f01feda937309d3dc44",
+      "runId": 35757676523,
+      "artifactId": 10709098413,
+      "archiveSha256": "d2b9c8399d71ff94f272af49d7513d031595dff303b9f771f1cfb5a7fd896a60",
+      "report": { "passed": true, "androidApi": 35, "physicalDevice": false, "aiInferenceAcceptance": false, "reportedChecks": 22 },
+      "workflowConclusion": "success"
+    },
+    "ios": {
+      "commit": "99226cc3ecfa3e77b131fda1ef4569658f6f8407",
+      "runId": 35761280789,
+      "jobId": 106859643895,
+      "artifactId": 10711146940,
+      "archiveSha256": "8b949e7f5ddc0ace03707692f105f3f2175ebeca900de1ded7a41aaadd06f71f",
+      "xmlSuites": 57,
+      "xmlTests": { "tests": 404, "failures": 0, "errors": 0, "skipped": 0 },
+      "report": {
+        "passed": true, "nativeWhisper": true, "pcm16kAndAac48k": true,
+        "nativeCleanup": true, "nativeRouting": true, "routerRoles": 3,
+        "sourceUnchanged": true, "networkTransport": false
+      },
+      "testDevice": "iOS Simulator arm64",
+      "workflowConclusion": "success"
+    }
+  },
+  "scope": {
+    "physicalDeviceAcceptance": false,
+    "appStoreReleaseSigning": false,
+    "allPossibleSpeechQuality": false,
+    "testSpeech": "synthetic",
+    "productionCodeUnchangedAfter": "74ddb1ef437135066e2b081ffcf3f110d1240fa4",
+    "productionEquivalenceCheck": "GitHub compare 74ddb1e...99226cc: only two tests and verification documents changed; iOS production unchanged since 842c8ec",
+    "iosLiveInferenceTestSeconds": 313.603,
+    "iosLiveInferenceTimingIsNotPhysicalDeviceBenchmark": true
+  },
+  "installers": [
+    { "platform": "macOS arm64", "artifactId": 10707924809, "runId": 35757676516, "expires": "2026-09-29", "modelsBundled": true },
+    { "platform": "Windows x64", "artifactId": 10709388023, "runId": 35757408846, "expires": "2026-10-06", "modelsBundled": true },
+    { "platform": "Linux x64", "artifactId": 10709806375, "runId": 35757408846, "expires": "2026-10-06", "modelsBundled": true },
+    {
+      "platform": "Android", "artifactId": 10709262698, "runId": 35757676523,
+      "expires": "2026-10-06", "modelsBundled": false,
+      "file": "Kasha-1.2.0-Android-test.apk", "bytes": 41780185,
+      "sha256": "284c2b88fb75cda26c37ad8407c4815b373f4a6d7610e54cbbd0eed0499fd728", "kind": "debug"
+    },
+    {
+      "platform": "iOS arm64", "artifactId": 10708832451, "runId": 35755658454,
+      "expires": "2026-10-06", "modelsBundled": false,
+      "file": "Kasha-1.2.0-iOS-SideStore.ipa", "bytes": 12287651,
+      "sha256": "fce9435357ef375aa8c685cad59a52e8c479be935a80e21b9fa25057ebdf0ab8",
+      "kind": "unsigned-SideStore", "appBuild": "495"
+    }
+  ]
+}
