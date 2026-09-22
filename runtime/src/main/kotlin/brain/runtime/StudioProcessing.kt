@@ -166,6 +166,57 @@ class StudioProcessor(
         }
     }
 
+    suspend fun retranscribe(id: String): Capture = work.withLock {
+        val capture = store.capture(id) ?: error("Запись не найдена")
+        require(capture.isInbox && !capture.status.isWorking && capture.audioFinalized)
+        val prefs = preferences.read()
+        val language = Languages.resolve(prefs.language, Locale.getDefault().toLanguageTag())
+        val dir = Files.createTempDirectory(store.root, ".retranscribe-")
+        try {
+            val input = dir.resolve("input.wav")
+            val source = store.resolveAudio(capture)
+            store.updateCapture(id) {
+                it.copy(status = CaptureStatus.TRANSCRIBING, message = "", selectedTextVariant = CaptureTextVariant.TRANSCRIPTION)
+            }
+            runner.run(
+                listOf(
+                    ffmpeg, "-nostdin", "-v", "error", "-y",
+                    "-i", source.toString(), "-ar", "16000", "-ac", "1",
+                    "-c:a", "pcm_s16le", input.toString(),
+                ),
+                300,
+            )
+            val text = intelligence.transcribe(input.toString(), language, prefs.demoExample).trim()
+            require(text.isNotBlank()) { "emptyTranscription" }
+            val transcribed = store.updateCapture(id) {
+                it.copy(
+                    title = NoteText.title(text),
+                    transcript = text,
+                    preparedText = "",
+                    selectedTextVariant = CaptureTextVariant.TRANSCRIPTION,
+                    draftEdited = false,
+                    llmApplied = false,
+                    rankingApplied = false,
+                    relevance = emptyMap(),
+                    status = CaptureStatus.POLISHING,
+                    message = "",
+                    simulated = intelligence.simulated,
+                )
+            }
+            val finished = workflow.finish(transcribed, store.snapshot().projects, language)
+            store.updateCapture(id) { CaptureAiResult.apply(transcribed, it, finished) }
+        } catch (cancelled: CancellationException) {
+            withContext(NonCancellable) {
+                store.updateCapture(id) { it.copy(status = CaptureStatus.FAILED, message = "Повторная транскрибация прервана") }
+            }
+            throw cancelled
+        } catch (error: Exception) {
+            store.updateCapture(id) { it.copy(status = CaptureStatus.FAILED, message = error.message ?: "Ошибка транскрибации") }
+        } finally {
+            dir.toFile().deleteRecursively()
+        }
+    }
+
     suspend fun tidy(id: String): Capture = work.withLock {
         val capture = store.capture(id) ?: error("Запись не найдена")
         require(capture.isInbox && !capture.status.isWorking)
@@ -238,24 +289,8 @@ class StudioDiskRepository(
     override suspend fun orderTasks(ids: List<String>) { withContext(Dispatchers.IO) { store.orderTasks(ids) } }
     override suspend fun claimTaskReminders(now: Long, zoneId: String) = withContext(Dispatchers.IO) { store.claimTaskReminders(now, zoneId) }
     override suspend fun reprocess(id: String) = withContext(Dispatchers.IO) { processor.enqueue(id, scope) }
-    override suspend fun retranscribe(id: String): Capture = withContext(Dispatchers.IO) {
-        val current = store.capture(id) ?: error("Запись не найдена")
-        require(current.isInbox && !current.status.isWorking)
-        store.updateCapture(id) {
-            it.copy(
-                transcript = "",
-                preparedText = "",
-                selectedTextVariant = CaptureTextVariant.TRANSCRIPTION,
-                draftEdited = false,
-                llmApplied = false,
-                rankingApplied = false,
-                relevance = emptyMap(),
-                status = CaptureStatus.QUEUED,
-                message = "",
-            )
-        }
-        processor.enqueue(id, scope)
-    }
+    override suspend fun retranscribe(id: String): Capture =
+        withContext(Dispatchers.IO) { processor.retranscribe(id) }
     override suspend fun tidy(id: String) = withContext(Dispatchers.IO) { processor.tidy(id) }
     override suspend fun rank(id: String) = withContext(Dispatchers.IO) { processor.rank(id) }
     override suspend fun discard(id: String) { withContext(Dispatchers.IO) { store.discard(id) } }
