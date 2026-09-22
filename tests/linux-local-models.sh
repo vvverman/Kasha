@@ -18,7 +18,9 @@ export PATH="$RES/bin:$PATH"
 export KASHA_WHISPER_CLI="$RES/bin/whisper-cli"
 export KASHA_WHISPER_MODEL="$RES/models/ggml-large-v3-turbo-q5_0.bin"
 export KASHA_LLAMA_CLI="$RES/bin/llama-completion"
-export KASHA_LLAMA_MODEL="$RES/models/Qwen3-4B-Q4_K_M.gguf"
+export KASHA_LLAMA_MODEL="$RES/models/Kasha-Cleanup-0.6B-Q4_K_M.gguf"
+export KASHA_EMBEDDING_CLI="$RES/bin/llama-embedding"
+export KASHA_ROUTING_MODEL="$RES/models/F2LLM-v2-80M.Q8_0.gguf"
 export KASHA_FFMPEG="$RES/bin/ffmpeg"
 export HF_HUB_OFFLINE=1
 python3 - <<'PY'
