@@ -1,0 +1,59 @@
+name: Cleanup lines acceptance
+on:
+  push:
+    branches: [main, ai-cleanup-finish]
+    paths:
+      - kashaCore/src/commonMain/kotlin/brain/domain/TranscriptCleanup.kt
+      - kashaCore/src/commonMain/kotlin/brain/domain/LocalModelText.kt
+      - kashaCore/src/commonTest/kotlin/brain/domain/*Cleanup*Test.kt
+      - aiCatalog/src/commonMain/kotlin/brain/ai/LocalTextRoles.kt
+      - aiCatalog/src/commonTest/kotlin/brain/ai/LocalCleanupPartsTest.kt
+      - runtime/src/main/kotlin/brain/runtime/LocalLlm.kt
+      - runtime/src/test/kotlin/brain/runtime/CleanupLinesAcceptanceTest.kt
+      - runtime/build.gradle.kts
+      - .github/workflows/cleanup-lines-acceptance.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cleanup-lines-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  acceptance:
+    runs-on: macos-15
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+      - uses: actions/cache/restore@v4
+        id: native
+        with:
+          path: desktopApp/bundle/common
+          key: kasha-macos-arm64-bundle-${{ hashFiles('desktopApp/packaging/build-native.sh') }}
+      - if: steps.native.outputs.cache-hit != 'true'
+        run: bash desktopApp/packaging/build-native.sh
+      - name: Общие контракты и настоящий JVM Cleanup на закреплённых весах
+        run: |
+          export KASHA_CLEANUP_ACCEPTANCE=1
+          export KASHA_CLEANUP_BUNDLE="$PWD/desktopApp/bundle/common"
+          export PATH="$KASHA_CLEANUP_BUNDLE/bin:$PATH"
+          export KASHA_CLEANUP_OUT="$PWD/test-output/cleanup-lines"
+          set -o pipefail
+          gradle --continue :kashaCore:jvmTest :aiCatalog:jvmTest :runtime:test 2>&1 | tee cleanup-lines.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kasha-cleanup-lines-${{ github.sha }}
+          path: |
+            test-output/cleanup-lines
+            cleanup-lines.log
+            kashaCore/build/test-results
+            aiCatalog/build/test-results
+            runtime/build/test-results
+          retention-days: 14

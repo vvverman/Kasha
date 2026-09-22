@@ -68,6 +68,8 @@ dependencies {
     implementation(project(":aiCatalog"))
     implementation(libs.androidx.activity.compose)
     implementation(libs.kotlinx.coroutines.core)
+    // Android-адаптеры сами читают JSON; implementation соседнего модуля его не экспортирует.
+    implementation(libs.kotlinx.serialization.json)
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:${libs.versions.coroutines.get()}")
 
     testImplementation("junit:junit:4.13.2")
