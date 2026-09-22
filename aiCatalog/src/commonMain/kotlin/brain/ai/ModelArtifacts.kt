@@ -14,6 +14,12 @@ object ModelArtifacts {
             "394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2",
         ),
         ModelArtifact(
+            AiSelection.DEFAULT_TEXT,
+            "Kasha-Cleanup-0.6B-Q4_K_M.gguf",
+            "https://github.com/vvverman/Kasha/releases/download/kasha-cleanup-0.6b-v1/Kasha-Cleanup-0.6B-Q4_K_M.gguf",
+            "8c405ca3d29af67b21d2147e195b62ea63c84b84be1794b8aa453f31115b4f69",
+        ),
+        ModelArtifact(
             AiSelection.DEFAULT_ROUTING,
             "F2LLM-v2-80M.Q8_0.gguf",
             "https://huggingface.co/mradermacher/F2LLM-v2-80M-GGUF/resolve/main/F2LLM-v2-80M.Q8_0.gguf?download=true",
@@ -24,10 +30,5 @@ object ModelArtifacts {
     val speech: Map<String, ModelArtifact> = packages.filterKeys { it == AiSelection.DEFAULT_STT }
     val routing: Map<String, ModelArtifact> = packages.filterKeys { it == AiSelection.DEFAULT_ROUTING }
 
-    /**
-     * Transcrib Cleanup 0.6B сейчас опубликован как MLX-пакет из нескольких файлов.
-     * Его нельзя выдавать за одиночный GGUF и исполнять текущим llama.cpp adapter.
-     * Кроссплатформенный TEXT package добавляется только после проверенного runtime/artifact.
-     */
-    val text: Map<String, ModelArtifact> = emptyMap()
+    val text: Map<String, ModelArtifact> = packages.filterKeys { it == AiSelection.DEFAULT_TEXT }
 }
