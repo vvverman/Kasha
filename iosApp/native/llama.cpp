@@ -20,15 +20,6 @@ struct Cancellation {
     }
     void check() { if (aborted(this)) throw std::runtime_error("operationCancelled"); }
 };
-// Формат ответа тот же, что у Android; разбор, prompts и проверки остаются в LocalTextRoles/Core.
-constexpr const char *grammar = R"GBNF(root ::= object
-value ::= object | array | string | number | ("true" | "false" | "null") ws
-object ::= "{" ws (string ":" ws value ("," ws string ":" ws value)*)? "}" ws
-array ::= "[" ws (value ("," ws value)*)? "]" ws
-string ::= "\"" ([^"\\\x7F\x00-\x1F] | "\\" (["\\bfnrt] | "u" [0-9a-fA-F]{4}))* "\"" ws
-number ::= ("-"? ([0-9] | [1-9] [0-9]{0,15})) ("." [0-9]+)? ([eE] [-+]? [0-9] [1-9]{0,15})? ws
-ws ::= | " " | "\n" [ \t]{0,20}
-)GBNF";
 void append(std::vector<llama_token> &target, const llama_vocab *vocab, const std::string &text, bool special) {
     const int count = -llama_tokenize(vocab, text.data(), static_cast<int>(text.size()), nullptr, 0, false, special);
     if (count <= 0 || count > 8192) throw std::runtime_error("aiUnavailable");
@@ -69,9 +60,7 @@ extern "C" __attribute__((visibility("default"))) char *kasha_llama_run(
         if (!context) throw std::runtime_error("aiUnavailable");
         std::unique_ptr<llama_sampler, decltype(&llama_sampler_free)> sampler(
             llama_sampler_chain_init(llama_sampler_chain_default_params()), llama_sampler_free);
-        auto *g = llama_sampler_init_grammar(vocab, grammar, "root");
-        if (!sampler || !g) throw std::runtime_error("aiUnavailable");
-        llama_sampler_chain_add(sampler.get(), g);
+        if (!sampler) throw std::runtime_error("aiUnavailable");
         llama_sampler_chain_add(sampler.get(), llama_sampler_init_greedy());
         for (size_t offset = 0; offset < tokens.size(); offset += 256) {
             cancel.check();
@@ -133,8 +122,7 @@ extern "C" __attribute__((visibility("default"))) char *kasha_llama_embed(
         cp.n_batch = cp.n_ubatch = static_cast<uint32_t>(tokens.size());
         cp.n_threads = cp.n_threads_batch = std::clamp(threads, 1, 4);
         cp.embeddings = true;
-        cp.pooling_type = LLAMA_POOLING_TYPE_MEAN;
-        cp.attention_type = LLAMA_ATTENTION_TYPE_NON_CAUSAL;
+        cp.pooling_type = LLAMA_POOLING_TYPE_LAST;
         cp.abort_callback = Cancellation::aborted;
         cp.abort_callback_data = &cancel;
         std::unique_ptr<llama_context, decltype(&llama_free)> context(
