@@ -10,6 +10,30 @@ class LocalModelTextTest {
         assertFails { LocalModelText.requirePreserved("Позвонить", "Позвонить в 10") }
         LocalModelText.requirePreserved("до 15:30 бюджет 25,5", "До 15:30. Бюджет 25,5.")
     }
+    @Test fun explicitSelfCorrectionMayDropCancelledNumberButNotInventOne() {
+        LocalModelText.requirePreserved(
+            "Встреча в 2, нет, точнее в 3 часа.",
+            "Встреча в 3 часа.",
+        )
+        assertFails {
+            LocalModelText.requirePreserved(
+                "Встреча в 2, нет, точнее в 3 часа.",
+                "Встреча в 99 часов.",
+            )
+        }
+    }
+    @Test fun explicitSelfCorrectionMayDropCancelledNameButNotInventOne() {
+        LocalModelText.requirePreserved(
+            "Позвонить Ивану, нет, точнее Петру завтра.",
+            "Позвонить Петру завтра.",
+        )
+        assertFails {
+            LocalModelText.requirePreserved(
+                "Позвонить Ивану, нет, точнее Петру завтра.",
+                "Позвонить Сергею завтра.",
+            )
+        }
+    }
     @Test fun negativeMeaningHasConservativeGuard() {
         assertFails { LocalModelText.requirePreserved("Не удалять. Без подписки. Нельзя терять текст.", "Удалять. Без подписки. Нельзя терять текст.") }
         LocalModelText.requirePreserved("старый текст удалять нельзя", "Старый текст удалять нельзя.")
