@@ -30,11 +30,11 @@ class AndroidLocalModelsExecutionTest {
         catch (_: java.io.IOException) { }
         assertFalse("Внешняя сеть должна быть выключена до запуска inference", networkReachable)
         assertTrue("Whisper JNI missing", AndroidWhisperNative.available)
-        assertTrue("Qwen JNI missing", AndroidLlamaNative.available)
+        assertTrue("Llama JNI missing", AndroidLlamaNative.available)
         val selection = AiSelection()
         val preferences = Preferences(ai = selection, language = "ru")
         val models = File(context.filesDir, "Kasha/models").also { it.mkdirs() }
-        for (id in setOf(selection.speechToText, selection.text)) {
+        for (id in setOf(selection.speechToText, selection.text, selection.routing)) {
             val artifact = ModelArtifacts.packages.getValue(id)
             val file = File(input, artifact.fileName)
             check(file.isFile && file.canRead()) { "Missing pinned model fixture: ${file.absolutePath}; visible=${input.list()?.joinToString()}" }
@@ -80,7 +80,7 @@ class AndroidLocalModelsExecutionTest {
             assertEquals(originalHash, hash(repository.audioFile(capture.id)))
             assertEquals(selection, repository.preferences().ai)
             phase("Все проверки завершены")
-            evidence.writeText("""{"passed":true,"nativeWhisper":true,"nativeQwen":true,"routerRoles":3,"voiceSavedAsNote":true,"restartPreserved":true,"sourceUnchanged":true,"externalNetworkReachable":false,"fixture":"synthetic-russian-speech"}""")
+            evidence.writeText("""{"passed":true,"nativeWhisper":true,"nativeCleanup":true,"nativeRouting":true,"routerRoles":3,"voiceSavedAsNote":true,"restartPreserved":true,"sourceUnchanged":true,"externalNetworkReachable":false,"fixture":"synthetic-russian-speech"}""")
         } finally { root.deleteRecursively() }
     }
     private fun hash(file: File): String {
