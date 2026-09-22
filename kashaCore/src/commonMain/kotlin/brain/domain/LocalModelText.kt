@@ -103,8 +103,9 @@ object LocalModelText {
         }
 
         // Cleanup-модель обучена применять самоисправления: «в 2, нет, в 3» → «в 3».
-        // При явном маркере коррекции разрешаем удалить отменённый вариант, но никогда
-        // не разрешаем придумать новое число/имя/отрицание.
+        // При явном маркере коррекции разрешаем удалить отменённый вариант. Для смыслового
+        // отрицания сохраняем число маркеров, а не конкретную лексему: нормализация вроде
+        // «удалять нельзя» → «не удалять» не меняет полярность, но меняет слово-маркер.
         val hasCorrection = Regex(
             """(?iu)(?<![\p{L}\p{N}_])(нет|точнее|вернее|ой|стоп|no\s+wait|wait|actually|sorry|rather|nein|warte|eigentlich|ні|точніше|стій|não\s+espera|espera|na\s+verdade|nej|vent|faktisk)(?![\p{L}\p{N}_])"""
         ).containsMatchIn(original)
@@ -121,11 +122,8 @@ object LocalModelText {
         val editedNegatives = negatives(edited)
         val strictOriginalNegatives = originalNegatives.filterNot { hasCorrection && it in removableCorrectionNegations }
         val strictEditedNegatives = editedNegatives.filterNot { hasCorrection && it in removableCorrectionNegations }
-        require(strictOriginalNegatives.sorted() == strictEditedNegatives.sorted()) {
-            "Модель изменила отрицания. Оставлен исходный текст"
-        }
-        require(isMultisetSubset(editedNegatives, originalNegatives)) {
-            "Модель добавила отрицание. Оставлен исходный текст"
+        require(strictOriginalNegatives.size == strictEditedNegatives.size) {
+            "Модель изменила количество отрицаний. Оставлен исходный текст"
         }
 
         val originalNames = names(original)
