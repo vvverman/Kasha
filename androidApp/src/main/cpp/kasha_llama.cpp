@@ -191,6 +191,7 @@ Java_ru_vrmn_kasha_android_AndroidLlamaNative_embed(JNIEnv *env, jobject,
         const auto *vocab = llama_model_get_vocab(model.get());
         std::vector<llama_token> tokens;
         appendTokens(tokens, vocab, text, false);
+        if (llama_vocab_get_add_eos(vocab)) tokens.push_back(llama_vocab_eos(vocab));
         if (tokens.empty() || tokens.size() > 8192) throw std::runtime_error("aiUnavailable");
 
         auto cp = llama_context_default_params();
