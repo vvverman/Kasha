@@ -129,10 +129,6 @@ object LocalModelText {
         }
 
         val originalNames = names(original)
-        val editedNames = names(edited)
-        require(editedNames.all { it in originalNames }) {
-            "Модель добавила имя или важное название. Оставлен исходный текст"
-        }
         if (!hasCorrection) require(originalNames.all { it in allWords(edited) }) {
             "Модель потеряла имя или важное название. Оставлен исходный текст"
         }
