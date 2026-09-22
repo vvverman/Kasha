@@ -44,17 +44,27 @@ class AndroidAiDataSafetyTest {
         }
     }
     @Test fun cancelledSpeechPreservesSourceAndManualText() = runBlocking {
-        fixture { repository, engine, capture ->
-            repository.updateCaptureDraft(capture.id, CaptureDraftUpdate(text = "Ручной текст"))
-            val started = CompletableDeferred<Unit>()
-            engine.speech = { started.complete(Unit); awaitCancellation() }
-            val processing = launch { repository.reprocess(capture.id) }
-            started.await(); processing.cancelAndJoin()
-            val current = repository.snapshot().captures.single()
-            assertEquals(CaptureStatus.FAILED, current.status)
-            assertEquals("Ручной текст", current.textToSave)
-            assertEquals(SOURCE, current.transcript)
-            assertArrayEquals(AUDIO, repository.audioFile(capture.id).readBytes())
+        for (variant in CaptureTextVariant.entries) {
+            fixture { repository, engine, capture ->
+                if (variant == CaptureTextVariant.NORMALIZATION) repository.tidy(capture.id)
+                repository.updateCaptureDraft(capture.id, CaptureDraftUpdate(text = "Ручной текст", variant = variant))
+                val before = repository.snapshot().captures.single()
+                // Редактирование транскрибации меняет transcript, нормализации — preparedText.
+                assertEquals(if (variant == CaptureTextVariant.TRANSCRIPTION) "Ручной текст" else SOURCE, before.transcript)
+                assertEquals(if (variant == CaptureTextVariant.NORMALIZATION) "Ручной текст" else "", before.preparedText)
+                val started = CompletableDeferred<Unit>()
+                engine.speech = { started.complete(Unit); awaitCancellation() }
+                val processing = launch { repository.reprocess(capture.id) }
+                started.await(); processing.cancelAndJoin()
+                val current = repository.snapshot().captures.single()
+                assertEquals(CaptureStatus.FAILED, current.status)
+                assertEquals("Ручной текст", current.textToSave)
+                assertEquals(before.transcript, current.transcript)
+                assertEquals(before.preparedText, current.preparedText)
+                assertEquals(before.selectedTextVariant, current.selectedTextVariant)
+                assertEquals(before.draftEdited, current.draftEdited)
+                assertArrayEquals(AUDIO, repository.audioFile(capture.id).readBytes())
+            }
         }
     }
     @Test fun missingModelStillAllowsSavingExistingTextManually() = runBlocking {
