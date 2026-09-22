@@ -22,7 +22,7 @@ class IosLocalModelsExecutionTest {
         val root = IosPaths.directory(IosPaths.child(NSTemporaryDirectory(), "native-models-${NSUUID().UUIDString}"))
         val selection = AiSelection()
         val preferences = Preferences(ai = selection)
-        val tested = ModelArtifacts.packages.filterKeys { it in setOf(selection.speechToText, selection.text) }
+        val tested = ModelArtifacts.packages.filterKeys { it in setOf(selection.speechToText, selection.text, selection.routing) }
         val native = IosNativeModels(frameworks)
         val packages = IosModelPackages(root, tested, { selection }) { url, part ->
             val spec = tested.values.single { it.url == url }
@@ -34,6 +34,7 @@ class IosLocalModelsExecutionTest {
             assertTrue(native.available(AiRole.TEXT))
             packages.install(selection.speechToText)
             packages.install(selection.text)
+            packages.install(selection.routing)
             val local = IosLocalModels(packages, native)
             val router = IosRoutedIntelligence(IosOnDeviceIntelligence(), null, local) { preferences }
             assertTrue(router.capabilities(selection, "ru").all { it.executable })
@@ -57,7 +58,7 @@ class IosLocalModelsExecutionTest {
             assertEquals(selection, preferences.ai)
             IosPaths.directory(evidence)
             IosPaths.write(IosPaths.child(evidence, "ios-local-models.json"),
-                """{"passed":true,"nativeWhisper":true,"pcm16kAndAac48k":true,"nativeQwen":true,"routerRoles":3,"sourceUnchanged":true,"networkTransport":false}""")
+                """{"passed":true,"nativeWhisper":true,"pcm16kAndAac48k":true,"nativeCleanup":true,"nativeRouting":true,"routerRoles":3,"sourceUnchanged":true,"networkTransport":false}""")
         } finally { IosPaths.remove(root) }
     }
 }
