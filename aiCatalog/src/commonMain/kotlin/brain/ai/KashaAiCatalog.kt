@@ -34,10 +34,10 @@ object KashaAiCatalog {
             roles = setOf(AiRole.TEXT),
             locality = AiLocality.LOCAL,
             version = "0.6B · 4-bit",
-            approximateSizeMb = 347,
+            approximateSizeMb = 397,
             languages = listOf("ru", "en", "de", "uk", "pt", "da"),
-            defaultInstalled = false,
-            installable = false,
+            defaultInstalled = true,
+            installable = true,
             description = "Узкая модель нормализации транскриптов; без чат-функций",
         ),
         AiEngineDescriptor(
