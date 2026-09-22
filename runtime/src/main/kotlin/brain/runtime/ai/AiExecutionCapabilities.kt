@@ -34,9 +34,8 @@ class JvmAiExecutionCapabilities(
                         if (locale == null) locale = language()
                         val state = states?.get(descriptor.id)
                         val supported = packages.available && (descriptor.id in JvmModelManifest.packages || state?.installed == true)
-                        val engineRole = if (role == AiRole.SPEECH_TO_TEXT) role else AiRole.TEXT
-                        val runnable = if (!supported) false else runtime[engineRole]
-                            ?: runtimeReady(engineRole).also { runtime[engineRole] = it }
+                        val runnable = if (!supported) false else runtime[role]
+                            ?: runtimeReady(role).also { runtime[role] = it }
                         val supportedLanguage = descriptor.languages.isEmpty() || (locale ?: "") in descriptor.languages
                         AiReadiness.local(role, id, supported, supportedLanguage, state, runnable)
                     }
@@ -54,8 +53,12 @@ class JvmAiRuntimeProbe(
     private val runner: CommandRunner = JvmCommandRunner(mapOf("GGML_METAL_DEVICES" to "0")),
 ) {
     suspend fun available(role: AiRole): Boolean {
-        val executable = environment[if (role == AiRole.SPEECH_TO_TEXT) "KASHA_WHISPER_CLI" else "KASHA_LLAMA_CLI"]
-            ?.takeIf(String::isNotBlank) ?: return false
+        val executableKey = when (role) {
+            AiRole.SPEECH_TO_TEXT -> "KASHA_WHISPER_CLI"
+            AiRole.TEXT -> "KASHA_LLAMA_CLI"
+            AiRole.ROUTING -> "KASHA_EMBEDDING_CLI"
+        }
+        val executable = environment[executableKey]?.takeIf(String::isNotBlank) ?: return false
         return try {
             // Закреплённый llama.cpp перечисляет Metal до разбора CLI; окружение
             // выше отключает только это перечисление в отдельном процессе probe.
