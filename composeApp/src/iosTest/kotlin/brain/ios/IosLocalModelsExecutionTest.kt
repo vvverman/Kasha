@@ -5,6 +5,8 @@ import brain.ai.ModelArtifacts
 import brain.model.Project
 import brain.studio.*
 import kotlinx.cinterop.toKString
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.test.runTest
 import platform.Foundation.*
 import platform.posix.getenv
@@ -14,6 +16,13 @@ import kotlin.time.Duration.Companion.minutes
 /** Требует подготовленные pinned-модели и iOS frameworks. Это реальный inference, не mock. */
 class IosLocalModelsExecutionTest {
     @Test fun installedModelsExecuteThroughIosRouterAndNativeBindings() = runTest(timeout = 20.minutes) {
+        // Нативная модель работает на настоящем потоке. Виртуальные часы runTest
+        // иначе мгновенно исчерпывают withTimeout в LocalTextRoles при ожидании модели.
+        // Внешний лимит теста и внутренние таймауты приложения остаются прежними.
+        withContext(Dispatchers.Default) { executeNativeModels() }
+    }
+
+    private suspend fun executeNativeModels() {
         fun required(name: String) = getenv(name)?.toKString() ?: error("Required integration fixture: $name")
         val frameworks = required("KASHA_IOS_NATIVE_FRAMEWORKS")
         val sourceModels = required("KASHA_IOS_MODEL_FIXTURES")
