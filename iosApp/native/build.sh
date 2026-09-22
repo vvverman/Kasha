@@ -32,6 +32,9 @@ for engine in whisper llama; do
     # Сохраняем вывод целиком: grep -q в pipefail-конвейере может вызвать SIGPIPE у nm.
     SYMBOLS="$(nm -gU "$BINARY")"
     grep -q "_kasha_${engine}_run$" <<< "$SYMBOLS"
+    if [ "$engine" = llama ]; then
+        grep -q "_kasha_llama_embed$" <<< "$SYMBOLS"
+    fi
     if grep -qE ' _ggml_| _llama_| _whisper_' <<< "$SYMBOLS"; then
         echo 'Internal engine symbols escaped the framework' >&2; exit 1
     fi
