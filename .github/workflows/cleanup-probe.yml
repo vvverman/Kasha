@@ -1,0 +1,37 @@
+name: Cleanup protocol diagnostics
+on:
+  push:
+    branches: [main]
+    paths:
+      - tests/cleanup_cli_probe.py
+      - .github/workflows/cleanup-probe.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cleanup-probe-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  cleanup-probe:
+    runs-on: macos-15
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache/restore@v4
+        id: native-cache
+        with:
+          path: desktopApp/bundle/common
+          key: kasha-macos-arm64-bundle-${{ hashFiles('desktopApp/packaging/build-native.sh') }}
+      - name: Подготовить закреплённый native bundle при отсутствии кэша
+        if: steps.native-cache.outputs.cache-hit != 'true'
+        run: bash desktopApp/packaging/build-native.sh
+      - name: Сравнить протоколы только на синтетических фразах без сети
+        run: |
+          /usr/bin/sandbox-exec -p '(version 1)(allow default)(deny network*)' \
+            python3 tests/cleanup_cli_probe.py --bundle desktopApp/bundle/common --out test-output/cleanup-probe
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kasha-cleanup-probe-${{ github.sha }}
+          path: test-output/cleanup-probe
+          retention-days: 7

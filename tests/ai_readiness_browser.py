@@ -38,7 +38,7 @@ def wait_runtime():
 
 wait_runtime()
 original = api('preferences')
-selection = {'speechToText': 'local.default.stt', 'text': 'local.default.text', 'routing': 'local.default.text'}
+selection = {'speechToText': 'local.default.stt', 'text': 'local.default.text', 'routing': 'local.default.routing'}
 configured = dict(original, language='ru', theme='light', autoRecord=False, ai=selection)
 api('preferences', configured)
 try:
@@ -66,6 +66,7 @@ try:
         page.route('**/api/ai/models', lambda route: route.fulfill(status=200, content_type='application/json', body=json.dumps([
             {'engineId': 'local.default.stt', 'installed': True},
             {'engineId': 'local.default.text', 'installed': True},
+            {'engineId': 'local.default.routing', 'installed': True},
         ])))
         page.route('**/api/ai/cloud', lambda route: route.fulfill(status=200, content_type='application/json', body='[]'))
 
