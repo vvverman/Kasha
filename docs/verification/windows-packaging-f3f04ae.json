@@ -1,0 +1,35 @@
+{
+  "codeSha": "f3f04ae83660362b9f710bf7bd46321c38580742",
+  "workflowRunId": 35740054306,
+  "jobId": 106787152031,
+  "artifactId": 10700755978,
+  "artifactSha256": "aafc40e9884004fb21d90d16ec76bd90428a6f03599dbf5c2036e733f81b48a7",
+  "packagingStep": "success",
+  "followingPackageVerificationStep": "failure",
+  "aiAcceptanceStep": "skipped",
+  "completeWindowsAcceptance": false,
+  "evidence": {
+    "modelSha256Checks": 3,
+    "cliFilesPresent": 4,
+    "msiGenerationLogged": true,
+    "exeCompilationLogged": true,
+    "setupFilename": "Kasha-1.2.0-Windows-x64-Setup.exe",
+    "installSmoke": "KASHA DESKTOP INSTALL SMOKE PASSED",
+    "uiScope": "actual-desktop-window; test-data; no AI inference or microphone claim",
+    "uiReportedPassed": true,
+    "uiScreenshotEntries": 40,
+    "dataPreservation": {
+      "before": "acbdbb7000bc69111c65ee0ad837996f1866067402c0c223b4308dc02452702c",
+      "afterReinstall": "acbdbb7000bc69111c65ee0ad837996f1866067402c0c223b4308dc02452702c",
+      "afterRemove": "acbdbb7000bc69111c65ee0ad837996f1866067402c0c223b4308dc02452702c",
+      "passed": true
+    }
+  },
+  "limitations": [
+    "This artifact contains diagnostics, not an accepted distribution for the user.",
+    "The succeeding packaging step does not imply the entire workflow passed.",
+    "The exact failure text of the following verification step was not extracted in this update.",
+    "The old minimum-two-CAB condition was independently corrected in 8141ec8, but this correction needs its own CI result.",
+    "No real model quality or physical microphone acceptance is claimed."
+  ]
+}
