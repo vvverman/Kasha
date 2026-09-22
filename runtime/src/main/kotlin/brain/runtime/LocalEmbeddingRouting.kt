@@ -15,7 +15,7 @@ class LocalEmbeddingRouting(
 ) {
     suspend fun rank(text: String, projects: List<Project>): Map<String, Int> {
         if (projects.isEmpty()) return emptyMap()
-        val source = embedding(text)
+        val source = embedding(brain.ai.EmbeddingProjectRouting.query(text))
         return projects.associate { project ->
             val document = buildString {
                 append(project.title.trim())
@@ -36,7 +36,7 @@ class LocalEmbeddingRouting(
                 listOf(
                     cli,
                     "-m", model.toString(),
-                    "--pooling", "mean",
+                    "--pooling", "last",
                     "--embd-normalize", "2",
                     "--embd-output-format", "array",
                     "--log-disable",
