@@ -56,6 +56,7 @@ fun main() {
     val bundledModels = buildMap<String, Path> {
         env["KASHA_WHISPER_MODEL"]?.let { Path.of(it) }?.takeIf(Files::isRegularFile)?.let { put(AiCatalog.DEFAULT_STT, it) }
         env["KASHA_LLAMA_MODEL"]?.let { Path.of(it) }?.takeIf(Files::isRegularFile)?.let { put(AiCatalog.DEFAULT_TEXT, it) }
+        env["KASHA_ROUTING_MODEL"]?.let { Path.of(it) }?.takeIf(Files::isRegularFile)?.let { put(AiCatalog.DEFAULT_ROUTING, it) }
     }
     val packages = JvmAiPackageGateway(root, bundledModels)
     val cloud = JvmCloudAiGateway(root)
