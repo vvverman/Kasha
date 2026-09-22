@@ -9,7 +9,7 @@ exec > >(tee -a "$OUT/packaging.log") 2>&1
 phase() { echo "$(date -u '+%FT%TZ') Этап: $1"; printf '%s\n' "$1" > "$OUT/phase.txt"; }
 phase 'Права запуска и подпись'
 RES="$APP/Contents/app/resources"
-for name in whisper-cli llama-completion ffmpeg; do
+for name in whisper-cli llama-completion llama-embedding ffmpeg; do
  test -f "$RES/bin/$name"
  chmod 755 "$RES/bin/$name"
  test -x "$RES/bin/$name"
@@ -117,6 +117,10 @@ hdiutil attach -nobrowse -readonly -mountpoint "$MOUNT" "$DMG"
 codesign --verify --deep --strict "$MOUNT/Kasha.app"
 test -x "$MOUNT/Kasha.app/Contents/app/resources/bin/whisper-cli"
 test -x "$MOUNT/Kasha.app/Contents/app/resources/bin/llama-completion"
+test -x "$MOUNT/Kasha.app/Contents/app/resources/bin/llama-embedding"
+test -s "$MOUNT/Kasha.app/Contents/app/resources/models/ggml-large-v3-turbo-q5_0.bin"
+test -s "$MOUNT/Kasha.app/Contents/app/resources/models/Kasha-Cleanup-0.6B-Q4_K_M.gguf"
+test -s "$MOUNT/Kasha.app/Contents/app/resources/models/F2LLM-v2-80M.Q8_0.gguf"
 test -x "$MOUNT/Kasha.app/Contents/app/resources/bin/ffmpeg"
 hdiutil detach "$MOUNT"
 export KASHA_DMG_NAME="$DMG_NAME"
