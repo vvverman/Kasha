@@ -82,15 +82,13 @@ class WebBrainRepository(private val baseUrl: String) : StudioRepository, AiPlat
     override suspend fun orderTasks(ids: List<String>) { client.post("$baseUrl/api/tasks/order") { contentType(ContentType.Application.Json); setBody(OrderRequest(ids)) } }
     override suspend fun claimTaskReminders(now: Long, zoneId: String): List<Task> =
         throw UnsupportedOperationException("Reminder scheduling belongs to the local runtime")
-    override suspend fun reprocess(id: String): Capture = client.post("$baseUrl/api/captures/$id/process").body()
-    override suspend fun retranscribe(id: String): Capture = client.post("$baseUrl/api/captures/$id/retranscribe") {
-        timeout { requestTimeoutMillis = STT_REQUEST_TIMEOUT_MILLIS }
-    }.body()
-    override suspend fun tidy(id: String): Capture = client.post("$baseUrl/api/captures/$id/tidy") {
-        timeout { requestTimeoutMillis = TEXT_REQUEST_TIMEOUT_MILLIS }
-    }.body()
-    override suspend fun rank(id: String): Capture = client.post("$baseUrl/api/captures/$id/rank") {
-        timeout { requestTimeoutMillis = TEXT_REQUEST_TIMEOUT_MILLIS }
-    }.body()
+    private val commandJson = Json { ignoreUnknownKeys = true }
+    private suspend fun command(id: String, stage: String, timeoutMillis: Long): Capture =
+        commandJson.decodeFromString(captureCommand(baseUrl, id, stage, timeoutMillis))
+
+    override suspend fun reprocess(id: String): Capture = command(id, "process", STT_REQUEST_TIMEOUT_MILLIS)
+    override suspend fun retranscribe(id: String): Capture = command(id, "retranscribe", STT_REQUEST_TIMEOUT_MILLIS)
+    override suspend fun tidy(id: String): Capture = command(id, "tidy", TEXT_REQUEST_TIMEOUT_MILLIS)
+    override suspend fun rank(id: String): Capture = command(id, "rank", TEXT_REQUEST_TIMEOUT_MILLIS)
     override suspend fun discard(id: String) { client.delete("$baseUrl/api/captures/$id") }
 }
