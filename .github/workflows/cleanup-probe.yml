@@ -1,7 +1,7 @@
 name: Cleanup protocol diagnostics
 on:
   push:
-    branches: [main]
+    branches: [main, diag-cleanup-segments-20260922]
     paths:
       - tests/cleanup_cli_probe.py
       - .github/workflows/cleanup-probe.yml
