@@ -47,12 +47,13 @@ DEST="/data/user/0/$PACKAGE/files/ai-fixtures"
 adb shell run-as "$PACKAGE" mkdir -p files/ai-fixtures
 APP_UID=$(adb shell run-as "$PACKAGE" id -u | tr -d '\r')
 [[ "$APP_UID" =~ ^[0-9]+$ ]]
-adb push desktopApp/bundle/common/models/ggml-small.bin "$DEST/ggml-small.bin"
-adb push desktopApp/bundle/common/models/Qwen3-4B-Q4_K_M.gguf "$DEST/Qwen3-4B-Q4_K_M.gguf"
+adb push desktopApp/bundle/common/models/ggml-large-v3-turbo-q5_0.bin "$DEST/ggml-large-v3-turbo-q5_0.bin"
+adb push desktopApp/bundle/common/models/Kasha-Cleanup-0.6B-Q4_K_M.gguf "$DEST/Kasha-Cleanup-0.6B-Q4_K_M.gguf"
+adb push desktopApp/bundle/common/models/F2LLM-v2-80M.Q8_0.gguf "$DEST/F2LLM-v2-80M.Q8_0.gguf"
 adb push test-output/real-models/russian-with-pauses.wav "$DEST/russian-with-pauses.wav"
 adb shell chown -R "$APP_UID:$APP_UID" "$DEST"
 adb shell restorecon -RF "$DEST"
-for file in ggml-small.bin Qwen3-4B-Q4_K_M.gguf russian-with-pauses.wav; do
+for file in ggml-large-v3-turbo-q5_0.bin Kasha-Cleanup-0.6B-Q4_K_M.gguf F2LLM-v2-80M.Q8_0.gguf russian-with-pauses.wav; do
     # test — команда shell; отдельный exec test недоступен под run-as на API26.
     adb shell "run-as $PACKAGE sh -c 'test -r files/ai-fixtures/$file'"
 done
@@ -71,7 +72,7 @@ python - "$OUT/android-local-models.json" "$API" <<'PY'
 import json, pathlib, sys
 path = pathlib.Path(sys.argv[1])
 evidence = json.loads(path.read_text())
-for flag in ('passed', 'nativeWhisper', 'nativeQwen', 'voiceSavedAsNote', 'restartPreserved', 'sourceUnchanged'):
+for flag in ('passed', 'nativeWhisper', 'nativeCleanup', 'nativeRouting', 'voiceSavedAsNote', 'restartPreserved', 'sourceUnchanged'):
     assert evidence.get(flag) is True, flag
 assert evidence['externalNetworkReachable'] is False
 assert evidence['routerRoles'] == 3
