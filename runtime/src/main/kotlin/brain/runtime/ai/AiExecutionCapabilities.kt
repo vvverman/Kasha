@@ -20,7 +20,8 @@ class JvmAiExecutionCapabilities(
         return AiRole.entries.map { role ->
             val id = selection.engineId(role)
             try {
-                val descriptor = AiCatalog.selectedDescriptor(id)
+                val canonicalId = KashaAiCatalog.canonicalEngineId(id, role)
+                val descriptor = AiCatalog.selectedDescriptor(canonicalId)
                 when {
                     descriptor == null || !KashaAiCatalog.supportsSelection(id, role) ->
                         AiReadiness.blocked(role, id, "platformUnavailable")
