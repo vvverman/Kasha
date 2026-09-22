@@ -236,8 +236,10 @@ with sync_playwright() as pw:
         capture = ready()
         field('Текст заметки', text)
         # Observe the actual autosave, not a fixed delay or a direct API replacement.
-        wait(lambda: (c := current()) and c['id'] == capture['id'] and c['preparedText'] == text and c['draftEdited'],
-             'текст захвата сохранён перед выбором назначения')
+        wait(lambda: (c := current()) and c['id'] == capture['id'] and
+             c['transcript'] == text and c['selectedTextVariant'] == 'TRANSCRIPTION' and
+             not c['preparedText'] and not c['llmApplied'] and c['draftEdited'],
+             'текст транскрибации сохранён перед выбором назначения')
 
     def task_manual_order():
         tasks = [t for t in api('snapshot')['tasks'] if t.get('completedAt') is None]
