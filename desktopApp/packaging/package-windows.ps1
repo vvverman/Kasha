@@ -52,28 +52,10 @@ $AppExe = Join-Path $AppImage "Kasha.exe"
 if (!(Test-Path $AppExe)) { throw "Compose app image not found: $AppImage" }
 
 $Resources = Join-Path $AppImage "app\resources"
-$Models = Join-Path $Resources "models"
-$WindowsModels = Join-Path $Desktop "bundle\windows\models"
-$MonolithicQwen = Join-Path $Models "Qwen3-4B-Q4_K_M.gguf"
-$SourceShards = @(Get-ChildItem $WindowsModels -Filter "Qwen3-4B-Q4_K_M-*-of-*.gguf" -File | Sort-Object Name)
-if ($SourceShards.Count -lt 2) { throw "Windows Qwen GGUF shards are missing" }
-foreach ($shard in $SourceShards) {
-    if ($shard.Length -ge 2000000000) { throw "Qwen shard $($shard.Name) is too large: $($shard.Length) bytes" }
-    Copy-Item $shard.FullName (Join-Path $Models $shard.Name) -Force
-}
-Remove-Item $MonolithicQwen -Force -ErrorAction SilentlyContinue
-
-foreach ($relative in @(
-    "bin\whisper-cli.exe",
-    "bin\llama-completion.exe",
-    "bin\ffmpeg.exe",
-    "models\ggml-small.bin"
-)) {
-    if (!(Test-Path (Join-Path $Resources $relative))) { throw "Bundled payload is missing $relative" }
-}
-$PackagedShards = @(Get-ChildItem $Models -Filter "Qwen3-4B-Q4_K_M-*-of-*.gguf" -File | Sort-Object Name)
-if ($PackagedShards.Count -ne $SourceShards.Count) { throw "Qwen shard copy is incomplete" }
-if (Test-Path $MonolithicQwen) { throw "Monolithic Qwen must not be present in the Windows package" }
+# Модели уже включены Compose из общего bundle. Старые Qwen shards не нужны.
+# Проверяем готовый app image по единому manifest до упаковки и запуска.
+& python (Join-Path $PSScriptRoot "verify-model-bundle.py") $Resources --suffix .exe
+if ($LASTEXITCODE -ne 0) { throw "Bundled model verification failed with exit code $LASTEXITCODE" }
 
 Remove-Item $Dist -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item $Temp -Recurse -Force -ErrorAction SilentlyContinue
@@ -86,7 +68,7 @@ Invoke-InstallSmoke $AppExe (Join-Path $Dist "windows-app-image-smoke.log")
 $jpackage = Join-Path $env:JAVA_HOME "bin\jpackage.exe"
 if (!(Test-Path $jpackage)) { throw "jpackage.exe not found under JAVA_HOME=$env:JAVA_HOME" }
 
-Write-Host "== MSI with external split CABs =="
+Write-Host "== MSI with external CAB payload =="
 # main.wxs creates the Start menu shortcut with the same AppUserModelID as EXE.
 $jpackageArgs = @(
     "--type", "msi",
@@ -109,7 +91,8 @@ if ($LASTEXITCODE -ne 0) { throw "jpackage MSI failed with exit code $LASTEXITCO
 $Msi = Get-ChildItem $MsiOut -Filter "*.msi" -File | Select-Object -First 1
 if ($null -eq $Msi) { throw "MSI was not produced" }
 $Cabs = @(Get-ChildItem $MsiOut -Filter "*.cab" -File | Sort-Object Name)
-if ($Cabs.Count -lt 2) { throw "Expected multiple external CABs for the bundled model payload" }
+# Новый комплект может целиком поместиться в один внешний CAB.
+if ($Cabs.Count -lt 1) { throw "External CAB payload was not produced" }
 foreach ($cab in $Cabs) {
     if ($cab.Length -ge 1900000000) { throw "CAB $($cab.Name) is too large: $($cab.Length) bytes" }
 }

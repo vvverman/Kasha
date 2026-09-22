@@ -4,12 +4,18 @@ on:
     branches: [main]
     paths:
       - scripts/setup-models.sh
+      - desktopApp/packaging/verify-model-bundle.py
+      - desktopApp/packaging/package-windows.ps1
+      - tests/model_bundle_test.py
       - tests/setup_models_test.py
       - aiCatalog/src/commonMain/kotlin/brain/ai/ModelArtifacts.kt
       - .github/workflows/model-setup.yml
   pull_request:
     paths:
       - scripts/setup-models.sh
+      - desktopApp/packaging/verify-model-bundle.py
+      - desktopApp/packaging/package-windows.ps1
+      - tests/model_bundle_test.py
       - tests/setup_models_test.py
       - aiCatalog/src/commonMain/kotlin/brain/ai/ModelArtifacts.kt
       - .github/workflows/model-setup.yml
@@ -29,3 +35,4 @@ jobs:
         run: |
           bash -n scripts/setup-models.sh
           python3 tests/setup_models_test.py
+          python3 tests/model_bundle_test.py

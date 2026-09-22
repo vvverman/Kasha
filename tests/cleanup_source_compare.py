@@ -91,7 +91,8 @@ def mlx_worker(args):
     # CPU выбран до импорта mlx-lm, чтобы поток генерации также был CPU.
     import mlx.core as mx
     mx.set_default_device(mx.cpu)
-    from mlx_lm import load, stream_generate
+    from mlx_lm import load
+    from mlx_lm.generate import generate_step
     from mlx_lm.sample_utils import make_sampler
     metadata = json.loads((args.out / 'source.json').read_text())
     model, tokenizer = load(metadata['sourcePath'], tokenizer_config={'trust_remote_code': False})
@@ -99,17 +100,23 @@ def mlx_worker(args):
     tokens = tokenizer.encode(prompt, add_special_tokens=False)
     if tokens != json.loads((args.out / (args.name + '-tokens.json')).read_text()):
         raise RuntimeError('Токенизация MLX не совпала с зафиксированным входом')
-    text, last = '', None
-    for last in stream_generate(model, tokenizer, tokens, max_tokens=LIMIT, sampler=make_sampler(temp=0.0)):
-        text += last.text
-    if last is None:
-        raise RuntimeError('MLX не вернул ни одного события')
+    # stream_generate входит в Metal wired_limit даже при default_device=cpu.
+    # Публичный generate_step выполняет ту же генерацию без настройки GPU-памяти.
+    # Сохраняем все выходные token IDs и останавливаемся только по EOS/лимиту.
+    generated, finish_reason = [], 'length'
+    for token, _ in generate_step(mx.array(tokens), model, max_tokens=LIMIT, sampler=make_sampler(temp=0.0)):
+        token = int(token)
+        if token in tokenizer.eos_token_ids:
+            finish_reason = 'stop'
+            break
+        generated.append(token)
+    text = tokenizer.decode(generated, skip_special_tokens=False)
     write_json(args.out / (args.name + '-mlx.json'), {
-        'output': text, 'finishReason': last.finish_reason,
-        'promptTokens': last.prompt_tokens, 'generationTokens': last.generation_tokens,
-        'device': 'CPU',
+        'output': text, 'finishReason': finish_reason, 'outputTokens': generated,
+        'promptTokens': len(tokens), 'generationTokens': len(generated),
+        'device': 'CPU', 'api': 'generate_step',
     })
-    if last.finish_reason != 'stop':
+    if finish_reason != 'stop':
         raise RuntimeError('MLX дошёл до лимита, результат не считается завершённым')
 
 
@@ -176,7 +183,7 @@ def main():
     parser.add_argument('mode', choices=('prepare', 'run', 'mlx-worker'))
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--bundle', type=Path, default=ROOT / 'desktopApp/bundle/common')
-    parser.add_argument('--revision', default='main')
+    parser.add_argument('--revision', default='881a17920f1a97e3adc155978188ad80c97bb0fb')
     parser.add_argument('--name', default='')
     args = parser.parse_args()
     args.out, args.bundle = args.out.resolve(), args.bundle.resolve()

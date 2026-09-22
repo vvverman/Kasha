@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       source_revision:
-        description: 'Ревизия MLX snapshot для воспроизведения (пусто — закрепить текущий SHA)'
+        description: 'Ревизия MLX snapshot для воспроизведения (пусто — использовать проверенный SHA)'
         required: false
         default: ''
 permissions:
@@ -42,7 +42,7 @@ jobs:
           mkdir -p test-output/cleanup-source-compare
           .cleanup-compare-python/bin/pip freeze > test-output/cleanup-source-compare/requirements-resolved.txt
           .cleanup-compare-python/bin/python tests/cleanup_source_compare.py prepare \
-            --out test-output/cleanup-source-compare --revision "${SOURCE_REVISION:-main}"
+            --out test-output/cleanup-source-compare --revision "${SOURCE_REVISION:-881a17920f1a97e3adc155978188ad80c97bb0fb}"
       - name: Сравнить одинаковые входы без сети и публикации весов
         run: |
           /usr/bin/sandbox-exec -p '(version 1)(allow default)(deny network*)' \
