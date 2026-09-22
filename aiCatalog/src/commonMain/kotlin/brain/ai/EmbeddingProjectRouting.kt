@@ -6,6 +6,9 @@ import kotlin.math.sqrt
 
 /** Общая инфраструктурная логика routing для embedding-моделей. */
 object EmbeddingProjectRouting {
+    fun query(text: String): String =
+        "Instruct: Given a voice note, retrieve the most relevant project for filing it.\nQuery: ${text.trim()}"
+
     fun document(project: Project): String = buildString {
         append(project.title.trim())
         project.description.trim().takeIf { it.isNotEmpty() }?.let { append("\n"); append(it) }
@@ -35,7 +38,7 @@ object EmbeddingProjectRouting {
         embed: suspend (String) -> FloatArray,
     ): Map<String, Int> {
         if (projects.isEmpty()) return emptyMap()
-        val source = embed(text)
+        val source = embed(query(text))
         return projects.associate { project ->
             project.id to score(source, embed(document(project)))
         }
