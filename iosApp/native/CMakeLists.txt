@@ -36,4 +36,11 @@ set_target_properties(${name} PROPERTIES FRAMEWORK TRUE
     LIBRARY_OUTPUT_DIRECTORY "${KASHA_OUTPUT}" LIBRARY_OUTPUT_DIRECTORY_RELEASE "${KASHA_OUTPUT}"
     INSTALL_NAME_DIR "@rpath" BUILD_WITH_INSTALL_NAME_DIR TRUE XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED NO)
 # Не экспортировать ggml или C++ ABI из одного движка в другой.
-target_link_options(${name} PRIVATE "-Wl,-exported_symbol,_kasha_${KASHA_ENGINE}_run")
+# Llama-framework обслуживает две независимые роли: Cleanup и routing embeddings.
+if(KASHA_ENGINE STREQUAL "llama")
+    target_link_options(${name} PRIVATE
+        "-Wl,-exported_symbol,_kasha_llama_run"
+        "-Wl,-exported_symbol,_kasha_llama_embed")
+else()
+    target_link_options(${name} PRIVATE "-Wl,-exported_symbol,_kasha_whisper_run")
+endif()
