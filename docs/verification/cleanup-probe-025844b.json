@@ -1,0 +1,41 @@
+{
+  "runId": 35706162383,
+  "commit": "025844b153396f9f593cdaf0e2e8799aef7a19e0",
+  "artifactId": 10684128640,
+  "diagnosticOnly": true,
+  "modelSha256": "8c405ca3d29af67b21d2147e195b62ea63c84b84be1794b8aa453f31115b4f69",
+  "samples": [
+    {
+      "sample": "acceptance",
+      "variant": "current",
+      "exit": 0,
+      "seconds": 48.53,
+      "input": "В проекте приложения нужно исправить запись голоса. Добавить кнопку паузы и проверить сохранение заметок. Старый текст удалять нельзя.",
+      "output": "<think>\n\n</think>\n\nВ проекте приложения нужно исправить запись голоса. Добавить кнопку пауза и проверить сохранение заметок. [end of text]\n\n\n"
+    },
+    {
+      "sample": "acceptance",
+      "variant": "system-user",
+      "exit": 0,
+      "seconds": 46.55,
+      "input": "В проекте приложения нужно исправить запись голоса. Добавить кнопку паузы и проверить сохранение заметок. Старый текст удалять нельзя.",
+      "output": "<think>\n\n</think>\n\nВ проекте приложения нужно исправить запись голоса. Добавить кнопку пауза и проверить сохранение заметок. [end of text]\n\n\n"
+    },
+    {
+      "sample": "correction",
+      "variant": "current",
+      "exit": 0,
+      "seconds": 24.02,
+      "input": "Эээ, встреча завтра, нет, в среду в три часа.",
+      "output": "<think>\n\n</think>\n\nЭэ, встреча завтра, в три часа. [end of text]\n\n\n"
+    },
+    {
+      "sample": "correction",
+      "variant": "system-user",
+      "exit": 0,
+      "seconds": 22.61,
+      "input": "Эээ, встреча завтра, нет, в среду в три часа.",
+      "output": "<think>\n\n</think>\n\nЭэ, встреча завтра, в три часа. [end of text]\n\n\n"
+    }
+  ]
+}

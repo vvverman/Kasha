@@ -75,6 +75,15 @@ jobs:
           python tests/responsive_accessibility_browser.py
           python tests/non_ai_parity_browser.py
           echo 'Non-AI browser acceptance: PASS' >> "$GITHUB_STEP_SUMMARY"
+      - name: Вкладки текста и отдельный повтор AI-этапов
+        run: |
+          export KASHA_HOME=$(mktemp -d)
+          export KASHA_DEMO_AI=1
+          export KASHA_WEB_ROOT="$PWD/composeApp/build/dist/wasmJs/productionExecutable"
+          bash runtime/build/install/runtime/bin/runtime >> runtime.log 2>&1 &
+          PID=$!
+          trap 'kill "$PID" 2>/dev/null || true' EXIT
+          python tests/capture_variants_browser.py
       - name: 'Обязательная AI readiness-приёмка в браузере'
         run: |
           export KASHA_HOME="$KASHA_BROWSER_HOME"
@@ -109,6 +118,7 @@ jobs:
             test-output/sorting
             test-output/responsive
             test-output/ai-readiness
+            test-output/capture-variants
             test-output/non-ai-parity
             kashaCore/build/test-results
             aiCatalog/build/test-results

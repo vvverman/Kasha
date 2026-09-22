@@ -12,6 +12,11 @@ import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 
+// Синхронные AI-команды ждут дольше обычных CRUD-запросов. Лимиты учитывают
+// runtime: до 300 секунд подготовки аудио + 3600 секунд STT, до 900 секунд Cleanup.
+private const val STT_REQUEST_TIMEOUT_MILLIS = 3_960_000L
+private const val TEXT_REQUEST_TIMEOUT_MILLIS = 960_000L
+
 /** Web UI talks only to the Kasha process on this device. */
 class WebBrainRepository(private val baseUrl: String) : StudioRepository, AiPlatformServices {
     override var simulated: Boolean = true; private set
@@ -68,7 +73,7 @@ class WebBrainRepository(private val baseUrl: String) : StudioRepository, AiPlat
     override suspend fun distributeTask(id: String, request: TaskDistributionRequest): Task = client.post("$baseUrl/api/captures/$id/task") { contentType(ContentType.Application.Json); setBody(request) }.body()
     override suspend fun updateNote(id: String, update: NoteUpdate): Note = client.put("$baseUrl/api/notes/$id") { contentType(ContentType.Application.Json); setBody(update) }.body()
     override suspend fun pinNote(id: String, pinned: Boolean): Note = client.post("$baseUrl/api/notes/$id/pin") { contentType(ContentType.Application.Json); setBody(PinRequest(pinned)) }.body()
-    override suspend fun orderNotePins(projectId: String, ids: List<String>) { client.post("$baseUrl/api/projects/$projectId/notes/pins/order") { contentType(ContentType.Application.Json); setBody(OrderRequest(ids)) } }
+    override suspend fun orderNotePins(projectId: String, ids: List<String>) { client.post("$baseUrl/api/projects/$projectId/notes/pins/order") { contentType(ContentType.Application.Json); setBody(PinOrderRequest(ids)) } }
     override suspend fun orderNotes(projectId: String, ids: List<String>) { client.post("$baseUrl/api/projects/$projectId/notes/order") { contentType(ContentType.Application.Json); setBody(OrderRequest(ids)) } }
     override suspend fun updateTask(id: String, update: TaskUpdate): Task = client.put("$baseUrl/api/tasks/$id") { contentType(ContentType.Application.Json); setBody(update) }.body()
     override suspend fun rescheduleTask(id: String, update: TaskScheduleUpdate): Task = client.put("$baseUrl/api/tasks/$id/schedule") { contentType(ContentType.Application.Json); setBody(update) }.body()
@@ -78,7 +83,14 @@ class WebBrainRepository(private val baseUrl: String) : StudioRepository, AiPlat
     override suspend fun claimTaskReminders(now: Long, zoneId: String): List<Task> =
         throw UnsupportedOperationException("Reminder scheduling belongs to the local runtime")
     override suspend fun reprocess(id: String): Capture = client.post("$baseUrl/api/captures/$id/process").body()
-    override suspend fun tidy(id: String): Capture = client.post("$baseUrl/api/captures/$id/tidy").body()
-    override suspend fun rank(id: String): Capture = client.post("$baseUrl/api/captures/$id/rank").body()
+    override suspend fun retranscribe(id: String): Capture = client.post("$baseUrl/api/captures/$id/retranscribe") {
+        timeout { requestTimeoutMillis = STT_REQUEST_TIMEOUT_MILLIS }
+    }.body()
+    override suspend fun tidy(id: String): Capture = client.post("$baseUrl/api/captures/$id/tidy") {
+        timeout { requestTimeoutMillis = TEXT_REQUEST_TIMEOUT_MILLIS }
+    }.body()
+    override suspend fun rank(id: String): Capture = client.post("$baseUrl/api/captures/$id/rank") {
+        timeout { requestTimeoutMillis = TEXT_REQUEST_TIMEOUT_MILLIS }
+    }.body()
     override suspend fun discard(id: String) { client.delete("$baseUrl/api/captures/$id") }
 }

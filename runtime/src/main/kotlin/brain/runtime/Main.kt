@@ -107,7 +107,7 @@ fun Application.brainModule(store: FileBrainStore, processing: LocalProcessing, 
         post("/api/pins/order") { call.respond(store.orderPins(call.receive<PinOrderRequest>().ids)) }
         post("/api/projects/order") { call.respond(store.orderProjects(call.receive<OrderRequest>().ids)) }
         post("/api/projects/{id}/notes/order") { call.respond(store.orderNotes(call.parameters["id"]!!, call.receive<OrderRequest>().ids)) }
-        post("/api/projects/{id}/notes/pins/order") { call.respond(store.orderNotePins(call.parameters["id"]!!, call.receive<OrderRequest>().ids)) }
+        post("/api/projects/{id}/notes/pins/order") { call.respond(store.orderNotePins(call.parameters["id"]!!, call.receive<PinOrderRequest>().ids)) }
 
         put("/api/notes/{id}") { call.respond(store.updateNote(call.parameters["id"]!!, call.receive<NoteUpdate>())) }
         post("/api/notes/{id}/pin") { call.respond(store.pinNote(call.parameters["id"]!!, call.receive<PinRequest>().pinned)) }
@@ -145,6 +145,11 @@ fun Application.brainModule(store: FileBrainStore, processing: LocalProcessing, 
         put("/api/captures/{id}/draft") { call.respond(store.updateDraft(call.parameters["id"]!!, call.receive<CaptureDraftUpdate>())) }
         post("/api/captures/{id}/process") {
             val id = call.parameters["id"]!!; call.respond(studio?.reprocess(id) ?: processing.enqueue(id, this@brainModule))
+        }
+        // Повтор STT — отдельная команда, не recovery с переиспользованием транскрипта.
+        post("/api/captures/{id}/retranscribe") {
+            check(studio != null)
+            call.respond(studio.retranscribe(call.parameters["id"]!!))
         }
         post("/api/captures/{id}/tidy") { check(studio != null); call.respond(studio.tidy(call.parameters["id"]!!)) }
         post("/api/captures/{id}/rank") { check(studio != null); call.respond(studio.rank(call.parameters["id"]!!)) }
