@@ -23,7 +23,15 @@ dependencies {
     testImplementation(libs.ktor.server.test.host)
 }
 
-tasks.test { useJUnitPlatform() }
+tasks.test {
+    useJUnitPlatform()
+    val cleanupAcceptance = providers.environmentVariable("KASHA_CLEANUP_ACCEPTANCE").orElse("0")
+    inputs.property("cleanupAcceptance", cleanupAcceptance)
+    if (cleanupAcceptance.get() == "1") {
+        outputs.upToDateWhen { false }
+        outputs.cacheIf { false }
+    }
+}
 
 dependencies {
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.12.2")

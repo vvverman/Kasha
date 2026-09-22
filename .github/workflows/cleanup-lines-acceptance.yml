@@ -7,13 +7,14 @@ on:
       - kashaCore/src/commonMain/kotlin/brain/domain/LocalModelText.kt
       - aiCatalog/src/commonMain/kotlin/brain/ai/LocalTextRoles.kt
       - runtime/src/test/kotlin/brain/runtime/CleanupLinesAcceptanceTest.kt
+      - runtime/build.gradle.kts
       - .github/workflows/cleanup-lines-acceptance.yml
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
   group: cleanup-lines-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
   acceptance:
     runs-on: macos-15
@@ -38,6 +39,7 @@ jobs:
         run: |
           export KASHA_CLEANUP_ACCEPTANCE=1
           export KASHA_CLEANUP_BUNDLE="$PWD/desktopApp/bundle/common"
+          export PATH="$KASHA_CLEANUP_BUNDLE/bin:$PATH"
           export KASHA_CLEANUP_OUT="$PWD/test-output/cleanup-lines"
           set -o pipefail
           gradle --continue :kashaCore:jvmTest :aiCatalog:jvmTest :runtime:test 2>&1 | tee cleanup-lines.log

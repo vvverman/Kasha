@@ -98,6 +98,14 @@ object LocalModelText {
         return if (title.isNotBlank() && words(title).intersect(words(original)).isNotEmpty()) title else NoteText.title(original)
     }
 
+    /** Узкий cleanup не должен терять даже одну содержательную позицию короткого фрагмента. */
+    fun requireCleanupCoverage(original: String, edited: String) {
+        val resultWords = words(edited)
+        require(words(original).all { it in resultWords }) {
+            "Модель потеряла содержательное слово фрагмента. Оставлен исходный текст"
+        }
+    }
+
     fun requirePreserved(original: String, edited: String) {
         // Только однозначные поправки в копии; сохранённый transcript не изменяется.
         val canonical = TranscriptCleanup.parts(original).joinToString("") { it.input + it.separator }
@@ -108,7 +116,7 @@ object LocalModelText {
     }
 
     private fun validatePreserved(original: String, edited: String) {
-        fun numbers(text: String) = Regex("[0-9]+(?:[.,][0-9]+)*").findAll(text).map { it.value }.toList()
+        fun numbers(text: String) = Regex("[-+−]?[0-9]+(?:[.,][0-9]+)*").findAll(text).map { it.value }.toList()
         fun negatives(text: String) = Regex("""[\p{L}]+""", RegexOption.IGNORE_CASE).findAll(text)
             .map { normalize(it.value) }.filter { it in negations }.toList()
         fun allWords(text: String) = Regex("""[\p{L}]{3,}""", RegexOption.IGNORE_CASE).findAll(text)

@@ -18,9 +18,9 @@ class LocalTextRoles(
         require(parts.isNotEmpty()) { "Пустая транскрибация" }
         val cleanedParts = parts.map { part ->
             val output = generate(AiRole.TEXT, LocalModelText.cleanupPrompt(part.input), "", 2200)
-            val cleaned = LocalModelText.cleanupPayload(output)
+            val cleaned = brain.domain.TranscriptCleanup.restoreNumberSpelling(part.input, LocalModelText.cleanupPayload(output))
             require(cleaned.isNotBlank()) { "Модель вернула пустую нормализацию. Оставлен исходный текст" }
-            // Проверяем и исходный фрагмент, и уже разобранное явное самоисправление.
+            LocalModelText.requireCleanupCoverage(part.input, cleaned)
             LocalModelText.requirePreserved(part.source, cleaned)
             if (part.input != part.source) LocalModelText.requirePreserved(part.input, cleaned)
             cleaned + part.separator

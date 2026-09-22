@@ -32,20 +32,62 @@ object TranscriptCleanup {
         var previous: String
         do {
             previous = value
+            value = repeatedListWord.replace(value) { if (it.groupValues[1].lowercase() in preserveRepetition) it.value else it.groupValues[1] }
             value = dayCorrection.replace(value) { it.groupValues[1] }
             value = numberCorrection.replace(value) { match ->
                 val beforeUnit = match.groups[3]?.value.orEmpty()
                 val afterUnit = match.groups[6]?.value.orEmpty()
-                // Не теряем единицу и не угадываем соответствие рублей, часов, процентов и т.п.
                 if (beforeUnit.isNotBlank() && !beforeUnit.trim().equals(afterUnit.trim(), ignoreCase = true)) match.value
                 else {
-                    val prefix = match.groups[4]?.value.orEmpty()
-                        .ifEmpty { match.groups[1]?.value.orEmpty() }
+                    val prefix = match.groups[4]?.value.orEmpty().ifEmpty { match.groups[1]?.value.orEmpty() }
                     prefix + match.groups[5]!!.value + afterUnit
                 }
             }
         } while (value != previous)
         return value
+    }
+
+    private val repeatedListWord = Regex("(?iu)(?<![\\p{L}\\p{N}_])([\\p{L}]{3,})\\s*,\\s*\\1(?=\\s+(?:и|или|and|or)(?![\\p{L}]))")
+    private val preserveRepetition = setOf("нельзя", "никогда", "ничего", "нет", "без", "not", "never", "without", "cannot", "очень", "сильно", "крайне", "далеко", "много", "мало", "very", "really", "more", "less")
+    private val numberWords = (listOf("zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen", "twenty")
+        .mapIndexed { index, word -> index.toString() to word } +
+        listOf("30" to "thirty", "40" to "forty", "50" to "fifty", "60" to "sixty", "70" to "seventy", "80" to "eighty", "90" to "ninety", "100" to "hundred", "1000" to "thousand")).toMap()
+    private val tokens = Regex("[\\p{L}]+|[0-9]+(?:[.,][0-9]+)*")
+
+    /** Меняем только графическое написание эквивалентного числа при совпадении всех остальных слов. */
+    fun restoreNumberSpelling(source: String, edited: String): String {
+        fun lexemes(value: String): List<MatchResult> {
+            val matches = tokens.findAll(value).toList()
+            val first = matches.firstOrNull() ?: return matches
+            // Английское hesitation перед запятой; немецкое «Um 3 Uhr» не исключается.
+            return if (first.value.lowercase() in setOf("um", "uh") &&
+                value.substring(first.range.last + 1).trimStart().startsWith(",")) matches.drop(1) else matches
+        }
+        val before = lexemes(source)
+        val after = lexemes(edited)
+        if (before.size != after.size) return edited
+        val replacements = mutableListOf<Pair<MatchResult, String>>()
+        for (index in before.indices) {
+            val from = before[index].value
+            val to = after[index]
+            if (from.equals(to.value, ignoreCase = true)) continue
+            // Не угадываем составные, десятичные, отрицательные числа или коды с ведущим нулём.
+            val preceding = source.getOrNull(before[index].range.first - 1)
+            val following = source.getOrNull(before[index].range.last + 1)
+            if ((preceding != null && !preceding.isWhitespace()) ||
+                (following != null && !following.isWhitespace() && following !in ".,!?;)") ||
+                numberWords[from]?.equals(to.value, ignoreCase = true) != true) return edited
+            replacements += to to from
+        }
+        if (replacements.isEmpty()) return edited
+        return buildString {
+            var copied = 0
+            for ((match, spelling) in replacements) {
+                append(edited.substring(copied, match.range.first)); append(spelling)
+                copied = match.range.last + 1
+            }
+            append(edited.substring(copied))
+        }
     }
 
     private val abbreviations = setOf("т", "д", "е", "г", "ул", "стр", "рис", "руб", "коп", "см", "им", "др", "etc", "mr", "mrs", "ms", "dr", "st", "vs", "prof", "inc", "ltd")
