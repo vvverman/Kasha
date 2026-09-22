@@ -43,11 +43,11 @@ jobs:
           .cleanup-compare-python/bin/pip freeze > test-output/cleanup-source-compare/requirements-resolved.txt
           .cleanup-compare-python/bin/python tests/cleanup_source_compare.py prepare \
             --out test-output/cleanup-source-compare --revision "${SOURCE_REVISION:-881a17920f1a97e3adc155978188ad80c97bb0fb}"
-      - name: Сравнить одинаковые входы без сети и публикации весов
+      - name: Сравнить GGUF и распакованный CPU reference без сети
         run: |
           /usr/bin/sandbox-exec -p '(version 1)(allow default)(deny network*)' \
             .cleanup-compare-python/bin/python tests/cleanup_source_compare.py run \
-            --out test-output/cleanup-source-compare
+            --out test-output/cleanup-source-compare --mlx-mode dense-f32
       - uses: actions/upload-artifact@v4
         if: always()
         with:

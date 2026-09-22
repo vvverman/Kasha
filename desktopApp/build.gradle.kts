@@ -72,7 +72,7 @@ if (!demoBuild && System.getProperty("os.name").lowercase().contains("linux")) {
     tasks.matching { it.name == "createDistributable" }.configureEach {
         doLast {
             val bin = layout.buildDirectory.dir("compose/binaries/main/app/Kasha/lib/app/resources/bin").get().asFile
-            for (name in listOf("whisper-cli", "llama-completion", "ffmpeg")) {
+            for (name in listOf("whisper-cli", "llama-completion", "llama-embedding", "ffmpeg")) {
                 val executable = bin.resolve(name)
                 check(executable.isFile && executable.setExecutable(true, false) && executable.canExecute()) {
                     "Не удалось установить право запуска упакованного движка: $name"

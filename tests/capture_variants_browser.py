@@ -48,6 +48,7 @@ try:
             headless=True,
             args=['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'])
         page = browser.new_page(viewport={'width': 1280, 'height': 1000}, locale='ru-RU')
+        page.add_init_script(path=str(Path(__file__).with_name('web_fetch_lifecycle_probe.js')))
         calls, failures, errors, external = [], [], [], []
         finished, network_events = [], []
         started = time.monotonic()
@@ -202,6 +203,9 @@ try:
                 'delayedResponseSeconds': 33}, ensure_ascii=False, indent=2))
             print('CAPTURE VARIANTS BROWSER PASSED')
         finally:
+            with suppress(Exception):
+                (OUT / 'fetch-lifecycle.json').write_text(json.dumps(
+                    page.evaluate('globalThis.kashaFetchLifecycle'), ensure_ascii=False, indent=2))
             with suppress(Exception):
                 page.screenshot(path=str(OUT / 'final.png'))
                 (OUT / 'semantics.txt').write_text(page.locator('body').aria_snapshot())

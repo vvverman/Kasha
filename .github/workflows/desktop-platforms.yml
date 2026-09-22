@@ -111,6 +111,12 @@ jobs:
           OUT="$PWD/test-output/linux-visual"
           mkdir -p "$OUT"
           export KASHA_HOME="$OUT/data"
+          # Проверяем именно установленный пакет до UI: ошибка прав/состава
+          # не должна зависать в системном диалоге невидимого headless-окна.
+          timeout 20 "$APP" --install-smoke > "$OUT/install-smoke.log" 2>&1 || {
+            cat "$OUT/install-smoke.log"
+            exit 1
+          }
           timeout 120 xvfb-run -a -s '-screen 0 1680x1050x24' "$APP" --ui-smoke "$OUT" matrix > "$OUT/run.log" 2>&1
           test -s "$OUT/visual-result.json"
           test -s "$OUT/matrix-ready.txt"
@@ -258,7 +264,7 @@ jobs:
           $cabs = @(Get-ChildItem "$dist/msi" -Filter '*.cab' -File)
           $exe = @(Get-ChildItem "$dist/exe" -Filter '*.exe' -File)
           if ($msi.Count -ne 1) { throw 'Windows MSI missing' }
-          if ($cabs.Count -lt 2) { throw 'Windows split CAB payload missing' }
+          if ($cabs.Count -lt 1) { throw 'Windows CAB payload missing' }
           if ($exe.Count -ne 1) { throw 'Windows self-contained EXE missing' }
           if (!(Test-Path "$dist/windows-install-smoke.log")) { throw 'Windows install smoke log missing' }
           Get-Content "$dist/windows-install-smoke.log"

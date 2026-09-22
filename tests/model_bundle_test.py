@@ -4,6 +4,7 @@ import os
 import subprocess
 import sys
 import importlib.util
+import re
 from pathlib import Path
 import tempfile
 import unittest
@@ -116,6 +117,26 @@ class ModelBundleTest(unittest.TestCase):
         self.assertNotEqual(0, result.returncode)
         self.assertIn('отсутствует непустой исполняемый файл', result.stderr.decode('utf-8'))
         self.assertNotIn('UnicodeEncodeError', result.stderr.decode('utf-8'))
+
+    def test_linux_permissions_cover_all_bundled_engines(self):
+        script = (ROOT / 'desktopApp/build.gradle.kts').read_text(encoding='utf-8')
+        match = re.search(r'for \(name in listOf\(([^)]*)\)\)', script)
+        self.assertIsNotNone(match, 'Не найден этап прав нативных движков')
+        self.assertEqual(set(BUNDLE.BINARIES), set(re.findall(r'"([^"]+)"', match[1])))
+        self.assertIn('executable.setExecutable(true, false)', script)
+        self.assertIn('executable.canExecute()', script)
+
+    def test_linux_installed_resources_checked_before_ui(self):
+        workflow = (ROOT / '.github/workflows/desktop-platforms.yml').read_text(encoding='utf-8')
+        install = workflow.index('timeout 20 "$APP" --install-smoke')
+        ui = workflow.index('timeout 120 xvfb-run')
+        self.assertLess(install, ui)
+        self.assertIn('cat "$OUT/install-smoke.log"', workflow[install:ui])
+
+    def test_windows_ci_accepts_single_cab_like_packager(self):
+        workflow = (ROOT / '.github/workflows/desktop-platforms.yml').read_text(encoding='utf-8')
+        self.assertIn('$cabs.Count -lt 1', workflow)
+        self.assertNotIn('$cabs.Count -lt 2', workflow)
 
     def test_windows_packaging_calls_shared_check_not_old_qwen_split(self):
         script = (ROOT / 'desktopApp/packaging/package-windows.ps1').read_text(encoding='utf-8')

@@ -45,7 +45,7 @@ jobs:
       - name: Контракты Web-плеера и IndexedDB без ожидания сборки
         run: |
           set -o pipefail
-          node --test tests/web_playback_contract.test.cjs tests/web_storage_contract.test.cjs 2>&1 | tee web-playback-contract.tap
+          node --test tests/web_playback_contract.test.cjs tests/web_storage_contract.test.cjs tests/web_fetch_lifecycle_probe.test.cjs 2>&1 | tee web-playback-contract.tap
       - name: Kasha Core, AI catalog и общий UI на JVM/Android; runtime и production WebAssembly
         run: |
           set -o pipefail

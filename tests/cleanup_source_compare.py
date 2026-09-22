@@ -11,6 +11,7 @@ import importlib.metadata
 import json
 import os
 from pathlib import Path
+from collections import Counter
 import re
 import subprocess
 import sys
@@ -109,15 +110,30 @@ def mlx_worker(args):
     metadata = json.loads((args.out / 'source.json').read_text())
     progress('load-model')
     model, tokenizer = load(metadata['sourcePath'], tokenizer_config={'trust_remote_code': False}, lazy=True)
-    progress('evaluate-weights')
+    from mlx.utils import tree_flatten
+    source_dtypes = dict(Counter(str(value.dtype) for _, value in tree_flatten(model.parameters())))
+    progress('evaluate-weights', parameterDtypes=source_dtypes)
     mx.eval(model.parameters())
+    if args.mlx_mode == 'dense-f32':
+        # Отдельный диагностический CPU reference, не штатный MLX runtime:
+        # распаковать опубликованные 4-bit значения в RAM и считать в float32.
+        # Нет дообучения, публикации весов или повторного квантования; арифметика и
+        # представление отличаются от source quantized execution и явно отмечены.
+        from mlx_lm.utils import dequantize_model
+        progress('dequantize-for-cpu-reference')
+        model = dequantize_model(model)
+        mx.eval(model.parameters())
+        model.set_dtype(mx.float32)
+        mx.eval(model.parameters())
+    compute_dtypes = dict(Counter(str(value.dtype) for _, value in tree_flatten(model.parameters())))
+    progress('weights-ready', representation=args.mlx_mode, parameterDtypes=compute_dtypes)
     prompt = (args.out / (args.name + '.txt')).read_text(encoding='utf-8')
     tokens = tokenizer.encode(prompt, add_special_tokens=False)
     if tokens != json.loads((args.out / (args.name + '-tokens.json')).read_text()):
         raise RuntimeError('Токенизация MLX не совпала с зафиксированным входом')
     # Синхронный greedy forward на публичных model/cache API. В отличие от
-    # generate_step здесь нет async_eval и второго потока исполнения. Параметры,
-    # dtype, токенизация, EOS и лимит не меняются; GPU и сеть не используются.
+    # generate_step здесь нет async_eval и второго потока исполнения.
+    # Токенизация, EOS и лимит не меняются; GPU и сеть не используются.
     cache = make_prompt_cache(model)
     generated, finish_reason = [], 'length'
     values = mx.array(tokens, dtype=mx.int32)[None]
@@ -136,7 +152,10 @@ def mlx_worker(args):
     write_json(args.out / (args.name + '-mlx.json'), {
         'output': text, 'finishReason': finish_reason, 'outputTokens': generated,
         'promptTokens': len(tokens), 'generationTokens': len(generated),
-        'device': 'CPU', 'api': 'synchronous-model-forward', 'sourceDtypeUnchanged': True,
+        'device': 'CPU', 'api': 'synchronous-model-forward',
+        'representation': args.mlx_mode, 'sourceDtypeUnchanged': args.mlx_mode == 'source-quantized',
+        'sourceParameterDtypes': source_dtypes, 'computeParameterDtypes': compute_dtypes,
+        'directSourceRuntime': args.mlx_mode == 'source-quantized',
     })
     progress('finished', generationTokens=len(generated), finishReason=finish_reason)
     faulthandler.cancel_dump_traceback_later()
@@ -165,7 +184,8 @@ def run(args):
     if '--no-conversation' not in help_text:
         raise RuntimeError('CLI не поддерживает явное отключение второго chat template')
     report = {'diagnosticOnly': True, 'sourceRevision': metadata['sourceRevision'],
-              'ggufSha256': spec[2], 'kashaSha': metadata['kashaSha'], 'runs': []}
+              'ggufSha256': spec[2], 'kashaSha': metadata['kashaSha'],
+              'mlxRepresentation': args.mlx_mode, 'runs': []}
     failed = False
     mlx_blocked = None
     # Сначала короткая фраза: непройденный запуск не размножается на все входы.
@@ -187,7 +207,7 @@ def run(args):
                 (args.out / (name + '-mlx.json')).unlink(missing_ok=True)
                 (args.out / (name + '-mlx-progress.json')).unlink(missing_ok=True)
                 command = [sys.executable, '-u', str(Path(__file__).resolve()), 'mlx-worker',
-                           '--out', str(args.out), '--name', name]
+                           '--out', str(args.out), '--name', name, '--mlx-mode', args.mlx_mode]
             start = time.monotonic()
             stdout_path = args.out / (name + '-' + engine + '-stdout.txt')
             stderr_path = args.out / (name + '-' + engine + '-stderr.txt')
@@ -224,6 +244,7 @@ def main():
     parser.add_argument('--bundle', type=Path, default=ROOT / 'desktopApp/bundle/common')
     parser.add_argument('--revision', default='881a17920f1a97e3adc155978188ad80c97bb0fb')
     parser.add_argument('--name', default='')
+    parser.add_argument('--mlx-mode', choices=('source-quantized', 'dense-f32'), default='source-quantized')
     args = parser.parse_args()
     args.out, args.bundle = args.out.resolve(), args.bundle.resolve()
     {'prepare': prepare, 'run': run, 'mlx-worker': mlx_worker}[args.mode](args)

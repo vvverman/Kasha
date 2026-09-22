@@ -1,0 +1,149 @@
+{
+  "diagnosticOnly": true,
+  "sourceRevision": "881a17920f1a97e3adc155978188ad80c97bb0fb",
+  "ggufSha256": "8c405ca3d29af67b21d2147e195b62ea63c84b84be1794b8aa453f31115b4f69",
+  "kashaSha": "f3f04ae83660362b9f710bf7bd46321c38580742",
+  "runs": [
+    {
+      "name": "identity-native-prefix",
+      "sample": "identity",
+      "protocol": "native-prefix",
+      "source": "Ирина не меняла 1200 пунктов.",
+      "promptSha256": "3707d86271fdebc3fc59cb257b7fe3cb2f888f3ecf171293c818c931be6f8f3d",
+      "engine": "gguf",
+      "exit": 0,
+      "seconds": 27.919,
+      "output": "Ирина не меняла 1200 пунктов. [end of text]\n\n\n"
+    },
+    {
+      "name": "identity-native-prefix",
+      "sample": "identity",
+      "protocol": "native-prefix",
+      "source": "Ирина не меняла 1200 пунктов.",
+      "promptSha256": "3707d86271fdebc3fc59cb257b7fe3cb2f888f3ecf171293c818c931be6f8f3d",
+      "engine": "mlx",
+      "exit": "timeout",
+      "seconds": 240.139,
+      "lastProgress": {
+        "phase": "prefill",
+        "seconds": 3.902,
+        "promptTokens": 94
+      }
+    },
+    {
+      "name": "identity-upstream-template",
+      "sample": "identity",
+      "protocol": "upstream-template",
+      "source": "Ирина не меняла 1200 пунктов.",
+      "promptSha256": "b43fac10410260bc04df156c9301671804e01d7ec97651d327a664fafaad5e1b",
+      "engine": "gguf",
+      "exit": 0,
+      "seconds": 22.172,
+      "output": "Ирина не меняла 1200 пунктов. [end of text]\n\n\n"
+    },
+    {
+      "name": "identity-upstream-template",
+      "sample": "identity",
+      "protocol": "upstream-template",
+      "source": "Ирина не меняла 1200 пунктов.",
+      "promptSha256": "b43fac10410260bc04df156c9301671804e01d7ec97651d327a664fafaad5e1b",
+      "engine": "mlx",
+      "exit": "not_run",
+      "reason": "previous_mlx_execution_failed",
+      "blockedBy": "identity-native-prefix"
+    },
+    {
+      "name": "acceptance-native-prefix",
+      "sample": "acceptance",
+      "protocol": "native-prefix",
+      "source": "В проекте приложения нужно исправить запись голоса. Добавить кнопку паузы и проверить сохранение заметок. Старый текст удалять нельзя.",
+      "promptSha256": "ae571001307993ec2049df98519d7b46d95d5925b45afac45e74d1f73ffaa339",
+      "engine": "gguf",
+      "exit": 0,
+      "seconds": 40.925,
+      "output": "В проекте приложения нужно исправить запись голоса. Добавить кнопку пауза и проверить сохранение заметок. [end of text]\n\n\n"
+    },
+    {
+      "name": "acceptance-native-prefix",
+      "sample": "acceptance",
+      "protocol": "native-prefix",
+      "source": "В проекте приложения нужно исправить запись голоса. Добавить кнопку паузы и проверить сохранение заметок. Старый текст удалять нельзя.",
+      "promptSha256": "ae571001307993ec2049df98519d7b46d95d5925b45afac45e74d1f73ffaa339",
+      "engine": "mlx",
+      "exit": "not_run",
+      "reason": "previous_mlx_execution_failed",
+      "blockedBy": "identity-native-prefix"
+    },
+    {
+      "name": "acceptance-upstream-template",
+      "sample": "acceptance",
+      "protocol": "upstream-template",
+      "source": "В проекте приложения нужно исправить запись голоса. Добавить кнопку паузы и проверить сохранение заметок. Старый текст удалять нельзя.",
+      "promptSha256": "ce9b3e2d2ae870a439b3675d0eb3451c4ecce67479ecc9e48a1f8a5a1a4790d7",
+      "engine": "gguf",
+      "exit": 0,
+      "seconds": 41.677,
+      "output": "В проекте приложения нужно исправить запись голоса. Добавить кнопку пауза и проверить сохранение заметок. [end of text]\n\n\n"
+    },
+    {
+      "name": "acceptance-upstream-template",
+      "sample": "acceptance",
+      "protocol": "upstream-template",
+      "source": "В проекте приложения нужно исправить запись голоса. Добавить кнопку паузы и проверить сохранение заметок. Старый текст удалять нельзя.",
+      "promptSha256": "ce9b3e2d2ae870a439b3675d0eb3451c4ecce67479ecc9e48a1f8a5a1a4790d7",
+      "engine": "mlx",
+      "exit": "not_run",
+      "reason": "previous_mlx_execution_failed",
+      "blockedBy": "identity-native-prefix"
+    },
+    {
+      "name": "correction-native-prefix",
+      "sample": "correction",
+      "protocol": "native-prefix",
+      "source": "Эээ, встреча завтра, нет, в среду в три часа.",
+      "promptSha256": "0e9abd195e265654c5613db17a33a1a02f21946910aa17cbcc686676af2a23b2",
+      "engine": "gguf",
+      "exit": 0,
+      "seconds": 21.411,
+      "output": "Ээ, встреча завтра, в среду в три часа. [end of text]\n\n\n"
+    },
+    {
+      "name": "correction-native-prefix",
+      "sample": "correction",
+      "protocol": "native-prefix",
+      "source": "Эээ, встреча завтра, нет, в среду в три часа.",
+      "promptSha256": "0e9abd195e265654c5613db17a33a1a02f21946910aa17cbcc686676af2a23b2",
+      "engine": "mlx",
+      "exit": "not_run",
+      "reason": "previous_mlx_execution_failed",
+      "blockedBy": "identity-native-prefix"
+    },
+    {
+      "name": "correction-upstream-template",
+      "sample": "correction",
+      "protocol": "upstream-template",
+      "source": "Эээ, встреча завтра, нет, в среду в три часа.",
+      "promptSha256": "905fd007bdff9338eb351ba7e98aac86a1dc9bb9b6ce5f15e522df1ff800d5e8",
+      "engine": "gguf",
+      "exit": 0,
+      "seconds": 19.21,
+      "output": "Ээя, встреча завтра, в три часа. [end of text]\n\n\n"
+    },
+    {
+      "name": "correction-upstream-template",
+      "sample": "correction",
+      "protocol": "upstream-template",
+      "source": "Эээ, встреча завтра, нет, в среду в три часа.",
+      "promptSha256": "905fd007bdff9338eb351ba7e98aac86a1dc9bb9b6ce5f15e522df1ff800d5e8",
+      "engine": "mlx",
+      "exit": "not_run",
+      "reason": "previous_mlx_execution_failed",
+      "blockedBy": "identity-native-prefix"
+    }
+  ],
+  "workflowRunId": 35740054490,
+  "artifactId": 10698799770,
+  "artifactSha256": "db366f63d2bd824866087a62bab8d388cda3bd7399f243cfdbf5368631db7bb7",
+  "accepted": false,
+  "reason": "MLX source CPU did not produce its first token; GGUF quality remains unaccepted"
+}
