@@ -132,8 +132,11 @@ class KashaCoreTest {
         val finished = workflow.finish(capture, projects, "ru")
         assertEquals(CaptureStatus.READY, finished.status)
         assertEquals("сырой текст", finished.title)
-        assertEquals(mapOf("p" to 4), finished.relevance)
-        assertTrue(finished.rankingApplied)
+        assertEquals(CaptureTextVariant.TRANSCRIPTION, finished.selectedTextVariant)
+        assertEquals("", finished.preparedText)
+        assertTrue(finished.relevance.isEmpty())
+        assertFalse(finished.rankingApplied)
+        assertFalse(finished.llmApplied)
 
         val tidied = workflow.tidy(finished, "ru")
         assertEquals("Сырой текст, аккуратно оформленный.", tidied.preparedText)
@@ -168,13 +171,23 @@ class KashaCoreTest {
             override suspend fun rank(text: String, projects: List<Project>, language: String): Map<String, Int> = error("routing unavailable")
         }
 
-        val result = CaptureWorkflow(failedRank).finish(capture, projects, "ru")
+        val workflow = CaptureWorkflow(failedRank)
+        val finished = workflow.finish(capture, projects, "ru")
+        assertEquals(CaptureStatus.READY, finished.status)
+        assertFalse(finished.rankingApplied)
+        assertTrue(finished.relevance.isEmpty())
+        assertEquals(capture.transcript, finished.transcript)
+        assertEquals("", finished.preparedText)
+        assertEquals(capture.audioFileName, finished.audioFileName)
+        assertTrue(finished.audioFinalized)
+
+        val result = workflow.rank(finished, projects, "ru")
         assertEquals(CaptureStatus.READY, result.status)
         assertFalse(result.rankingApplied)
         assertTrue(result.relevance.isEmpty())
-        assertEquals(capture.transcript, result.transcript)
-        assertEquals(capture.preparedText, result.preparedText)
-        assertEquals(capture.audioFileName, result.audioFileName)
+        assertEquals(finished.transcript, result.transcript)
+        assertEquals(finished.preparedText, result.preparedText)
+        assertEquals(finished.audioFileName, result.audioFileName)
         assertTrue(result.audioFinalized)
     }
 
