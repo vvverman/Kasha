@@ -38,7 +38,7 @@ jobs:
           SOURCE_REVISION: ${{ inputs.source_revision }}
         run: |
           python3 -m venv .cleanup-compare-python
-          .cleanup-compare-python/bin/pip install 'mlx-lm==0.31.3'
+          .cleanup-compare-python/bin/pip install 'mlx-lm==0.31.3' 'mlx==0.32.2' 'mlx-metal==0.32.2' 'transformers==5.17.0'
           mkdir -p test-output/cleanup-source-compare
           .cleanup-compare-python/bin/pip freeze > test-output/cleanup-source-compare/requirements-resolved.txt
           .cleanup-compare-python/bin/python tests/cleanup_source_compare.py prepare \

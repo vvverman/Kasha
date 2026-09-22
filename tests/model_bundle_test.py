@@ -1,5 +1,8 @@
 """Регрессия состава установщика: тестовые байты, настоящая SHA-256, без inference."""
 import hashlib
+import os
+import subprocess
+import sys
 import importlib.util
 from pathlib import Path
 import tempfile
@@ -80,6 +83,39 @@ class ModelBundleTest(unittest.TestCase):
         self.manifest.write_text(self.manifest.read_text().replace('"' + name + '"', '"../' + name + '"'))
         with self.assertRaisesRegex(ValueError, 'имя файла'):
             self.verify()
+
+    def cli(self):
+        # Запускаем настоящий main в отдельном процессе с ограниченной кодировкой.
+        # Подменён только путь к manifest с маленькими fixture-весами.
+        command = (
+            "import runpy,sys; "
+            "from pathlib import Path; "
+            "m=runpy.run_path(sys.argv[1]); "
+            "main=m['main']; "
+            "verify=main.__globals__['verify']; "
+            "verify.__kwdefaults__['manifest']=Path(sys.argv[2]); "
+            "sys.argv=[sys.argv[1],sys.argv[3],'--suffix','.exe']; main()"
+        )
+        return subprocess.run(
+            [sys.executable, '-c', command, str(SPEC.origin), str(self.manifest), str(self.resources)],
+            env=dict(os.environ, PYTHONIOENCODING='cp1252', PYTHONUTF8='0'),
+            capture_output=True, timeout=10,
+        )
+
+    def test_cli_success_is_utf8_with_cp1252_pipe(self):
+        result = self.cli()
+        self.assertEqual(0, result.returncode, result.stderr.decode('utf-8'))
+        output = result.stdout.decode('utf-8')
+        self.assertEqual(3, output.count('SHA-256 OK'))
+        self.assertIn('Все три модели', output)
+        self.assertNotIn('UnicodeEncodeError', result.stderr.decode('utf-8'))
+
+    def test_cli_failure_keeps_diagnostic_with_cp1252_pipe(self):
+        (self.resources / 'bin/llama-embedding.exe').unlink()
+        result = self.cli()
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn('отсутствует непустой исполняемый файл', result.stderr.decode('utf-8'))
+        self.assertNotIn('UnicodeEncodeError', result.stderr.decode('utf-8'))
 
     def test_windows_packaging_calls_shared_check_not_old_qwen_split(self):
         script = (ROOT / 'desktopApp/packaging/package-windows.ps1').read_text(encoding='utf-8')

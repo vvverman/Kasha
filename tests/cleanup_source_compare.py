@@ -5,6 +5,7 @@ prepare скачивает один закреплённый snapshot; run ра�
 Результаты каждого запуска сохраняются даже при ошибке следующего.
 """
 import argparse
+import faulthandler
 import hashlib
 import importlib.metadata
 import json
@@ -88,34 +89,57 @@ def prepare(args):
 
 
 def mlx_worker(args):
-    # CPU выбран до импорта mlx-lm, чтобы поток генерации также был CPU.
+    # Диагностируем точную фазу, а не повторяем шесть непрозрачных таймаутов.
+    started = time.monotonic()
+    faulthandler.enable()
+    faulthandler.dump_traceback_later(30, repeat=True)
+    progress_path = args.out / (args.name + '-mlx-progress.json')
+
+    def progress(phase, **extra):
+        state = dict(phase=phase, seconds=round(time.monotonic()-started, 3), **extra)
+        write_json(progress_path, state)
+        print(json.dumps(state, ensure_ascii=False), flush=True)
+
+    progress('import-mlx')
     import mlx.core as mx
     mx.set_default_device(mx.cpu)
+    progress('import-mlx-lm')
     from mlx_lm import load
-    from mlx_lm.generate import generate_step
-    from mlx_lm.sample_utils import make_sampler
+    from mlx_lm.models.cache import make_prompt_cache
     metadata = json.loads((args.out / 'source.json').read_text())
-    model, tokenizer = load(metadata['sourcePath'], tokenizer_config={'trust_remote_code': False})
+    progress('load-model')
+    model, tokenizer = load(metadata['sourcePath'], tokenizer_config={'trust_remote_code': False}, lazy=True)
+    progress('evaluate-weights')
+    mx.eval(model.parameters())
     prompt = (args.out / (args.name + '.txt')).read_text(encoding='utf-8')
     tokens = tokenizer.encode(prompt, add_special_tokens=False)
     if tokens != json.loads((args.out / (args.name + '-tokens.json')).read_text()):
         raise RuntimeError('Токенизация MLX не совпала с зафиксированным входом')
-    # stream_generate входит в Metal wired_limit даже при default_device=cpu.
-    # Публичный generate_step выполняет ту же генерацию без настройки GPU-памяти.
-    # Сохраняем все выходные token IDs и останавливаемся только по EOS/лимиту.
+    # Синхронный greedy forward на публичных model/cache API. В отличие от
+    # generate_step здесь нет async_eval и второго потока исполнения. Параметры,
+    # dtype, токенизация, EOS и лимит не меняются; GPU и сеть не используются.
+    cache = make_prompt_cache(model)
     generated, finish_reason = [], 'length'
-    for token, _ in generate_step(mx.array(tokens), model, max_tokens=LIMIT, sampler=make_sampler(temp=0.0)):
-        token = int(token)
+    values = mx.array(tokens, dtype=mx.int32)[None]
+    progress('prefill', promptTokens=len(tokens))
+    for index in range(LIMIT):
+        logits = model(values, cache=cache)[:, -1, :]
+        token = int(mx.argmax(logits, axis=-1).item())
         if token in tokenizer.eos_token_ids:
             finish_reason = 'stop'
             break
         generated.append(token)
+        if index == 0 or len(generated) % 8 == 0:
+            progress('decode', generationTokens=len(generated), outputTokens=generated)
+        values = mx.array([[token]], dtype=mx.int32)
     text = tokenizer.decode(generated, skip_special_tokens=False)
     write_json(args.out / (args.name + '-mlx.json'), {
         'output': text, 'finishReason': finish_reason, 'outputTokens': generated,
         'promptTokens': len(tokens), 'generationTokens': len(generated),
-        'device': 'CPU', 'api': 'generate_step',
+        'device': 'CPU', 'api': 'synchronous-model-forward', 'sourceDtypeUnchanged': True,
     })
+    progress('finished', generationTokens=len(generated), finishReason=finish_reason)
+    faulthandler.cancel_dump_traceback_later()
     if finish_reason != 'stop':
         raise RuntimeError('MLX дошёл до лимита, результат не считается завершённым')
 
@@ -143,16 +167,26 @@ def run(args):
     report = {'diagnosticOnly': True, 'sourceRevision': metadata['sourceRevision'],
               'ggufSha256': spec[2], 'kashaSha': metadata['kashaSha'], 'runs': []}
     failed = False
-    for prompt in metadata['prompts']:
+    mlx_blocked = None
+    # Сначала короткая фраза: непройденный запуск не размножается на все входы.
+    prompts = sorted(metadata['prompts'], key=lambda p: p['sample'] != 'identity')
+    for prompt in prompts:
         for engine in ('gguf', 'mlx'):
             name = prompt['name']
+            if engine == 'mlx' and mlx_blocked is not None:
+                report['runs'].append(dict(prompt, engine=engine, exit='not_run',
+                    reason='previous_mlx_execution_failed', blockedBy=mlx_blocked))
+                write_json(args.out / 'comparison.json', report)
+                continue
             if engine == 'gguf':
                 command = [str(cli), '-m', str(model), '--no-conversation', '--no-display-prompt',
                            '--simple-io', '--no-escape', '--file', str(args.out / (name + '.txt')),
                            '-n', str(LIMIT), '-c', '8192', '--temp', '0', '--seed', '0', '-t', '4',
                            '--n-gpu-layers', '0', '--device', 'none', '--verbose-prompt']
             else:
-                command = [sys.executable, str(Path(__file__).resolve()), 'mlx-worker',
+                (args.out / (name + '-mlx.json')).unlink(missing_ok=True)
+                (args.out / (name + '-mlx-progress.json')).unlink(missing_ok=True)
+                command = [sys.executable, '-u', str(Path(__file__).resolve()), 'mlx-worker',
                            '--out', str(args.out), '--name', name]
             start = time.monotonic()
             stdout_path = args.out / (name + '-' + engine + '-stdout.txt')
@@ -164,6 +198,8 @@ def run(args):
                 except subprocess.TimeoutExpired:
                     code = 'timeout'
             failed |= code != 0
+            if engine == 'mlx' and code != 0:
+                mlx_blocked = name
             row = dict(prompt, engine=engine, exit=code, seconds=round(time.monotonic()-start, 3))
             if engine == 'gguf':
                 row['output'] = stdout_path.read_text(encoding='utf-8')
@@ -171,6 +207,9 @@ def run(args):
                 worker = args.out / (name + '-mlx.json')
                 if worker.exists():
                     row.update(json.loads(worker.read_text()))
+                progress_file = args.out / (name + '-mlx-progress.json')
+                if progress_file.exists():
+                    row['lastProgress'] = json.loads(progress_file.read_text())
             report['runs'].append(row)
             write_json(args.out / 'comparison.json', report)
             print(json.dumps(row, ensure_ascii=False), flush=True)

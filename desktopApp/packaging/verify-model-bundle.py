@@ -6,6 +6,7 @@ import argparse
 import hashlib
 from pathlib import Path
 import re
+import sys
 
 ROOT = Path(__file__).resolve().parents[2]
 MANIFEST = ROOT / 'aiCatalog/src/commonMain/kotlin/brain/ai/ModelArtifacts.kt'
@@ -57,6 +58,11 @@ def verify(resources: Path, *, suffix: str = '', manifest: Path = MANIFEST) -> l
 
 
 def main():
+    # PowerShell перенаправляет stdout в pipe: Python на Windows может выбрать
+    # CP1252. Диагностика всегда UTF-8, включая русские пути и сообщения ошибок.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, 'reconfigure'):
+            stream.reconfigure(encoding='utf-8')
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('resources', type=Path)
     parser.add_argument('--suffix', choices=('', '.exe'), default='')
