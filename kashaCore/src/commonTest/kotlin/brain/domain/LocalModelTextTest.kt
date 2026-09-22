@@ -37,6 +37,8 @@ class LocalModelTextTest {
     @Test fun negativeMeaningHasConservativeGuard() {
         assertFails { LocalModelText.requirePreserved("Не удалять. Без подписки. Нельзя терять текст.", "Удалять. Без подписки. Нельзя терять текст.") }
         LocalModelText.requirePreserved("старый текст удалять нельзя", "Старый текст удалять нельзя.")
+        LocalModelText.requirePreserved("Старый текст удалять нельзя.", "Старый текст не удалять.")
+        assertFails { LocalModelText.requirePreserved("Старый текст удалять нельзя.", "Старый текст не удалять нельзя.") }
     }
     @Test fun negativeGuardWorksAcrossSupportedAlphabets() {
         assertFails { LocalModelText.requirePreserved("Це не можна видаляти важливі записи про проєкт.", "Це можна видаляти важливі записи про проєкт.") }
