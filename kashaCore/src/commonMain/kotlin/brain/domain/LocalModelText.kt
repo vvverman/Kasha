@@ -89,27 +89,65 @@ object LocalModelText {
     }
 
     fun requirePreserved(original: String, edited: String) {
-        fun numbers(text: String) = Regex("[0-9]+(?:[.,][0-9]+)*").findAll(text).map { it.value }.sorted().toList()
+        fun numbers(text: String) = Regex("[0-9]+(?:[.,][0-9]+)*").findAll(text).map { it.value }.toList()
         fun negatives(text: String) = Regex("""[\p{L}]+""", RegexOption.IGNORE_CASE).findAll(text)
-            .map { normalize(it.value) }.filter { it in negations }.sorted().toList()
+            .map { normalize(it.value) }.filter { it in negations }.toList()
         fun allWords(text: String) = Regex("""[\p{L}]{3,}""", RegexOption.IGNORE_CASE).findAll(text)
             .map { normalize(it.value) }.toSet()
+        fun <T> isMultisetSubset(part: List<T>, whole: List<T>): Boolean {
+            val remaining = whole.groupingBy { it }.eachCount().toMutableMap()
+            return part.all { value ->
+                val count = remaining[value] ?: 0
+                if (count <= 0) false else { remaining[value] = count - 1; true }
+            }
+        }
 
-        require(numbers(original) == numbers(edited)) { "Модель изменила числа. Оставлен исходный текст" }
-        require(negatives(original) == negatives(edited)) { "Модель изменила отрицания. Оставлен исходный текст" }
+        // Cleanup-модель обучена применять самоисправления: «в 2, нет, в 3» → «в 3».
+        // При явном маркере коррекции разрешаем удалить отменённый вариант, но никогда
+        // не разрешаем придумать новое число/имя/отрицание.
+        val hasCorrection = Regex(
+            """(?iu)\b(нет|точнее|вернее|ой|стоп|no\s+wait|wait|actually|sorry|rather|nein|warte|eigentlich|ні|точніше|стій|não\s+espera|espera|na\s+verdade|nej|vent|faktisk)\b"""
+        ).containsMatchIn(original)
 
-        val editedWords = allWords(edited)
-        val missingNames = names(original).filterNot { it in editedWords }
-        require(missingNames.isEmpty()) { "Модель потеряла имя или важное название. Оставлен исходный текст" }
+        val originalNumbers = numbers(original)
+        val editedNumbers = numbers(edited)
+        require(
+            if (hasCorrection) isMultisetSubset(editedNumbers, originalNumbers)
+            else editedNumbers.sorted() == originalNumbers.sorted()
+        ) { "Модель изменила числа. Оставлен исходный текст" }
+
+        val removableCorrectionNegations = setOf("нет", "no", "nein", "ні")
+        val originalNegatives = negatives(original)
+        val editedNegatives = negatives(edited)
+        val strictOriginalNegatives = originalNegatives.filterNot { hasCorrection && it in removableCorrectionNegations }
+        val strictEditedNegatives = editedNegatives.filterNot { hasCorrection && it in removableCorrectionNegations }
+        require(strictOriginalNegatives.sorted() == strictEditedNegatives.sorted()) {
+            "Модель изменила отрицания. Оставлен исходный текст"
+        }
+        require(isMultisetSubset(editedNegatives, originalNegatives)) {
+            "Модель добавила отрицание. Оставлен исходный текст"
+        }
+
+        val originalNames = names(original)
+        val editedNames = names(edited)
+        require(editedNames.all { it in originalNames }) {
+            "Модель добавила имя или важное название. Оставлен исходный текст"
+        }
+        if (!hasCorrection) require(originalNames.all { it in allWords(edited) }) {
+            "Модель потеряла имя или важное название. Оставлен исходный текст"
+        }
 
         val before = words(original)
         val after = words(edited)
         val missing = before - after
-        // На длинном тексте это те же ~15%. На короткой заметке разрешаем заменить до двух
-        // содержательных слов: этого достаточно для «какая-то фигня» → «проблема», но не для пересказа.
-        val allowedMissing = maxOf(2, ceil(before.size * 0.15).toInt())
+        val added = after - before
+        val allowedMissing = maxOf(2, ceil(before.size * (if (hasCorrection) 0.40 else 0.20)).toInt())
+        val allowedAdded = maxOf(1, ceil(before.size * 0.10).toInt())
         require(before.isEmpty() || missing.size <= allowedMissing) {
             "Модель пропустила значительную часть исходного текста. Оставлен полный транскрипт"
+        }
+        require(added.size <= allowedAdded) {
+            "Модель добавила лишний текст. Оставлен исходный транскрипт"
         }
     }
 
