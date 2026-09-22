@@ -1,0 +1,31 @@
+name: Local model setup contract
+on:
+  push:
+    branches: [main]
+    paths:
+      - scripts/setup-models.sh
+      - tests/setup_models_test.py
+      - aiCatalog/src/commonMain/kotlin/brain/ai/ModelArtifacts.kt
+      - .github/workflows/model-setup.yml
+  pull_request:
+    paths:
+      - scripts/setup-models.sh
+      - tests/setup_models_test.py
+      - aiCatalog/src/commonMain/kotlin/brain/ai/ModelArtifacts.kt
+      - .github/workflows/model-setup.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: model-setup-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  setup-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Shell syntax and pinned three-role setup
+        run: |
+          bash -n scripts/setup-models.sh
+          python3 tests/setup_models_test.py
