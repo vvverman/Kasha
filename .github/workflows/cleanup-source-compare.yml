@@ -1,0 +1,56 @@
+name: Cleanup source and GGUF comparison
+on:
+  push:
+    branches: [main]
+    paths:
+      - tests/cleanup_source_compare.py
+      - .github/workflows/cleanup-source-compare.yml
+  workflow_dispatch:
+    inputs:
+      source_revision:
+        description: 'Ревизия MLX snapshot для воспроизведения (пусто — закрепить текущий SHA)'
+        required: false
+        default: ''
+permissions:
+  contents: read
+concurrency:
+  group: cleanup-source-compare-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  compare:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/cache/restore@v4
+        id: native-cache
+        with:
+          path: desktopApp/bundle/common
+          key: kasha-macos-arm64-bundle-${{ hashFiles('desktopApp/packaging/build-native.sh') }}
+      - name: Подготовить закреплённый native bundle при отсутствии кэша
+        if: steps.native-cache.outputs.cache-hit != 'true'
+        run: bash desktopApp/packaging/build-native.sh
+      - name: Зафиксировать исходный MLX snapshot и зависимости
+        env:
+          SOURCE_REVISION: ${{ inputs.source_revision }}
+        run: |
+          python3 -m venv .cleanup-compare-python
+          .cleanup-compare-python/bin/pip install 'mlx-lm==0.31.3'
+          mkdir -p test-output/cleanup-source-compare
+          .cleanup-compare-python/bin/pip freeze > test-output/cleanup-source-compare/requirements-resolved.txt
+          .cleanup-compare-python/bin/python tests/cleanup_source_compare.py prepare \
+            --out test-output/cleanup-source-compare --revision "${SOURCE_REVISION:-main}"
+      - name: Сравнить одинаковые входы без сети и публикации весов
+        run: |
+          /usr/bin/sandbox-exec -p '(version 1)(allow default)(deny network*)' \
+            .cleanup-compare-python/bin/python tests/cleanup_source_compare.py run \
+            --out test-output/cleanup-source-compare
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kasha-cleanup-source-compare-${{ github.sha }}
+          path: test-output/cleanup-source-compare
+          retention-days: 14

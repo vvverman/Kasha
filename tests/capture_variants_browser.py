@@ -49,6 +49,13 @@ try:
             args=['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'])
         page = browser.new_page(viewport={'width': 1280, 'height': 1000}, locale='ru-RU')
         calls, failures, errors, external = [], [], [], []
+        finished, network_events = [], []
+        started = time.monotonic()
+
+        def stage_event(kind, request, **extra):
+            if request.method == 'POST' and '/api/captures/' in request.url:
+                network_events.append(dict(event=kind, url=request.url,
+                    seconds=round(time.monotonic()-started, 3), **extra))
         checks = []
         delayed = {'done': False}
 
@@ -57,10 +64,22 @@ try:
                 external.append(request.url)
             if request.method == 'POST' and '/api/captures/' in request.url:
                 calls.append(urlsplit(request.url).path.rsplit('/', 1)[-1])
+                stage_event('request', request)
+
+        def request_finished(request):
+            if request.method == 'POST' and '/api/captures/' in request.url:
+                finished.append(urlsplit(request.url).path.rsplit('/', 1)[-1])
+                stage_event('finished', request)
+
+        def request_failed(request):
+            if request.method == 'POST' and '/api/captures/' in request.url:
+                failures.append({'url': request.url, 'failure': request.failure})
+                stage_event('failed', request, failure=request.failure)
 
         page.on('request', request_seen)
-        page.on('requestfailed', lambda request: failures.append({'url': request.url, 'failure': request.failure})
-                if request.method == 'POST' and '/api/captures/' in request.url else None)
+        page.on('requestfinished', request_finished)
+        page.on('requestfailed', request_failed)
+        page.on('response', lambda response: stage_event('response', response.request, status=response.status))
         page.on('pageerror', lambda error: errors.append(str(error)))
 
         def slow_first_cleanup(route):
@@ -71,7 +90,9 @@ try:
                 time.sleep(33)
             route.fulfill(response=response)
 
-        page.route('**/api/captures/*/tidy', slow_first_cleanup)
+        # Перехват нужен только для одной проверки 30-секундного лимита.
+        # Все следующие команды идут по настоящему браузерному HTTP без proxy fetch/fulfill.
+        page.route('**/api/captures/*/tidy', slow_first_cleanup, times=1)
 
         def wait(check, label, seconds=60):
             end = time.monotonic() + seconds
@@ -115,6 +136,9 @@ try:
             result = wait(lambda: (c if (c := current()) and c['status'] == 'READY' and
                 c['audioFinalized'] and c['selectedTextVariant'] == variant else None), variant)
             target('button', 'Обработать заново')
+            # READY на сервере ещё не означает, что браузер получил весь ответ.
+            # Не отправляем следующую команду до завершения текущего HTTP-запроса.
+            wait(lambda: failures or len(finished) == len(calls), 'получение браузером ответа этапа')
             assert not failures, failures
             return result
 
@@ -174,7 +198,8 @@ try:
             assert not failures and not errors and not external, (failures, errors, external)
             checks.append('новая нормализация использует повторно распознанный текст')
             (OUT / 'result.json').write_text(json.dumps({'passed': True, 'demoAi': True,
-                'checks': checks, 'stageRequests': calls, 'delayedResponseSeconds': 33}, ensure_ascii=False, indent=2))
+                'checks': checks, 'stageRequests': calls, 'finishedRequests': finished,
+                'delayedResponseSeconds': 33}, ensure_ascii=False, indent=2))
             print('CAPTURE VARIANTS BROWSER PASSED')
         finally:
             with suppress(Exception):
@@ -183,7 +208,8 @@ try:
             with suppress(Exception):
                 (OUT / 'snapshot.json').write_text(json.dumps(api('snapshot'), ensure_ascii=False, indent=2))
             (OUT / 'events.json').write_text(json.dumps({'calls': calls, 'failures': failures,
-                'errors': errors, 'external': external, 'checks': checks}, ensure_ascii=False, indent=2))
+                'errors': errors, 'external': external, 'checks': checks,
+                'finished': finished, 'networkEvents': network_events}, ensure_ascii=False, indent=2))
             browser.close()
 finally:
     api('preferences', original)
