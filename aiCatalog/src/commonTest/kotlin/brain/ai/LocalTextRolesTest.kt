@@ -21,44 +21,42 @@ class LocalTextRolesTest {
         val roles = mutableListOf<AiRole>()
         val model = LocalTextRoles { role, _, schema, _ ->
             roles += role
-            when {
-                "relevance" in schema -> """{"relevance":3}"""
-                "\"text\"" in schema -> """{"title":"План","text":"Проверить 12 файлов"}"""
-                else -> """{"title":"План"}"""
+            if (role == AiRole.ROUTING) {
+                assertTrue("relevance" in schema)
+                """{"relevance":3}"""
+            } else {
+                assertTrue(schema.isBlank())
+                "Проверить 12 файлов"
             }
         }
-        assertEquals("План", model.title("Проверить 12 файлов"))
+        assertEquals("Проверить 12 файлов", model.title("Проверить 12 файлов"))
         assertEquals("Проверить 12 файлов", model.tidy("Проверить 12 файлов"))
         assertEquals(mapOf("p" to 3), model.rank("Проверить 12 файлов", listOf(Project("p", "Работа"))))
-        assertEquals(listOf(AiRole.TEXT, AiRole.TEXT, AiRole.ROUTING), roles)
+        assertEquals(listOf(AiRole.TEXT, AiRole.ROUTING), roles)
     }
-    @Test fun rejectedFirstTidyRetriesFromOriginalAndAcceptsSafeSecondAnswer() = immediate {
+    @Test fun rejectedCleanupIsNotRetriedAsAChatConversation() = immediate {
         var calls = 0
-        val model = LocalTextRoles { role, prompt, _, _ ->
+        val model = LocalTextRoles { role, prompt, schema, _ ->
             assertEquals(AiRole.TEXT, role)
+            assertTrue(schema.isBlank())
+            assertTrue("Ирина не меняла 12 файлов" in prompt)
             calls++
-            if (calls == 1) {
-                """{"title":"План","text":"Ирина меняла 12 файлов"}"""
-            } else {
-                assertTrue("Если не уверен" in prompt)
-                assertTrue("Ирина не меняла 12 файлов" in prompt)
-                """{"title":"План","text":"Ирина не меняла 12 файлов."}"""
-            }
+            "Ирина меняла 12 файлов"
         }
-        assertEquals("Ирина не меняла 12 файлов.", model.tidy("Ирина не меняла 12 файлов"))
-        assertEquals(2, calls)
+        assertFailsWith<IllegalArgumentException> { model.tidy("Ирина не меняла 12 файлов") }
+        assertEquals(1, calls)
     }
 
     @Test fun changedNumbersAreRejectedByExistingCoreValidator() = immediate {
-        val model = LocalTextRoles { _, _, _, _ -> """{"title":"План","text":"Ирина не меняла 21 файл"}""" }
+        val model = LocalTextRoles { _, _, _, _ -> "Ирина не меняла 21 файл" }
         assertFailsWith<IllegalArgumentException> { model.tidy("Ирина не меняла 12 файлов") }
     }
     @Test fun lostNegationIsRejectedByExistingCoreValidator() = immediate {
-        val model = LocalTextRoles { _, _, _, _ -> """{"title":"План","text":"Ирина меняла 12 файлов"}""" }
+        val model = LocalTextRoles { _, _, _, _ -> "Ирина меняла 12 файлов" }
         assertFailsWith<IllegalArgumentException> { model.tidy("Ирина не меняла 12 файлов") }
     }
-    @Test fun malformedResponseIsNotPublishedAsText() = immediate {
-        val model = LocalTextRoles { _, _, _, _ -> "{\"text\":\"unfinished" }
+    @Test fun emptyCleanupResponseIsNotPublishedAsText() = immediate {
+        val model = LocalTextRoles { _, _, _, _ -> "   " }
         assertFails { model.tidy("Исходная заметка") }
     }
     @Test fun noProjectsDoesNotLoadModel() = immediate {
