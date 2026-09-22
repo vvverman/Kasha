@@ -98,7 +98,7 @@ jobs:
           import json
           from pathlib import Path
           evidence = json.loads(Path('test-output/ios-local-models/ios-local-models.json').read_text())
-          for flag in ('passed', 'nativeWhisper', 'pcm16kAndAac48k', 'nativeQwen', 'sourceUnchanged'):
+          for flag in ('passed', 'nativeWhisper', 'pcm16kAndAac48k', 'nativeCleanup', 'nativeRouting', 'sourceUnchanged'):
               assert evidence.get(flag) is True, flag
           assert evidence.get('routerRoles') == 3
           assert evidence.get('networkTransport') is False
