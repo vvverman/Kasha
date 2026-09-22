@@ -75,7 +75,8 @@ object TranscriptCleanup {
             val word = source.substring(wordStart, (whitespaceStart - 1).coerceAtLeast(wordStart))
             val paragraph = separator.count { it == '\n' } >= 2
             val sentence = preceding in listOf('.', '!', '?') &&
-                !(preceding == '.' && (word.length == 1 || word.lowercase() in abbreviations || (word.isNotEmpty() && word.all { it.isDigit() })))
+                !(preceding == '.' && ((word.length == 1 && word[0].isLetter()) || word.lowercase() in abbreviations ||
+                    (word.isNotEmpty() && word.all { it.isDigit() } && source.substring(start, wordStart).isBlank())))
             if ((paragraph || sentence) && index < source.length &&
                 !correctionStart.containsMatchIn(source.substring(index))) {
                 val part = source.substring(start, whitespaceStart)
