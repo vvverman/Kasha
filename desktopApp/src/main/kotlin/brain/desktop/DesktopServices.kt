@@ -30,6 +30,7 @@ class DesktopServices(val root: Path, val resources: Path, cpuOnly: Boolean = fa
             val prefs = PreferenceStore(root)
             val bundledModels = if (simulated) emptyMap() else mapOf(
                 AiCatalog.DEFAULT_STT to Path.of(env.getValue("KASHA_WHISPER_MODEL")),
+                AiCatalog.DEFAULT_TEXT to Path.of(env.getValue("KASHA_LLAMA_MODEL")),
                 AiCatalog.DEFAULT_ROUTING to Path.of(env.getValue("KASHA_ROUTING_MODEL")),
             )
             val packages = JvmAiPackageGateway(root, bundledModels)
@@ -82,6 +83,8 @@ internal fun bundledModel(resources: Path, name: String): String {
 fun bundledEnvironment(resources:Path):Map<String,String> = mapOf(
     "KASHA_WHISPER_CLI" to bundledExecutable(resources,"whisper-cli"),
     "KASHA_WHISPER_MODEL" to bundledModel(resources,"ggml-large-v3-turbo-q5_0.bin"),
+    "KASHA_LLAMA_CLI" to bundledExecutable(resources,"llama-completion"),
+    "KASHA_LLAMA_MODEL" to bundledModel(resources,"Kasha-Cleanup-0.6B-Q4_K_M.gguf"),
     "KASHA_EMBEDDING_CLI" to bundledExecutable(resources,"llama-embedding"),
     "KASHA_ROUTING_MODEL" to bundledModel(resources,"F2LLM-v2-80M.Q8_0.gguf"),
     "KASHA_FFMPEG" to bundledExecutable(resources,"ffmpeg"),
