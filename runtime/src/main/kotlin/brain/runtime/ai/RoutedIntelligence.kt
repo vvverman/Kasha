@@ -62,8 +62,10 @@ class RoutedStudioIntelligence(
 
     private fun external(provider: String) = brain.ai.ExternalTextRoles { role, prompt -> cloud.generate(provider, role, prompt) }
 
-    private suspend fun selectedEngine(role: AiRole): String = preferences.read().ai.engineId(role).also {
-        check(AiCatalog.supportsSelection(it, role)) { "aiUnavailable" }
+    private suspend fun selectedEngine(role: AiRole): String {
+        val stored = preferences.read().ai.engineId(role)
+        check(AiCatalog.supportsSelection(stored, role)) { "aiUnavailable" }
+        return brain.ai.KashaAiCatalog.canonicalEngineId(stored, role)
     }
 
     private suspend fun <T> local(engineId: String, role: AiRole, action: suspend (LocalStudioIntelligence) -> T): T {
