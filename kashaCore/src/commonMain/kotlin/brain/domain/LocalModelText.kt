@@ -106,7 +106,7 @@ object LocalModelText {
         // При явном маркере коррекции разрешаем удалить отменённый вариант, но никогда
         // не разрешаем придумать новое число/имя/отрицание.
         val hasCorrection = Regex(
-            """(?iu)\b(нет|точнее|вернее|ой|стоп|no\s+wait|wait|actually|sorry|rather|nein|warte|eigentlich|ні|точніше|стій|não\s+espera|espera|na\s+verdade|nej|vent|faktisk)\b"""
+            """(?iu)(?<![\p{L}\p{N}_])(нет|точнее|вернее|ой|стоп|no\s+wait|wait|actually|sorry|rather|nein|warte|eigentlich|ні|точніше|стій|não\s+espera|espera|na\s+verdade|nej|vent|faktisk)(?![\p{L}\p{N}_])"""
         ).containsMatchIn(original)
 
         val originalNumbers = numbers(original)
