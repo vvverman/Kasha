@@ -19,10 +19,17 @@ object LocalModelText {
         </transcript>
     """.trimIndent()
 
-    fun cleanupPayload(output: String): String =
-        output.trim().removeSuffix("[end of text]").trim()
-            .removePrefix("assistant/analysis").trim()
+    fun cleanupPayload(output: String): String {
+        val text = output.trim().removeSuffix("[end of text]").trim()
             .removePrefix("assistant/final").trim()
+            .replaceFirst(Regex("""^<think>\s*</think>\s*"""), "")
+        // Пустая протокольная обёртка не является содержимым заметки.
+        // Непустые/незакрытые рассуждения не пытаемся выдавать за нормализацию.
+        require(!text.startsWith("<think>", ignoreCase = true) && !text.startsWith("assistant/analysis")) {
+            "Модель вернула служебные рассуждения вместо нормализации. Оставлен исходный текст"
+        }
+        return text
+    }
 
     fun cleanPrompt(text: String): String = """
         Ты корректор, не автор резюме. Исправь только пунктуацию и абзацы русской голосовой заметки.
@@ -106,9 +113,10 @@ object LocalModelText {
         // При явном маркере коррекции разрешаем удалить отменённый вариант. Для смыслового
         // отрицания сохраняем число маркеров, а не конкретную лексему: нормализация вроде
         // «удалять нельзя» → «не удалять» не меняет полярность, но меняет слово-маркер.
-        val hasCorrection = Regex(
+        val lastCorrection = Regex(
             """(?iu)(?<![\p{L}\p{N}_])(нет|точнее|вернее|ой|стоп|no\s+wait|wait|actually|sorry|rather|nein|warte|eigentlich|ні|точніше|стій|não\s+espera|espera|na\s+verdade|nej|vent|faktisk)(?![\p{L}\p{N}_])"""
-        ).containsMatchIn(original)
+        ).findAll(original).lastOrNull()
+        val hasCorrection = lastCorrection != null
 
         val originalNumbers = numbers(original)
         val editedNumbers = numbers(edited)
@@ -124,6 +132,18 @@ object LocalModelText {
         val strictEditedNegatives = editedNegatives.filterNot { hasCorrection && it in removableCorrectionNegations }
         require(strictOriginalNegatives.size == strictEditedNegatives.size) {
             "Модель изменила количество отрицаний. Оставлен исходный текст"
+        }
+
+        if (lastCorrection != null) {
+            // Разрешение убрать отменённый вариант не разрешает потерять окончательный.
+            // Более строгая проверка хвоста намеренно может отклонить перефразировку.
+            val finalVersion = original.substring(lastCorrection.range.last + 1)
+            val fillers = setOf("эээ", "ээээ", "ммм", "umm", "uhh", "hmm", "erm")
+            val finalWords = allWords(finalVersion) - fillers
+            val resultWords = allWords(edited)
+            require(finalWords.all { it in resultWords } && isMultisetSubset(numbers(finalVersion), editedNumbers)) {
+                "Модель потеряла окончательный вариант самоисправления. Оставлен исходный текст"
+            }
         }
 
         val originalNames = names(original)

@@ -1,0 +1,26 @@
+{
+  "commit": "b94ff50bb34d09d9c525eae9680d11dbd425f1ca",
+  "runId": 35707524184,
+  "runConclusion": "success",
+  "artifactId": 10685541523,
+  "artifactSha256": "57c0c3ed135c4cb3e0d91250d388522b910b6930321ae7d930957e9ba8ba7fb9",
+  "junit": {"suites": 57, "tests": 405, "failures": 0, "errors": 0, "skipped": 2},
+  "captureVariants": {
+    "passed": true,
+    "demoAi": true,
+    "checks": [
+      "после STT нет автоматической нормализации или routing",
+      "первое открытие нормализации запускает только TEXT; ответ позже 30 секунд принят",
+      "переключение вкладок использует сохранённую нормализацию",
+      "повтор нормализации не запускает STT",
+      "повтор транскрибации вызывает отдельный STT и сбрасывает устаревшие результаты",
+      "новая нормализация использует повторно распознанный текст"
+    ],
+    "stageRequests": ["tidy", "tidy", "retranscribe", "tidy"],
+    "delayedResponseSeconds": 33,
+    "requestFailures": [],
+    "pageErrors": [],
+    "externalRequests": []
+  },
+  "realModelQualityAccepted": false
+}
