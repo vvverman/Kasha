@@ -116,7 +116,7 @@ class KashaCoreTest {
             override val simulated = false
             override suspend fun transcribe(file: String, language: String, example: String) = "транскрипт"
             override suspend fun title(text: String, language: String) = "Этот title больше не используется"
-            override suspend fun tidy(text: String, language: String) = "Сырой текст, аккуратно оформленный."
+            override suspend fun tidy(text: String, language: String) = "Сырой текст."
             override suspend fun rank(text: String, projects: List<Project>, language: String) = projects.associate { it.id to 4 }
         }
         val workflow = CaptureWorkflow(intelligence)
@@ -139,8 +139,8 @@ class KashaCoreTest {
         assertFalse(finished.llmApplied)
 
         val tidied = workflow.tidy(finished, "ru")
-        assertEquals("Сырой текст, аккуратно оформленный.", tidied.preparedText)
-        assertEquals("Сырой текст, аккуратно оформленный.", tidied.title)
+        assertEquals("Сырой текст.", tidied.preparedText)
+        assertEquals("Сырой текст.", tidied.title)
         assertTrue(tidied.draftEdited)
         assertTrue(tidied.llmApplied)
         assertFalse(tidied.rankingApplied)
