@@ -274,7 +274,14 @@ class StorageRecoveryTest {
 
             suspend fun readyCapture(seed: Int, text: String): Capture {
                 val capture = store.createCapture("source.wav", byteArrayOf(seed.toByte(), 2, 3, 4))
-                store.updateCapture(capture.id) { it.copy(status = CaptureStatus.READY, preparedText = text) }
+                store.updateCapture(capture.id) {
+                    it.copy(
+                        status = CaptureStatus.READY,
+                        transcript = text,
+                        preparedText = "",
+                        selectedTextVariant = CaptureTextVariant.TRANSCRIPTION,
+                    )
+                }
                 return store.capture(capture.id)!!
             }
 
