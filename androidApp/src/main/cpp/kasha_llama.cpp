@@ -10,16 +10,6 @@
 #include "llama.h"
 
 namespace {
-// JSON grammar from the same pinned llama.cpp; field/meaning checks remain in Core.
-constexpr const char *jsonGrammar = R"GBNF(root   ::= object
-value  ::= object | array | string | number | ("true" | "false" | "null") ws
-object ::= "{" ws (string ":" ws value ("," ws string ":" ws value)*)? "}" ws
-array  ::= "[" ws (value ("," ws value)*)? "]" ws
-string ::= "\"" ([^"\\\x7F\x00-\x1F] | "\\" (["\\bfnrt] | "u" [0-9a-fA-F]{4}))* "\"" ws
-number ::= ("-"? ([0-9] | [1-9] [0-9]{0,15})) ("." [0-9]+)? ([eE] [-+]? [0-9] [1-9]{0,15})? ws
-ws ::= | " " | "\n" [ \t]{0,20}
-)GBNF";
-
 struct Signal {
     JavaVM *vm; jobject object; jmethodID method;
     static bool cancelled(void *data) {
@@ -120,9 +110,6 @@ Java_ru_vrmn_kasha_android_AndroidLlamaNative_generate(JNIEnv *env, jobject,
         std::unique_ptr<llama_sampler, decltype(&llama_sampler_free)> sampler(
             llama_sampler_chain_init(llama_sampler_chain_default_params()), llama_sampler_free);
         if (!sampler) throw std::bad_alloc();
-        auto *grammar = llama_sampler_init_grammar(vocab, jsonGrammar, "root");
-        if (!grammar) throw std::runtime_error("aiUnavailable");
-        llama_sampler_chain_add(sampler.get(), grammar);
         llama_sampler_chain_add(sampler.get(), llama_sampler_init_greedy());
         for (size_t offset = 0; offset < tokens.size(); offset += 256) {
             cancellation.check();
@@ -211,8 +198,7 @@ Java_ru_vrmn_kasha_android_AndroidLlamaNative_embed(JNIEnv *env, jobject,
         cp.n_batch = cp.n_ubatch = static_cast<uint32_t>(tokens.size());
         cp.n_threads = cp.n_threads_batch = std::clamp(static_cast<int>(threads), 1, 4);
         cp.embeddings = true;
-        cp.pooling_type = LLAMA_POOLING_TYPE_MEAN;
-        cp.attention_type = LLAMA_ATTENTION_TYPE_NON_CAUSAL;
+        cp.pooling_type = LLAMA_POOLING_TYPE_LAST;
         cp.abort_callback = Signal::cancelled;
         cp.abort_callback_data = &cancellation;
         std::unique_ptr<llama_context, decltype(&llama_free)> context(
