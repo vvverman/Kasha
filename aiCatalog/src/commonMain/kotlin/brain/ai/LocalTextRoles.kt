@@ -13,12 +13,21 @@ class LocalTextRoles(
 ) {
     suspend fun title(text: String): String = NoteText.title(text)
 
-    suspend fun tidy(text: String): String {
-        val output = generate(AiRole.TEXT, LocalModelText.cleanupPrompt(text), "", 2200)
-        val cleaned = LocalModelText.cleanupPayload(output)
-        require(cleaned.isNotBlank()) { "Локальная нормализация вернула пустой текст" }
-        LocalModelText.requirePreserved(text, cleaned)
-        return cleaned
+    suspend fun tidy(text: String): String = kotlinx.coroutines.withTimeout(900_000L) {
+        val parts = brain.domain.TranscriptCleanup.parts(text)
+        require(parts.isNotEmpty()) { "Пустая транскрибация" }
+        val cleanedParts = parts.map { part ->
+            val output = generate(AiRole.TEXT, LocalModelText.cleanupPrompt(part.input), "", 2200)
+            val cleaned = LocalModelText.cleanupPayload(output)
+            require(cleaned.isNotBlank()) { "Модель вернула пустую нормализацию. Оставлен исходный текст" }
+            // Проверяем и исходный фрагмент, и уже разобранное явное самоисправление.
+            LocalModelText.requirePreserved(part.source, cleaned)
+            if (part.input != part.source) LocalModelText.requirePreserved(part.input, cleaned)
+            cleaned + part.separator
+        }
+        val result = cleanedParts.joinToString("")
+        LocalModelText.requirePreserved(text, result)
+        result
     }
 
     suspend fun rank(text: String, projects: List<Project>): Map<String, Int> =
